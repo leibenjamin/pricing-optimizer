@@ -95,7 +95,7 @@ export function simulateLong(params: SimParams): AltRow[] {
 
 export function defaultSim(): AltRow[] {
   return simulateLong({
-    nObs: 15000,
+    nObs: 5000,
     basePrices: { good: 9, better: 15, best: 25 },
     beta: {
       intercept_good: 0.8,
