@@ -1,0 +1,8 @@
+name = "pricing-optimizer"
+pages_build_output_dir = "dist"
+compatibility_date = "2024-11-01"
+
+[[kv_namespaces]]
+binding = "SCENARIOS"
+id = "8954bd41bfca46ceaf22712a375382c8"
+preview_id = "209b8cf92758482abf04e940f057a0e6"
