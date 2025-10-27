@@ -1,75 +1,122 @@
-import { useEffect, useMemo, useState } from "react"
-import FrontierChartReal from "./components/FrontierChart"
-import TakeRateChart from "./components/TakeRateChart"
-import { defaultSim } from "./lib/simulate"
-import { fitMNL, predictProbs, type Scenario } from "./lib/mnl"
+import { useEffect, useMemo, useState } from "react";
+import FrontierChartReal from "./components/FrontierChart";
+import TakeRateChart from "./components/TakeRateChart";
+import { defaultSim } from "./lib/simulate";
+import { fitMNL, predictProbs, type Scenario } from "./lib/mnl";
+import {
+  formatPriceChange,
+  formatCostChange,
+  formatToggle,
+} from "./lib/logger";
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
+const approx = (n: number) => Math.round(n); // for prices
+const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="rounded-2xl shadow p-4 border border-gray-200 bg-white">
       <h2 className="font-semibold text-lg mb-3">{title}</h2>
       {children}
     </div>
-  )
+  );
 }
 
 export default function App() {
-  const [prices, setPrices] = useState({ good: 9, better: 15, best: 25 })
+  const [journal, setJournal] = useState<string[]>([]);
+  const pushJ = (msg: string) => setJournal((j) => [msg, ...j].slice(0, 200));
+  // Draft value for Best while dragging, and the drag start (for the "from" price)
+
+  const [prices, setPrices] = useState({ good: 9, better: 15, best: 25 });
+  const [bestDraft, setBestDraft] = useState<number>(prices.best);
+  const [bestDragStart, setBestDragStart] = useState<number | null>(null);
   const [features, setFeatures] = useState({
     featA: { good: 1, better: 1, best: 1 },
     featB: { good: 0, better: 1, best: 1 },
-  })
-  const [costs, setCosts] = useState({ good: 3, better: 5, best: 8 })
-  const [beta, setBeta] = useState<[number, number, number, number, number, number] | null>(null)
-  const [fitInfo, setFitInfo] = useState<{ logLik: number; iters: number; converged: boolean } | null>(null)
+  });
+  const [costs, setCosts] = useState({ good: 3, better: 5, best: 8 });
+  const [beta, setBeta] = useState<
+    [number, number, number, number, number, number] | null
+  >(null);
+  const [fitInfo, setFitInfo] = useState<{
+    logLik: number;
+    iters: number;
+    converged: boolean;
+  } | null>(null);
 
   // Estimate model once from synthetic data
   useEffect(() => {
-    const rows = defaultSim()
-    const fit = fitMNL(rows, undefined, { maxIters: 200, ridge: 1e-3 })
-    setBeta(fit.beta)
-    setFitInfo({ logLik: fit.logLik, iters: fit.iters, converged: fit.converged })
-  }, [])
+    const rows = defaultSim();
+    // Closer init + more iters + a tiny tolerance for better convergence:
+    const fit = fitMNL(
+      rows,
+      [0.8, 1.2, 1.1, -0.07, 0.35, 0.25], // init near ground-truth
+      { maxIters: 400, ridge: 2e-3, tol: 1e-7 }
+    );
+    setBeta(fit.beta);
+    setFitInfo({
+      logLik: fit.logLik,
+      iters: fit.iters,
+      converged: fit.converged,
+    });
+  }, []);
+
+  useEffect(() => {
+    setBestDraft(prices.best);
+  }, [prices.best]);
 
   // Demand scale for demo math
-  const N = 1000
+  const N = 1000;
 
   const scenario: Scenario = useMemo(
     () => ({
-      price: { ...prices },
+      price: { good: prices.good, better: prices.better, best: bestDraft },
       featA: { ...features.featA },
       featB: { ...features.featB },
     }),
-    [prices, features]
-  )
+    [prices.good, prices.better, bestDraft, features.featA, features.featB]
+  );
 
   const probs = useMemo(() => {
-    if (!beta) return { none: 0.25, good: 0.25, better: 0.25, best: 0.25 }
-    return predictProbs(beta, scenario)
-  }, [beta, scenario])
+    if (!beta) return { none: 0.25, good: 0.25, better: 0.25, best: 0.25 };
+    return predictProbs(beta, scenario);
+  }, [beta, scenario]);
 
   // Profit frontier: sweep Best price; keep Good/Better fixed
   const frontier = useMemo(() => {
-    if (!beta) return { points: [] as { bestPrice: number; profit: number }[], optimum: null as { bestPrice: number; profit: number } | null }
-    const points: { bestPrice: number; profit: number }[] = []
+    if (!beta)
+      return {
+        points: [] as { bestPrice: number; profit: number }[],
+        optimum: null as { bestPrice: number; profit: number } | null,
+      };
+    const points: { bestPrice: number; profit: number }[] = [];
     for (let p = 5; p <= 60; p += 1) {
       const probsP = predictProbs(beta, {
         price: { good: prices.good, better: prices.better, best: p },
         featA: features.featA,
         featB: features.featB,
-      })
-      const take_good = Math.round(N * probsP.good)
-      const take_better = Math.round(N * probsP.better)
-      const take_best = Math.round(N * probsP.best)
+      });
+      const take_good = Math.round(N * probsP.good);
+      const take_better = Math.round(N * probsP.better);
+      const take_best = Math.round(N * probsP.best);
       const profitP =
         take_good * (prices.good - costs.good) +
         take_better * (prices.better - costs.better) +
-        take_best * (p - costs.best)
-      points.push({ bestPrice: p, profit: profitP })
+        take_best * (p - costs.best);
+      points.push({ bestPrice: p, profit: profitP });
     }
-    if (points.length === 0) return { points, optimum: null }
-    const optimum = points.reduce((a, b) => (b.profit > a.profit ? b : a), points[0])
-    return { points, optimum }
+    if (points.length === 0) return { points, optimum: null };
+    const optimum = points.reduce(
+      (a, b) => (b.profit > a.profit ? b : a),
+      points[0]
+    );
+    return { points, optimum };
   }, [
     beta,
     N,
@@ -80,7 +127,10 @@ export default function App() {
     costs.best,
     features.featA,
     features.featB,
-  ])
+  ]);
+
+  const bestPriceOpt = frontier.optimum?.bestPrice ?? prices.best;
+  const bestProfitOpt = frontier.optimum?.profit ?? 0;
 
   // Expected profit (current slider scenario)
   const take = {
@@ -88,19 +138,30 @@ export default function App() {
     good: Math.round(N * probs.good),
     better: Math.round(N * probs.better),
     best: Math.round(N * probs.best),
-  }
-  const revenue = take.good * prices.good + take.better * prices.better + take.best * prices.best
+  };
+  const revenue =
+    take.good * prices.good +
+    take.better * prices.better +
+    take.best * prices.best;
   const profit =
     take.good * (prices.good - costs.good) +
     take.better * (prices.better - costs.better) +
-    take.best * (prices.best - costs.best)
+    take.best * (prices.best - costs.best);
+  const activeCustomers = N - take.none;
+  const arpu = activeCustomers > 0 ? revenue / activeCustomers : 0;
+  const profitPerCustomer = profit / N;
+  const grossMarginPct = revenue > 0 ? profit / revenue : 0;
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold">Good–Better–Best Pricing Optimizer</h1>
-          <div className="text-sm text-gray-500">v0.2 • MNL estimated on synthetic data</div>
+          <h1 className="text-xl font-bold">
+            Good–Better–Best Pricing Optimizer
+          </h1>
+          <div className="text-sm text-gray-500">
+            v0.2 • MNL estimated on synthetic data
+          </div>
         </div>
       </header>
 
@@ -109,7 +170,8 @@ export default function App() {
         <div className="col-span-12 md:col-span-3 space-y-4">
           <Section title="Scenario Panel">
             <div className="space-y-4">
-              {(["good", "better", "best"] as const).map((tier) => (
+              {/* GOOD & BETTER: keep current immediate-commit + log-on-change behavior */}
+              {(["good", "better"] as const).map((tier) => (
                 <div key={tier} className="space-y-1">
                   <label className="block text-sm font-medium capitalize">
                     {tier} price (${prices[tier]})
@@ -119,59 +181,144 @@ export default function App() {
                     min={1}
                     max={99}
                     value={prices[tier]}
-                    onChange={(e) => setPrices((p) => ({ ...p, [tier]: Number(e.target.value) }))}
+                    onChange={(e) =>
+                      setPrices((p) => {
+                        const to = Number(e.target.value);
+                        const from = p[tier];
+                        if (from !== to)
+                          pushJ(formatPriceChange(tier, from, to));
+                        return { ...p, [tier]: to };
+                      })
+                    }
                     className="w-full"
                   />
                 </div>
               ))}
 
-              <div className="grid grid-cols-3 gap-2">
-                {(["good", "better", "best"] as const).map((tier) => (
-                  <div key={tier} className="text-xs">
-                    <div className="font-semibold capitalize mb-1">{tier} cost</div>
-                    <input
-                      type="number"
-                      value={costs[tier]}
-                      onChange={(e) => setCosts((c) => ({ ...c, [tier]: Number(e.target.value || 0) }))}
-                      className="w-full border rounded px-2 py-1"
-                    />
+              {/* BEST: live-drag on draft, single journal entry on release */}
+              <div className="space-y-1">
+                <label className="block text-sm font-medium capitalize">
+                  best price (${bestDraft})
+                </label>
+                <input
+                  type="range"
+                  min={1}
+                  max={99}
+                  value={bestDraft}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setBestDraft(v); // live UI + charts (because scenario uses bestDraft)
+                  }}
+                  onPointerDown={() => {
+                    setBestDragStart(prices.best); // remember where the drag started
+                  }}
+                  onPointerUp={() => {
+                    // Commit once and log once
+                    setPrices((p) => {
+                      const from = bestDragStart ?? p.best;
+                      const to = bestDraft;
+                      if (from !== to)
+                        pushJ(formatPriceChange("best", from, to));
+                      return { ...p, best: to };
+                    });
+                    setBestDragStart(null);
+                  }}
+                  onBlur={() => {
+                    // Keyboard/tab-out safety: also commit if focus leaves the slider
+                    setPrices((p) => {
+                      const from = bestDragStart ?? p.best;
+                      const to = bestDraft;
+                      if (from !== to)
+                        pushJ(formatPriceChange("best", from, to));
+                      return { ...p, best: to };
+                    });
+                    setBestDragStart(null);
+                  }}
+                  className="w-full"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              {(["good", "better", "best"] as const).map((tier) => (
+                <div key={tier} className="text-xs">
+                  <div className="font-semibold capitalize mb-1">
+                    {tier} cost
                   </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                {(["good", "better", "best"] as const).map((tier) => (
-                  <label key={"A-" + tier} className="text-xs flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={!!features.featA[tier]}
-                      onChange={() => setFeatures((f) => ({ ...f, featA: { ...f.featA, [tier]: f.featA[tier] ? 0 : 1 } }))}
-                    />
-                    FeatA {tier}
-                  </label>
-                ))}
-                {(["good", "better", "best"] as const).map((tier) => (
-                  <label key={"B-" + tier} className="text-xs flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={!!features.featB[tier]}
-                      onChange={() => setFeatures((f) => ({ ...f, featB: { ...f.featB, [tier]: f.featB[tier] ? 0 : 1 } }))}
-                    />
-                    FeatB {tier}
-                  </label>
-                ))}
-              </div>
+                  <input
+                    type="number"
+                    value={costs[tier]}
+                    onChange={(e) =>
+                      setCosts((c) => {
+                        const to = Number(e.target.value || 0);
+                        const from = c[tier];
+                        if (from !== to)
+                          pushJ(formatCostChange(tier, from, to));
+                        return { ...c, [tier]: to };
+                      })
+                    }
+                    className="w-full border rounded px-2 py-1"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              {(["good", "better", "best"] as const).map((tier) => (
+                <label
+                  key={`A-${tier}`}
+                  className="text-xs flex items-center gap-2"
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!features.featA[tier]}
+                    onChange={() =>
+                      setFeatures((f) => {
+                        const on = !f.featA[tier];
+                        pushJ(formatToggle("FeatA", tier, on));
+                        return {
+                          ...f,
+                          featA: { ...f.featA, [tier]: on ? 1 : 0 },
+                        };
+                      })
+                    }
+                  />
+                  FeatA {tier}
+                </label>
+              ))}
+              {(["good", "better", "best"] as const).map((tier) => (
+                <label
+                  key={`B-${tier}`}
+                  className="text-xs flex items-center gap-2"
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!features.featB[tier]}
+                    onChange={() =>
+                      setFeatures((f) => {
+                        const on = !f.featB[tier];
+                        pushJ(formatToggle("FeatB", tier, on));
+                        return {
+                          ...f,
+                          featB: { ...f.featB, [tier]: on ? 1 : 0 },
+                        };
+                      })
+                    }
+                  />
+                  FeatB {tier}
+                </label>
+              ))}
             </div>
           </Section>
 
           <Section title="Methods">
             <p className="text-sm text-gray-700">
-              MNL: U = β₀(j) + βₚ·price + β_A·featA + β_B·featB; outside option intercept fixed at 0.
-              Estimated by MLE on ~15k synthetic obs with ridge regularization.
+              MNL: U = β₀(j) + βₚ·price + β_A·featA + β_B·featB; outside option
+              intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
+              ridge regularization.
             </p>
             {fitInfo && (
               <div className="text-xs text-gray-600 mt-2">
-                logLik: {Math.round(fitInfo.logLik)} • iters: {fitInfo.iters} • {fitInfo.converged ? "converged" : "not converged"}
+                logLik: {Math.round(fitInfo.logLik)} • iters: {fitInfo.iters} •{" "}
+                {fitInfo.converged ? "converged" : "not converged"}
               </div>
             )}
           </Section>
@@ -180,7 +327,10 @@ export default function App() {
         {/* Center: Charts */}
         <div className="col-span-12 md:col-span-6 space-y-4">
           <Section title="Profit Frontier">
-            <FrontierChartReal points={frontier.points} optimum={frontier.optimum} />
+            <FrontierChartReal
+              points={frontier.points}
+              optimum={frontier.optimum}
+            />
           </Section>
           <Section title="Take-Rate Bars">
             <TakeRateChart data={probs} />
@@ -190,20 +340,80 @@ export default function App() {
         {/* Right: Journal */}
         <div className="col-span-12 md:col-span-3 space-y-4">
           <Section title="Scenario Journal">
-            <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
-              <li>Prices: {prices.good}/{prices.better}/{prices.best}</li>
-              <li>Revenue (N=1000): ${revenue.toLocaleString()}</li>
-              <li>Profit (N=1000): ${profit.toLocaleString()}</li>
+            <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1">
+              {journal.length === 0 ? (
+                <li className="text-gray-400">
+                  Adjust sliders/toggles to log changes…
+                </li>
+              ) : (
+                journal.map((line, i) => <li key={i}>{line}</li>)
+              )}
+              <li>
+                Revenue (N=1000): <strong>{fmtUSD(revenue)}</strong>
+              </li>
+              <li>
+                Profit (N=1000): <strong>{fmtUSD(profit)}</strong>
+              </li>
+              <li>
+                Active customers:{" "}
+                <strong>{activeCustomers.toLocaleString()}</strong>
+              </li>
+              <li>
+                ARPU (active only): <strong>{fmtUSD(arpu)}</strong>
+              </li>
+              <li>
+                Profit / customer (all N):{" "}
+                <strong>{fmtUSD(profitPerCustomer)}</strong>
+              </li>
+              <li>
+                Gross margin: <strong>{fmtPct(grossMarginPct)}</strong>
+              </li>
             </ul>
+            <div className="mt-2 flex gap-2">
+              <button
+                className="text-xs border px-2 py-1 rounded"
+                onClick={() => setJournal([])}
+              >
+                Clear
+              </button>
+              <button
+                className="text-xs border px-2 py-1 rounded"
+                onClick={() => {
+                  const blob = new Blob(
+                    [journal.slice().reverse().join("\n")],
+                    { type: "text/plain" }
+                  );
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "scenario-journal.txt";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                Download .txt
+              </button>
+            </div>
           </Section>
+
           <Section title="Callouts">
-            <div className="text-sm text-gray-700 space-y-1">
-              <div><strong>So what?</strong> Conversion ≈ {Math.round((probs.good + probs.better + probs.best) * 100)}%.</div>
-              <div className="text-xs text-gray-500">Frontier shows profit vs Best price with current Good/Better fixed.</div>
+            <div className="text-sm text-gray-700 space-y-2">
+              <div>
+                <strong>So what?</strong> Conversion ≈{" "}
+                {Math.round((probs.good + probs.better + probs.best) * 100)}%.
+              </div>
+              <div className="text-xs text-gray-600">
+                Best-price optimum ≈ <strong>${approx(bestPriceOpt)}</strong>{" "}
+                (profit ≈ <strong>{fmtUSD(bestProfitOpt)}</strong>).
+              </div>
+              <div className="text-xs text-gray-500">
+                Frontier shows profit vs Best price with current Good/Better
+                fixed.
+              </div>
             </div>
           </Section>
         </div>
       </main>
     </div>
-  )
+  );
 }
