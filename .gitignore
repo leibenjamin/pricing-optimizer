@@ -26,3 +26,12 @@ pnpm-lock.yaml
 *.njsproj
 *.sln
 *.sw?
+
+# build artifacts
+dist
+# local dev vars
+.dev.vars
+# wrangler local state
+.node_modules/.tmp
+.types/
+
