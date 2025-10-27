@@ -4,6 +4,7 @@ import TakeRateChart from "./components/TakeRateChart";
 import { defaultSim } from "./lib/simulate";
 import { fitMNL, predictProbs, type Scenario } from "./lib/mnl";
 import {
+  now,
   formatPriceChange,
   formatCostChange,
   formatToggle,
@@ -70,6 +71,34 @@ export default function App() {
   useEffect(() => {
     setBestDraft(prices.best);
   }, [prices.best]);
+
+  useEffect(() => {
+    const sid = new URLSearchParams(location.search).get("s");
+    if (!sid) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/get?s=${encodeURIComponent(sid)}`);
+        if (!res.ok) {
+          pushJ(`[${now()}] Load failed for id ${sid} (HTTP ${res.status})`);
+          return;
+        }
+        const { scenario } = (await res.json()) as {
+          scenario: {
+            prices: typeof prices;
+            costs: typeof costs;
+            features: typeof features;
+          };
+        };
+        setPrices(scenario.prices);
+        setCosts(scenario.costs);
+        setFeatures(scenario.features);
+        pushJ(`[${now()}] Loaded scenario ${sid}`);
+      } catch (e) {
+        pushJ(`[${now()}] Load error for id ${sid}: ${(e as Error).message}`);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Demand scale for demo math
   const N = 1000;
@@ -151,6 +180,33 @@ export default function App() {
   const arpu = activeCustomers > 0 ? revenue / activeCustomers : 0;
   const profitPerCustomer = profit / N;
   const grossMarginPct = revenue > 0 ? profit / revenue : 0;
+
+  async function saveScenarioShortLink() {
+    // what to persist
+    const payload = { prices, costs, features };
+    try {
+      const res = await fetch("/api/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        pushJ(`[${now()}] Save failed: HTTP ${res.status}`);
+        return;
+      }
+      const { id } = (await res.json()) as { id: string };
+      const shortUrl = `${location.origin}${location.pathname}?s=${id}`;
+      history.replaceState(null, "", `?s=${id}`);
+      try {
+        await navigator.clipboard.writeText(shortUrl);
+      } catch {
+        /* empty */
+      }
+      pushJ(`[${now()}] Saved as ${id} (link copied)`);
+    } catch (e) {
+      pushJ(`[${now()}] Save error: ${(e as Error).message}`);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
