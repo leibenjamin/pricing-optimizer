@@ -363,6 +363,43 @@ export default function App() {
                 </label>
               ))}
             </div>
+            <div className="mt-3 flex gap-2">
+              <button
+                className="text-xs border px-2 py-1 rounded"
+                onClick={saveScenarioShortLink}
+                title="Create a short link (saved in Cloudflare KV)"
+              >
+                Save short link
+              </button>
+
+              <button
+                className="text-xs border px-2 py-1 rounded"
+                onClick={() => {
+                  // optional: copy long URL (fully encoded state) as a fallback/share
+                  const q = new URLSearchParams({
+                    p: [prices.good, prices.better, prices.best].join(","),
+                    c: [costs.good, costs.better, costs.best].join(","),
+                    fa: [
+                      features.featA.good,
+                      features.featA.better,
+                      features.featA.best,
+                    ].join(","),
+                    fb: [
+                      features.featB.good,
+                      features.featB.better,
+                      features.featB.best,
+                    ].join(","),
+                  });
+                  const longUrl = `${location.origin}${
+                    location.pathname
+                  }?${q.toString()}`;
+                  navigator.clipboard.writeText(longUrl).catch(() => {});
+                  pushJ(`[${now()}] Copied long URL state`);
+                }}
+              >
+                Copy long URL
+              </button>
+            </div>
           </Section>
 
           <Section title="Methods">
