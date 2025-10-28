@@ -228,7 +228,7 @@ export default function App() {
             Good–Better–Best Pricing Optimizer
           </h1>
           <div className="text-sm text-gray-500">
-            v0.2 • MNL estimated on synthetic data
+            v0.3 • Latent-class choice model (3 segments)
           </div>
         </div>
       </header>
@@ -510,6 +510,7 @@ export default function App() {
               <div className="text-xs text-gray-600">
                 Best-price optimum ≈ <strong>${approx(bestPriceOpt)}</strong>{" "}
                 (profit ≈ <strong>{fmtUSD(bestProfitOpt)}</strong>).
+                Segments: Price-sens / Value / Premium.
               </div>
               <div className="text-xs text-gray-500">
                 Frontier shows profit vs Best price with current Good/Better
