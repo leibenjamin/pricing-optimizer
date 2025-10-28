@@ -51,6 +51,25 @@ export default function App() {
     converged: boolean;
   } | null>(null);
 
+  // ---- recent IDs helpers ----
+  type RecentItem = { id: string; t: number };
+  const RECENT_KEY = "po_recent_ids_v1";
+  const readRecents = (): RecentItem[] => {
+    try {
+      return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    } catch {
+      return [];
+    }
+  };
+  const writeRecents = (arr: RecentItem[]) => {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(arr.slice(0, 5)));
+  };
+  const rememberId = (id: string) => {
+    const now = Date.now();
+    const seen = readRecents().filter((r) => r.id !== id);
+    writeRecents([{ id, t: now }, ...seen]);
+  };
+
   // Estimate model once from synthetic data
   useEffect(() => {
     const rows = defaultSim();
@@ -92,6 +111,7 @@ export default function App() {
         setPrices(scenario.prices);
         setCosts(scenario.costs);
         setFeatures(scenario.features);
+        rememberId(sid);
         pushJ(`[${now()}] Loaded scenario ${sid}`);
       } catch (e) {
         pushJ(`[${now()}] Load error for id ${sid}: ${(e as Error).message}`);
@@ -197,6 +217,8 @@ export default function App() {
       const { id } = (await res.json()) as { id: string };
       const shortUrl = `${location.origin}${location.pathname}?s=${id}`;
       history.replaceState(null, "", `?s=${id}`);
+      rememberId(id);
+
       try {
         await navigator.clipboard.writeText(shortUrl);
       } catch {
@@ -503,6 +525,54 @@ export default function App() {
                 Frontier shows profit vs Best price with current Good/Better
                 fixed.
               </div>
+            </div>
+          </Section>
+
+          <Section title="Recent short links">
+            <ul className="text-xs space-y-1">
+              {readRecents().length === 0 ? (
+                <li className="text-gray-500">None yet</li>
+              ) : (
+                readRecents().map((r) => (
+                  <li
+                    key={r.id}
+                    className="flex items-center justify-between gap-2"
+                  >
+                    <button
+                      className="underline"
+                      title={new Date(r.t).toLocaleString()}
+                      onClick={() => {
+                        const url = `${location.origin}${location.pathname}?s=${r.id}`;
+                        location.assign(url); // reload page with this id
+                      }}
+                    >
+                      {r.id}
+                    </button>
+                    <button
+                      className="border rounded px-2 py-0.5"
+                      onClick={() => {
+                        const url = `${location.origin}${location.pathname}?s=${r.id}`;
+                        navigator.clipboard.writeText(url).catch(() => {});
+                        pushJ(`[${now()}] Copied short link ${r.id}`);
+                      }}
+                    >
+                      Copy
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+            <div className="mt-2">
+              <button
+                className="text-xs border rounded px-2 py-1"
+                onClick={() => {
+                  localStorage.removeItem(RECENT_KEY);
+                  pushJ(`[${now()}] Cleared recent short links`);
+                  location.reload();
+                }}
+              >
+                Clear recents
+              </button>
             </div>
           </Section>
         </div>
