@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import FrontierChartReal from "./components/FrontierChart";
 import TakeRateChart from "./components/TakeRateChart";
 import { defaultSim } from "./lib/simulate";
-import { fitMNL, predictProbs, type Scenario } from "./lib/mnl";
+import { fitMNL } from "./lib/mnl";
 import {
   now,
   formatPriceChange,
   formatCostChange,
   formatToggle,
 } from "./lib/logger";
+import { defaultSegments, type Segment } from "./lib/segments";
+import { choiceShares } from "./lib/choice";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
@@ -42,9 +44,6 @@ export default function App() {
     featB: { good: 0, better: 1, best: 1 },
   });
   const [costs, setCosts] = useState({ good: 3, better: 5, best: 8 });
-  const [beta, setBeta] = useState<
-    [number, number, number, number, number, number] | null
-  >(null);
   const [fitInfo, setFitInfo] = useState<{
     logLik: number;
     iters: number;
@@ -70,6 +69,12 @@ export default function App() {
     writeRecents([{ id, t: now }, ...seen]);
   };
 
+  // ADD: latent-class segments state
+  const [segments] = useState<Segment[]>(defaultSegments);
+
+  // removed setters for now, until adding segments
+  // const [segments, setSegments] = useState<Segment[]>(defaultSegments);
+
   // Estimate model once from synthetic data
   useEffect(() => {
     const rows = defaultSim();
@@ -79,7 +84,6 @@ export default function App() {
       [0.8, 1.2, 1.1, -0.07, 0.35, 0.25], // init near ground-truth
       { maxIters: 400, ridge: 2e-3, tol: 1e-7 }
     );
-    setBeta(fit.beta);
     setFitInfo({
       logLik: fit.logLik,
       iters: fit.iters,
@@ -123,34 +127,17 @@ export default function App() {
   // Demand scale for demo math
   const N = 1000;
 
-  const scenario: Scenario = useMemo(
-    () => ({
-      price: { good: prices.good, better: prices.better, best: bestDraft },
-      featA: { ...features.featA },
-      featB: { ...features.featB },
-    }),
-    [prices.good, prices.better, bestDraft, features.featA, features.featB]
-  );
-
   const probs = useMemo(() => {
-    if (!beta) return { none: 0.25, good: 0.25, better: 0.25, best: 0.25 };
-    return predictProbs(beta, scenario);
-  }, [beta, scenario]);
+    const p = { good: prices.good, better: prices.better, best: bestDraft };
+    return choiceShares(p, features, segments);
+  }, [prices.good, prices.better, bestDraft, features, segments]);
 
-  // Profit frontier: sweep Best price; keep Good/Better fixed
+  // Profit frontier: sweep Best price; keep Good/Better fixed (latent-class mix)
   const frontier = useMemo(() => {
-    if (!beta)
-      return {
-        points: [] as { bestPrice: number; profit: number }[],
-        optimum: null as { bestPrice: number; profit: number } | null,
-      };
     const points: { bestPrice: number; profit: number }[] = [];
     for (let p = 5; p <= 60; p += 1) {
-      const probsP = predictProbs(beta, {
-        price: { good: prices.good, better: prices.better, best: p },
-        featA: features.featA,
-        featB: features.featB,
-      });
+      const pricesP = { good: prices.good, better: prices.better, best: p };
+      const probsP = choiceShares(pricesP, features, segments);
       const take_good = Math.round(N * probsP.good);
       const take_better = Math.round(N * probsP.better);
       const take_best = Math.round(N * probsP.best);
@@ -160,22 +147,25 @@ export default function App() {
         take_best * (p - costs.best);
       points.push({ bestPrice: p, profit: profitP });
     }
-    if (points.length === 0) return { points, optimum: null };
+    if (points.length === 0)
+      return {
+        points,
+        optimum: null as { bestPrice: number; profit: number } | null,
+      };
     const optimum = points.reduce(
       (a, b) => (b.profit > a.profit ? b : a),
       points[0]
     );
     return { points, optimum };
   }, [
-    beta,
     N,
     prices.good,
     prices.better,
     costs.good,
     costs.better,
     costs.best,
-    features.featA,
-    features.featB,
+    features,
+    segments,
   ]);
 
   const bestPriceOpt = frontier.optimum?.bestPrice ?? prices.best;
