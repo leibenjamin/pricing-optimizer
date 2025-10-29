@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import FrontierChartReal from "./components/FrontierChart";
 import TakeRateChart from "./components/TakeRateChart";
 import { defaultSim } from "./lib/simulate";
@@ -15,11 +15,8 @@ import {
   type Segment,
 } from "./lib/segments";
 import { choiceShares } from "./lib/choice";
-import {
-  gridSearch,
-  type Constraints,
-  type SearchRanges,
-} from "./lib/optimize";
+import { type Constraints, type SearchRanges } from "./lib/optimize";
+import { runOptimizeInWorker } from "./lib/optWorker";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
@@ -161,21 +158,53 @@ export default function App() {
   } | null>(null);
 
   function runOptimizer() {
-    const out = gridSearch(
-      optRanges,
+    // cancel any in-flight run
+    if (cancelRef.current) {
+      cancelRef.current();
+      cancelRef.current = null;
+    }
+    setIsOptRunning(true);
+    setOptError(null);
+    const runId = ++runIdRef.current;
+
+    const { promise, cancel } = runOptimizeInWorker({
+      runId,
+      ranges: optRanges,
       costs,
-      features,
-      segments,
+      feats: features,
+      segs: segments,
       refPrices,
       N,
-      optConstraints
-    );
-    setOptResult(out);
-    pushJ(
-      `[${now()}] Optimizer: best ladder $${out.prices.good}/$${
-        out.prices.better
-      }/$${out.prices.best} (profit≈$${Math.round(out.profit)})`
-    );
+      C: optConstraints,
+    });
+    cancelRef.current = cancel;
+
+    promise
+      .then((out) => {
+        // ignore if a newer run started
+        if (runIdRef.current !== runId) return;
+        setOptResult({ prices: out.prices, profit: out.profit });
+        pushJ(
+          `[${now()}] Optimizer ✓ best ladder $${out.prices.good}/$${
+            out.prices.better
+          }/$${out.prices.best} (profit≈$${Math.round(out.profit)})`
+        );
+      })
+      .catch((e) => {
+        if (runIdRef.current !== runId) return;
+        setOptError(e instanceof Error ? e.message : String(e));
+        pushJ(
+          `[${now()}] Optimizer error: ${
+            e instanceof Error ? e.message : String(e)
+          }`
+        );
+      })
+      .finally(() => {
+        if (runIdRef.current === runId) {
+          setIsOptRunning(false);
+          cancelRef.current = null;
+        }
+      });
   }
 
   function applyOptimizedPrices() {
@@ -186,6 +215,17 @@ export default function App() {
       best: optResult.prices.best,
     });
   }
+
+  const [isOptRunning, setIsOptRunning] = useState(false);
+  const [optError, setOptError] = useState<string | null>(null);
+  const runIdRef = useRef(0);
+  const cancelRef = useRef<null | (() => void)>(null);
+
+  useEffect(() => {
+    return () => {
+      if (cancelRef.current) cancelRef.current();
+    };
+  }, []);
 
   // Demand scale for demo math
   const N = 1000;
@@ -229,6 +269,7 @@ export default function App() {
     costs.best,
     features,
     segments,
+    refPrices,
   ]);
 
   const bestPriceOpt = frontier.optimum?.bestPrice ?? prices.best;
@@ -744,18 +785,22 @@ export default function App() {
                   <button
                     className="border rounded px-2 py-1"
                     onClick={runOptimizer}
+                    disabled={isOptRunning}
                   >
-                    Run
+                    {isOptRunning ? "Running…" : "Run"}
                   </button>
                   <button
                     className="border rounded px-2 py-1"
                     onClick={applyOptimizedPrices}
-                    disabled={!optResult}
+                    disabled={!optResult || isOptRunning}
                   >
                     Apply
                   </button>
                 </div>
                 <div className="text-xs text-gray-700">
+                  {optError && (
+                    <div className="text-red-600 mb-1">Error: {optError}</div>
+                  )}
                   {optResult ? (
                     <>
                       <div>
