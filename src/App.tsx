@@ -519,27 +519,42 @@ export default function App() {
           </Section>
 
           <Section title="Reference prices">
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              {(["good", "better", "best"] as const).map((t) => (
-                <label key={t} className="flex items-center gap-1">
-                  <span className="w-12 capitalize">{t}</span>
-                  <input
-                    type="number"
-                    className="border rounded px-1 py-0.5 w-20"
-                    value={refPrices[t]}
-                    onChange={(e) =>
-                      setRefPrices((prev) => ({
-                        ...prev,
-                        [t]: Number(e.target.value),
-                      }))
-                    }
-                  />
-                </label>
-              ))}
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2 items-center">
+              <label className="text-sm">Good</label>
+              <input
+                type="number"
+                className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                value={refPrices.good}
+                onChange={(e) =>
+                  setRefPrices((p) => ({ ...p, good: Number(e.target.value) }))
+                }
+              />
+              <label className="text-sm">Better</label>
+              <input
+                type="number"
+                className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                value={refPrices.better}
+                onChange={(e) =>
+                  setRefPrices((p) => ({
+                    ...p,
+                    better: Number(e.target.value),
+                  }))
+                }
+              />
+              <label className="text-sm">Best</label>
+              <input
+                type="number"
+                className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                value={refPrices.best}
+                onChange={(e) =>
+                  setRefPrices((p) => ({ ...p, best: Number(e.target.value) }))
+                }
+              />
             </div>
-            <div className="mt-2">
+
+            <div className="mt-3">
               <button
-                className="border rounded px-2 py-1 text-xs"
+                className="border rounded-md px-3 py-1.5 text-xs bg-white hover:bg-gray-50"
                 onClick={setRefsFromCurrent}
               >
                 Set from current prices
@@ -658,68 +673,15 @@ export default function App() {
           </Section>
 
           <Section title="Global Optimizer">
-            <div className="grid grid-cols-3 gap-2 text-xs items-end">
-              {/* Ranges */}
-              <div>
-                <div className="font-semibold mb-1">Ranges ($)</div>
-                {(["good", "better", "best"] as const).map((t) => (
-                  <div key={t} className="flex items-center gap-1 mb-1">
-                    <span className="w-12 capitalize">{t}</span>
-                    <input
-                      type="number"
-                      className="border rounded px-1 py-0.5 w-16"
-                      value={optRanges[t][0]}
-                      onChange={(e) =>
-                        setOptRanges((r) => ({
-                          ...r,
-                          [t]: [Number(e.target.value), r[t][1]] as [
-                            number,
-                            number
-                          ],
-                        }))
-                      }
-                    />
-                    <span>–</span>
-                    <input
-                      type="number"
-                      className="border rounded px-1 py-0.5 w-16"
-                      value={optRanges[t][1]}
-                      onChange={(e) =>
-                        setOptRanges((r) => ({
-                          ...r,
-                          [t]: [r[t][0], Number(e.target.value)] as [
-                            number,
-                            number
-                          ],
-                        }))
-                      }
-                    />
-                  </div>
-                ))}
-                <div className="flex items-center gap-2">
-                  <span className="w-12">Step</span>
-                  <input
-                    type="number"
-                    className="border rounded px-1 py-0.5 w-16"
-                    value={optRanges.step}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        step: Math.max(0.25, Number(e.target.value)),
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Constraints */}
-              <div>
-                <div className="font-semibold mb-1">Constraints</div>
-                <label className="flex items-center gap-2 mb-1">
-                  <span className="w-24">Gap G→B</span>
+              <div className="space-y-2">
+                <div className="font-semibold">Constraints</div>
+                <label className="flex items-center gap-2">
+                  <span className="w-28">Gap G→B</span>
                   <input
                     type="number"
-                    className="border rounded px-1 py-0.5 w-16"
+                    className="border rounded px-2 h-9 w-24"
                     value={optConstraints.gapGB}
                     onChange={(e) =>
                       setOptConstraints((c) => ({
@@ -729,11 +691,11 @@ export default function App() {
                     }
                   />
                 </label>
-                <label className="flex items-center gap-2 mb-1">
-                  <span className="w-24">Gap B→Best</span>
+                <label className="flex items-center gap-2">
+                  <span className="w-28">Gap B→Best</span>
                   <input
                     type="number"
-                    className="border rounded px-1 py-0.5 w-16"
+                    className="border rounded px-2 h-9 w-24"
                     value={optConstraints.gapBB}
                     onChange={(e) =>
                       setOptConstraints((c) => ({
@@ -744,12 +706,12 @@ export default function App() {
                   />
                 </label>
                 {(["good", "better", "best"] as const).map((t) => (
-                  <label key={t} className="flex items-center gap-2 mb-1">
-                    <span className="w-24 capitalize">{t} margin ≥</span>
+                  <label key={t} className="flex items-center gap-2">
+                    <span className="w-28 capitalize">{t} margin ≥</span>
                     <input
                       type="number"
                       step={0.01}
-                      className="border rounded px-1 py-0.5 w-16"
+                      className="border rounded px-2 h-9 w-24"
                       value={optConstraints.marginFloor[t]}
                       onChange={(e) =>
                         setOptConstraints((c) => ({
@@ -763,7 +725,7 @@ export default function App() {
                     />
                   </label>
                 ))}
-                <label className="flex items-center gap-2 mt-1">
+                <label className="flex items-center gap-2 pt-1">
                   <input
                     type="checkbox"
                     checked={optConstraints.charm}
@@ -778,19 +740,72 @@ export default function App() {
                 </label>
               </div>
 
+              {/* Ranges */}
+              <div className="space-y-2">
+                <div className="font-semibold">Ranges ($)</div>
+                {(["good", "better", "best"] as const).map((t) => (
+                  <div key={t} className="flex items-center gap-2">
+                    <span className="w-14 capitalize">{t}</span>
+                    <input
+                      type="number"
+                      className="border rounded px-2 h-9 w-20"
+                      value={optRanges[t][0]}
+                      onChange={(e) =>
+                        setOptRanges((r) => ({
+                          ...r,
+                          [t]: [Number(e.target.value), r[t][1]] as [
+                            number,
+                            number
+                          ],
+                        }))
+                      }
+                    />
+                    <span>–</span>
+                    <input
+                      type="number"
+                      className="border rounded px-2 h-9 w-20"
+                      value={optRanges[t][1]}
+                      onChange={(e) =>
+                        setOptRanges((r) => ({
+                          ...r,
+                          [t]: [r[t][0], Number(e.target.value)] as [
+                            number,
+                            number
+                          ],
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+                <div className="flex items-center gap-2">
+                  <span className="w-14">Step</span>
+                  <input
+                    type="number"
+                    className="border rounded px-2 h-9 w-20"
+                    value={optRanges.step}
+                    onChange={(e) =>
+                      setOptRanges((r) => ({
+                        ...r,
+                        step: Math.max(0.25, Number(e.target.value)),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
               {/* Actions / Result */}
-              <div>
-                <div className="font-semibold mb-1">Actions</div>
-                <div className="flex gap-2 mb-2">
+              <div className="space-y-2">
+                <div className="font-semibold">Actions</div>
+                <div className="flex gap-2">
                   <button
-                    className="border rounded px-2 py-1"
+                    className="border rounded px-3 h-9 bg-white hover:bg-gray-50"
                     onClick={runOptimizer}
                     disabled={isOptRunning}
                   >
                     {isOptRunning ? "Running…" : "Run"}
                   </button>
                   <button
-                    className="border rounded px-2 py-1"
+                    className="border rounded px-3 h-9 bg-white hover:bg-gray-50 disabled:opacity-50"
                     onClick={applyOptimizedPrices}
                     disabled={!optResult || isOptRunning}
                   >
