@@ -2,6 +2,7 @@
 
 import { gridSearch, type Constraints, type SearchRanges } from "../lib/optimize"
 import type { Prices, Features, Segment } from "../lib/segments"
+import type { Leakages } from "../lib/waterfall"
 
 export type OptimizeIn = {
   ranges: SearchRanges
@@ -11,6 +12,7 @@ export type OptimizeIn = {
   refPrices?: Prices
   N: number
   C: Constraints
+  leak?: Leakages
   runId: number            // used to ignore stale responses
 }
 
@@ -21,7 +23,7 @@ export type OptimizeOut =
 self.onmessage = (ev: MessageEvent<OptimizeIn>) => {
   const msg = ev.data
   try {
-    const best = gridSearch(msg.ranges, msg.costs, msg.feats, msg.segs, msg.refPrices, msg.N, msg.C)
+    const best = gridSearch(msg.ranges, msg.costs, msg.feats, msg.segs, msg.refPrices, msg.N, msg.C, msg.leak)
     const out: OptimizeOut = { ok: true, runId: msg.runId, prices: best.prices, profit: best.profit }
     ;(self as unknown as Worker).postMessage(out)
   } catch (e) {
