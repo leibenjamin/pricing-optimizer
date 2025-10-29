@@ -41,6 +41,16 @@ export default function App() {
   // Draft value for Best while dragging, and the drag start (for the "from" price)
 
   const [prices, setPrices] = useState({ good: 9, better: 15, best: 25 });
+
+  const [refPrices, setRefPrices] = useState({ good: 9, better: 15, best: 25 });
+  // (optional) a quick helper to set refs from current sliders
+  const setRefsFromCurrent = () =>
+    setRefPrices({
+      good: prices.good,
+      better: prices.better,
+      best: prices.best,
+    });
+
   const [bestDraft, setBestDraft] = useState<number>(prices.best);
   const [bestDragStart, setBestDragStart] = useState<number | null>(null);
   const [features, setFeatures] = useState({
@@ -130,15 +140,15 @@ export default function App() {
 
   const probs = useMemo(() => {
     const p = { good: prices.good, better: prices.better, best: bestDraft };
-    return choiceShares(p, features, segments);
-  }, [prices.good, prices.better, bestDraft, features, segments]);
+    return choiceShares(p, features, segments, refPrices);
+  }, [prices.good, prices.better, bestDraft, features, segments, refPrices]);
 
   // Profit frontier: sweep Best price; keep Good/Better fixed (latent-class mix)
   const frontier = useMemo(() => {
     const points: { bestPrice: number; profit: number }[] = [];
     for (let p = 5; p <= 60; p += 1) {
       const pricesP = { good: prices.good, better: prices.better, best: p };
-      const probsP = choiceShares(pricesP, features, segments);
+      const probsP = choiceShares(pricesP, features, segments, refPrices);
       const take_good = Math.round(N * probsP.good);
       const take_better = Math.round(N * probsP.better);
       const take_best = Math.round(N * probsP.best);
@@ -415,6 +425,35 @@ export default function App() {
             </div>
           </Section>
 
+          <Section title="Reference prices">
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              {(["good", "better", "best"] as const).map((t) => (
+                <label key={t} className="flex items-center gap-1">
+                  <span className="w-12 capitalize">{t}</span>
+                  <input
+                    type="number"
+                    className="border rounded px-1 py-0.5 w-20"
+                    value={refPrices[t]}
+                    onChange={(e) =>
+                      setRefPrices((prev) => ({
+                        ...prev,
+                        [t]: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="mt-2">
+              <button
+                className="border rounded px-2 py-1 text-xs"
+                onClick={setRefsFromCurrent}
+              >
+                Set from current prices
+              </button>
+            </div>
+          </Section>
+
           <Section title="Methods">
             <p className="text-sm text-gray-700">
               MNL: U = β₀(j) + βₚ·price + β_A·featA + β_B·featB; outside option
@@ -517,9 +556,14 @@ export default function App() {
                 Frontier shows profit vs Best price with current Good/Better
                 fixed.
               </div>
+              <div className="text-xs text-gray-600">
+                Anchoring on refs{" "}
+                {`$${refPrices.good}/$${refPrices.better}/$${refPrices.best}`};
+                loss aversion on increases.
+              </div>
             </div>
           </Section>
-          
+
           <Section title="Segments (mix)">
             <div className="space-y-2 text-xs">
               {segments.map((s, i) => (

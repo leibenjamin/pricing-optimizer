@@ -3,43 +3,78 @@ import type { Prices, Features, Segment } from "./segments"
 
 export type Shares = { none: number; good: number; better: number; best: number }
 
-// numerically stable softmax over array of utilities
+// Numerically-stable softmax
 function softmax(us: number[]): number[] {
   const m = Math.max(...us)
-  const exps = us.map(u => Math.exp(u - m))
+  const exps = us.map((u) => Math.exp(u - m))
   const s = exps.reduce((a, b) => a + b, 0)
-  return exps.map(e => e / s)
+  return exps.map((e) => e / s)
 }
 
-// One segment’s MNL shares given prices & features
-function segmentShares(prices: Prices, feats: Features, s: Segment): Shares {
-  const U_none   = s.betaNone
-  const U_good   = s.betaPrice * prices.good   + s.betaFeatA * feats.featA.good   + s.betaFeatB * feats.featB.good
-  const U_better = s.betaPrice * prices.better + s.betaFeatA * feats.featA.better + s.betaFeatB * feats.featB.better
-  const U_best   = s.betaPrice * prices.best   + s.betaFeatA * feats.featA.best   + s.betaFeatB * feats.featB.best
+/**
+ * Mixed multinomial-logit shares across latent segments.
+ * - prices: current ladder {good, better, best}
+ * - feats: simple binary/continuous features per tier
+ * - segments: latent classes with weights and coefficients
+ * - refPrices: optional reference prices to apply anchoring + loss aversion
+ */
+export function choiceShares(
+  prices: Prices,
+  feats: Features,
+  segments: Segment[],
+  refPrices?: Prices
+): Shares {
+  // accumulator for the weighted mix
+  let accNone = 0,
+    accGood = 0,
+    accBetter = 0,
+    accBest = 0
 
-  const [pNone, pGood, pBetter, pBest] = softmax([U_none, U_good, U_better, U_best])
-  return { none: pNone, good: pGood, better: pBetter, best: pBest }
-}
+  for (const s of segments) {
+    // Base utilities per tier
+    const U_none = s.betaNone
+    let U_good =
+      s.betaPrice * prices.good +
+      s.betaFeatA * feats.featA.good +
+      s.betaFeatB * feats.featB.good
+    let U_better =
+      s.betaPrice * prices.better +
+      s.betaFeatA * feats.featA.better +
+      s.betaFeatB * feats.featB.better
+    let U_best =
+      s.betaPrice * prices.best +
+      s.betaFeatA * feats.featA.best +
+      s.betaFeatB * feats.featB.best
 
-// Mix segments by weight to get overall shares
-export function choiceShares(prices: Prices, feats: Features, segments: Segment[]): Shares {
-  const mixInit = { none: 0, good: 0, better: 0, best: 0 }
-  const total = segments.reduce((acc, seg) => {
-    const sh = segmentShares(prices, feats, seg)
-    return {
-      none:   acc.none   + seg.weight * sh.none,
-      good:   acc.good   + seg.weight * sh.good,
-      better: acc.better + seg.weight * sh.better,
-      best:   acc.best   + seg.weight * sh.best,
+    // Optional: reference-price anchoring with loss aversion
+    if (refPrices && s.alphaAnchor && s.alphaAnchor > 0) {
+      const lambda = s.lambdaLoss && s.lambdaLoss > 1 ? s.lambdaLoss : 1
+      const adj = (p: number, r: number) => {
+        const d = p - r
+        // Price increases (d>=0) are penalized by lambda > 1 (losses loom larger)
+        return s.alphaAnchor! * (d >= 0 ? lambda * d : d)
+      }
+      U_good += adj(prices.good, refPrices.good)
+      U_better += adj(prices.better, refPrices.better)
+      U_best += adj(prices.best, refPrices.best)
     }
-  }, mixInit)
-  // tiny numeric guard
-  const sum = total.none + total.good + total.better + total.best
-  return sum > 0 ? {
-    none: total.none / sum,
-    good: total.good / sum,
-    better: total.better / sum,
-    best: total.best / sum,
-  } : { none: 1, good: 0, better: 0, best: 0 }
+
+    const [pNone, pGood, pBetter, pBest] = softmax([U_none, U_good, U_better, U_best])
+
+    accNone += s.weight * pNone
+    accGood += s.weight * pGood
+    accBetter += s.weight * pBetter
+    accBest += s.weight * pBest
+  }
+
+  // Normalize just in case segment weights were off due to rounding
+  const sum = accNone + accGood + accBetter + accBest
+  if (sum <= 0) return { none: 1, good: 0, better: 0, best: 0 }
+
+  return {
+    none: accNone / sum,
+    good: accGood / sum,
+    better: accBetter / sum,
+    best: accBest / sum,
+  }
 }
