@@ -15,6 +15,11 @@ import {
   type Segment,
 } from "./lib/segments";
 import { choiceShares } from "./lib/choice";
+import {
+  gridSearch,
+  type Constraints,
+  type SearchRanges,
+} from "./lib/optimize";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
@@ -134,6 +139,53 @@ export default function App() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Optimizer inputs
+  const [optRanges, setOptRanges] = useState<SearchRanges>({
+    good: [5, 30],
+    better: [10, 45],
+    best: [15, 60],
+    step: 1,
+  });
+  const [optConstraints, setOptConstraints] = useState<Constraints>({
+    gapGB: 2,
+    gapBB: 3,
+    marginFloor: { good: 0.25, better: 0.25, best: 0.25 },
+    charm: false,
+  });
+
+  // Result of last run
+  const [optResult, setOptResult] = useState<{
+    prices: { good: number; better: number; best: number };
+    profit: number;
+  } | null>(null);
+
+  function runOptimizer() {
+    const out = gridSearch(
+      optRanges,
+      costs,
+      features,
+      segments,
+      refPrices,
+      N,
+      optConstraints
+    );
+    setOptResult(out);
+    pushJ(
+      `[${now()}] Optimizer: best ladder $${out.prices.good}/$${
+        out.prices.better
+      }/$${out.prices.best} (profit≈$${Math.round(out.profit)})`
+    );
+  }
+
+  function applyOptimizedPrices() {
+    if (!optResult) return;
+    setPrices({
+      good: optResult.prices.good,
+      better: optResult.prices.better,
+      best: optResult.prices.best,
+    });
+  }
 
   // Demand scale for demo math
   const N = 1000;
@@ -560,6 +612,162 @@ export default function App() {
                 Anchoring on refs{" "}
                 {`$${refPrices.good}/$${refPrices.better}/$${refPrices.best}`};
                 loss aversion on increases.
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Global Optimizer">
+            <div className="grid grid-cols-3 gap-2 text-xs items-end">
+              {/* Ranges */}
+              <div>
+                <div className="font-semibold mb-1">Ranges ($)</div>
+                {(["good", "better", "best"] as const).map((t) => (
+                  <div key={t} className="flex items-center gap-1 mb-1">
+                    <span className="w-12 capitalize">{t}</span>
+                    <input
+                      type="number"
+                      className="border rounded px-1 py-0.5 w-16"
+                      value={optRanges[t][0]}
+                      onChange={(e) =>
+                        setOptRanges((r) => ({
+                          ...r,
+                          [t]: [Number(e.target.value), r[t][1]] as [
+                            number,
+                            number
+                          ],
+                        }))
+                      }
+                    />
+                    <span>–</span>
+                    <input
+                      type="number"
+                      className="border rounded px-1 py-0.5 w-16"
+                      value={optRanges[t][1]}
+                      onChange={(e) =>
+                        setOptRanges((r) => ({
+                          ...r,
+                          [t]: [r[t][0], Number(e.target.value)] as [
+                            number,
+                            number
+                          ],
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+                <div className="flex items-center gap-2">
+                  <span className="w-12">Step</span>
+                  <input
+                    type="number"
+                    className="border rounded px-1 py-0.5 w-16"
+                    value={optRanges.step}
+                    onChange={(e) =>
+                      setOptRanges((r) => ({
+                        ...r,
+                        step: Math.max(0.25, Number(e.target.value)),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* Constraints */}
+              <div>
+                <div className="font-semibold mb-1">Constraints</div>
+                <label className="flex items-center gap-2 mb-1">
+                  <span className="w-24">Gap G→B</span>
+                  <input
+                    type="number"
+                    className="border rounded px-1 py-0.5 w-16"
+                    value={optConstraints.gapGB}
+                    onChange={(e) =>
+                      setOptConstraints((c) => ({
+                        ...c,
+                        gapGB: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <label className="flex items-center gap-2 mb-1">
+                  <span className="w-24">Gap B→Best</span>
+                  <input
+                    type="number"
+                    className="border rounded px-1 py-0.5 w-16"
+                    value={optConstraints.gapBB}
+                    onChange={(e) =>
+                      setOptConstraints((c) => ({
+                        ...c,
+                        gapBB: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                {(["good", "better", "best"] as const).map((t) => (
+                  <label key={t} className="flex items-center gap-2 mb-1">
+                    <span className="w-24 capitalize">{t} margin ≥</span>
+                    <input
+                      type="number"
+                      step={0.01}
+                      className="border rounded px-1 py-0.5 w-16"
+                      value={optConstraints.marginFloor[t]}
+                      onChange={(e) =>
+                        setOptConstraints((c) => ({
+                          ...c,
+                          marginFloor: {
+                            ...c.marginFloor,
+                            [t]: Number(e.target.value),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                ))}
+                <label className="flex items-center gap-2 mt-1">
+                  <input
+                    type="checkbox"
+                    checked={optConstraints.charm}
+                    onChange={(e) =>
+                      setOptConstraints((c) => ({
+                        ...c,
+                        charm: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span>Charm endings (.99)</span>
+                </label>
+              </div>
+
+              {/* Actions / Result */}
+              <div>
+                <div className="font-semibold mb-1">Actions</div>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    className="border rounded px-2 py-1"
+                    onClick={runOptimizer}
+                  >
+                    Run
+                  </button>
+                  <button
+                    className="border rounded px-2 py-1"
+                    onClick={applyOptimizedPrices}
+                    disabled={!optResult}
+                  >
+                    Apply
+                  </button>
+                </div>
+                <div className="text-xs text-gray-700">
+                  {optResult ? (
+                    <>
+                      <div>
+                        Best: ${optResult.prices.good} / $
+                        {optResult.prices.better} / ${optResult.prices.best}
+                      </div>
+                      <div>Profit ≈ ${Math.round(optResult.profit)}</div>
+                    </>
+                  ) : (
+                    <div className="text-gray-500">No result yet</div>
+                  )}
+                </div>
               </div>
             </div>
           </Section>
