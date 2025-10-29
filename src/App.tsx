@@ -611,7 +611,7 @@ export default function App() {
         </div>
 
         {/* Right: Journal */}
-        <div className="col-span-12 md:col-span-3 space-y-4 min-w-0">
+        <div className="col-span-12 md:col-span-3 space-y-4 min-w-0 md:sticky md:top-4 self-start">
           <Section title="Scenario Journal">
             <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
               {journal.length === 0 ? (
@@ -935,88 +935,99 @@ export default function App() {
           </Section>
 
           <Section title="Segments (mix)">
-            <div className="space-y-2 text-xs">
-              {segments.map((s, i) => (
-                <div key={s.name} className="flex items-center gap-2">
-                  <div className="w-28">{s.name}</div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={s.weight}
-                    onChange={(e) => {
-                      const w = Number(e.target.value);
-                      const next = segments.map((t, j) =>
-                        j === i ? { ...t, weight: w } : t
-                      );
-                      setSegments(normalizeWeights(next));
-                    }}
-                    className="flex-1"
-                    aria-label={`${s.name} weight`}
-                  />
-                  <div className="w-10 text-right">
-                    {Math.round(s.weight * 100)}%
+            <details open className="text-xs">
+              <summary className="cursor-pointer select-none font-medium mb-2">
+                Adjust segment weights
+              </summary>
+              <div className="space-y-2 text-xs">
+                {segments.map((s, i) => (
+                  <div key={s.name} className="flex items-center gap-2">
+                    <div className="w-28">{s.name}</div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={s.weight}
+                      onChange={(e) => {
+                        const w = Number(e.target.value);
+                        const next = segments.map((t, j) =>
+                          j === i ? { ...t, weight: w } : t
+                        );
+                        setSegments(normalizeWeights(next));
+                      }}
+                      className="flex-1"
+                      aria-label={`${s.name} weight`}
+                    />
+                    <div className="w-10 text-right">
+                      {Math.round(s.weight * 100)}%
+                    </div>
                   </div>
+                ))}
+                <div className="flex justify-end">
+                  <button
+                    className="border rounded px-2 py-1"
+                    onClick={() => setSegments(normalizeWeights(segments))}
+                  >
+                    Normalize
+                  </button>
                 </div>
-              ))}
-              <div className="flex justify-end">
-                <button
-                  className="border rounded px-2 py-1"
-                  onClick={() => setSegments(normalizeWeights(segments))}
-                >
-                  Normalize
-                </button>
               </div>
-            </div>
+            </details>
           </Section>
 
           <Section title="Recent short links">
-            <ul className="text-xs space-y-1">
-              {readRecents().length === 0 ? (
-                <li className="text-gray-500">None yet</li>
-              ) : (
-                readRecents().map((r) => (
-                  <li
-                    key={r.id}
-                    className="flex items-center justify-between gap-2"
-                  >
-                    <button
-                      className="underline"
-                      title={new Date(r.t).toLocaleString()}
-                      onClick={() => {
-                        const url = `${location.origin}${location.pathname}?s=${r.id}`;
-                        location.assign(url); // reload page with this id
-                      }}
+            <details className="text-xs">
+              <summary className="cursor-pointer select-none font-medium mb-2">
+                Show recents
+              </summary>
+
+              <ul className="text-xs space-y-1">
+                {readRecents().length === 0 ? (
+                  <li className="text-gray-500">None yet</li>
+                ) : (
+                  readRecents().map((r) => (
+                    <li
+                      key={r.id}
+                      className="flex items-center justify-between gap-2"
                     >
-                      {r.id}
-                    </button>
-                    <button
-                      className="border rounded px-2 py-0.5"
-                      onClick={() => {
-                        const url = `${location.origin}${location.pathname}?s=${r.id}`;
-                        navigator.clipboard.writeText(url).catch(() => {});
-                        pushJ(`[${now()}] Copied short link ${r.id}`);
-                      }}
-                    >
-                      Copy
-                    </button>
-                  </li>
-                ))
-              )}
-            </ul>
-            <div className="mt-2">
-              <button
-                className="text-xs border rounded px-2 py-1"
-                onClick={() => {
-                  localStorage.removeItem(RECENT_KEY);
-                  pushJ(`[${now()}] Cleared recent short links`);
-                  location.reload();
-                }}
-              >
-                Clear recents
-              </button>
-            </div>
+                      <button
+                        className="underline"
+                        title={new Date(r.t).toLocaleString()}
+                        onClick={() => {
+                          const url = `${location.origin}${location.pathname}?s=${r.id}`;
+                          location.assign(url); // reload page with this id
+                        }}
+                      >
+                        {r.id}
+                      </button>
+                      <button
+                        className="border rounded px-2 py-0.5"
+                        onClick={() => {
+                          const url = `${location.origin}${location.pathname}?s=${r.id}`;
+                          navigator.clipboard.writeText(url).catch(() => {});
+                          pushJ(`[${now()}] Copied short link ${r.id}`);
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+              <div className="mt-2">
+                <button
+                  className="text-xs border rounded px-2 py-1"
+                  onClick={() => {
+                    localStorage.removeItem(RECENT_KEY);
+                    pushJ(`[${now()}] Cleared recent short links`);
+                    location.reload();
+                  }}
+                >
+                  Clear recents
+                </button>
+              </div>
+            </details>
           </Section>
         </div>
       </main>
