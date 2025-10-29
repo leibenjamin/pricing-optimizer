@@ -680,6 +680,12 @@ export default function App() {
                 (profit ≈ <strong>{fmtUSD(bestProfitOpt)}</strong>). Segments:
                 Price-sens / Value / Premium.
               </div>
+              {optResult && (
+                <div className="mt-1 inline-block text-[11px] px-2 py-1 rounded bg-gray-100 border">
+                  Opt best: ${optResult.prices.good}/{optResult.prices.better}/
+                  {optResult.prices.best} • π≈${Math.round(optResult.profit)}
+                </div>
+              )}
               <div className="text-xs text-gray-500">
                 Frontier shows profit vs Best price with current Good/Better
                 fixed.
