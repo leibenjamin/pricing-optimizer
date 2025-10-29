@@ -1,6 +1,7 @@
 // src/lib/optimize.ts
 import type { Prices, Features, Segment } from "./segments"
 import { choiceShares } from "./choice"
+import { computePocketPrice, type Leakages } from "./waterfall"
 
 export type Ladder = Prices
 
@@ -12,6 +13,7 @@ export type Constraints = {
   marginFloor: { good: number; better: number; best: number }
   // optional charm-price snapping
   charm: boolean
+  usePocketMargins?: boolean // (default false)
 }
 
 export type SearchRanges = {
@@ -39,7 +41,8 @@ export function gridSearch(
   segs: Segment[],
   refPrices: Prices | undefined,
   N: number,
-  C: Constraints
+  C: Constraints,
+  leak?: Leakages
 ): { prices: Ladder; profit: number } {
   let best = { prices: { good: ranges.good[0], better: ranges.better[0], best: ranges.best[0] }, profit: -Infinity }
 
@@ -59,9 +62,15 @@ export function gridSearch(
         const p: Prices = { good: pg, better: pb, best: pBest }
 
         // margin floors
-        const mg = (p.good   - costs.good)   / Math.max(1e-6, p.good)
-        const mb = (p.better - costs.better) / Math.max(1e-6, p.better)
-        const mB = (p.best   - costs.best)   / Math.max(1e-6, p.best)
+        // compute effective “price” to test margin floors
+        const effGood   = C.usePocketMargins && leak ? computePocketPrice(p.good,   "good",   leak).pocket   : p.good
+        const effBetter = C.usePocketMargins && leak ? computePocketPrice(p.better, "better", leak).pocket : p.better
+        const effBest   = C.usePocketMargins && leak ? computePocketPrice(p.best,   "best",   leak).pocket   : p.best
+
+        const mg = (effGood   - costs.good)   / Math.max(1e-6, effGood)
+        const mb = (effBetter - costs.better) / Math.max(1e-6, effBetter)
+        const mB = (effBest   - costs.best)   / Math.max(1e-6, effBest)
+
         if (mg < C.marginFloor.good || mb < C.marginFloor.better || mB < C.marginFloor.best) continue
 
         const shares = choiceShares(p, feats, segs, refPrices)
