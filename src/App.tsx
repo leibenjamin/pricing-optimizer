@@ -25,15 +25,20 @@ const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 function Section({
   title,
   children,
+  className = "",
 }: {
   title: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="rounded-2xl shadow p-4 border border-gray-200 bg-white">
+    <section
+      className={`rounded-2xl shadow p-4 border border-gray-200 bg-white ${className}`}
+    >
       <h2 className="font-semibold text-lg mb-3">{title}</h2>
-      {children}
-    </div>
+      {/* ensure consistent vertical rhythm inside all sections */}
+      <div className="space-y-3">{children}</div>
+    </section>
   );
 }
 
@@ -339,7 +344,7 @@ export default function App() {
 
       <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4">
         {/* Left: Scenario Panel */}
-        <div className="col-span-12 md:col-span-3 space-y-4">
+        <div className="col-span-12 md:col-span-3 space-y-4 min-w-0">
           <Section title="Scenario Panel">
             <div className="space-y-4">
               {/* GOOD & BETTER: keep current immediate-commit + log-on-change behavior */}
@@ -578,22 +583,37 @@ export default function App() {
         </div>
 
         {/* Center: Charts */}
-        <div className="col-span-12 md:col-span-6 space-y-4">
-          <Section title="Profit Frontier">
-            <FrontierChartReal
-              points={frontier.points}
-              optimum={frontier.optimum}
-            />
+        <div className="col-span-12 md:col-span-6 space-y-4 min-w-0">
+          <Section title="Profit Frontier" className="overflow-hidden">
+            <div
+              style={{
+                contentVisibility: "auto",
+                containIntrinsicSize: "420px",
+              }}
+            >
+              <FrontierChartReal
+                points={frontier.points}
+                optimum={frontier.optimum}
+              />
+            </div>
           </Section>
-          <Section title="Take-Rate Bars">
-            <TakeRateChart data={probs} />
+
+          <Section title="Take-Rate Bars" className="overflow-hidden">
+            <div
+              style={{
+                contentVisibility: "auto",
+                containIntrinsicSize: "320px",
+              }}
+            >
+              <TakeRateChart data={probs} />
+            </div>
           </Section>
         </div>
 
         {/* Right: Journal */}
-        <div className="col-span-12 md:col-span-3 space-y-4">
+        <div className="col-span-12 md:col-span-3 space-y-4 min-w-0">
           <Section title="Scenario Journal">
-            <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1">
+            <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
               {journal.length === 0 ? (
                 <li className="text-gray-400">
                   Adjust sliders/toggles to log changes…
@@ -673,7 +693,7 @@ export default function App() {
           </Section>
 
           <Section title="Global Optimizer">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_minmax(200px,0.9fr)] gap-4">
               {/* Constraints */}
               <div className="space-y-2">
                 <div className="font-semibold">Constraints</div>
