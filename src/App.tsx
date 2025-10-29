@@ -18,6 +18,9 @@ import { choiceShares } from "./lib/choice";
 import { type Constraints, type SearchRanges } from "./lib/optimize";
 import { runOptimizeInWorker } from "./lib/optWorker";
 
+import { computePocketPrice, type Leakages, type Tier } from "./lib/waterfall";
+import { Waterfall } from "./components/Waterfall";
+
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -231,6 +234,32 @@ export default function App() {
       if (cancelRef.current) cancelRef.current();
     };
   }, []);
+
+  const [leak, setLeak] = useState<Leakages>({
+    promo: { good: 0.05, better: 0.05, best: 0.05 }, // 5% promo
+    volume: { good: 0.03, better: 0.03, best: 0.03 }, // 3% volume
+    paymentPct: 0.029, // 2.9% processor
+    paymentFixed: 0.1, // $0.10
+    fxPct: 0.01, // 1%
+    refundsPct: 0.02, // 2%
+  });
+
+  const [waterTier, setWaterTier] = useState<Tier>("good");
+
+  const listForWater =
+    waterTier === "good"
+      ? prices.good
+      : waterTier === "better"
+      ? prices.better
+      : prices.best;
+  const water = useMemo(
+    () => computePocketPrice(listForWater, waterTier, leak),
+    [listForWater, waterTier, leak]
+  );
+
+  function clamp01(x: number) {
+    return Math.max(0, Math.min(1, x));
+  }
 
   // Demand scale for demo math
   const N = 1000;
@@ -608,6 +637,137 @@ export default function App() {
               <TakeRateChart data={probs} />
             </div>
           </Section>
+
+          <Section title="Pocket Price Waterfall">
+            <div className="text-xs grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Controls */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-20">Tier</span>
+                  <select
+                    className="border rounded px-2 py-1"
+                    value={waterTier}
+                    onChange={(e) => setWaterTier(e.target.value as Tier)}
+                  >
+                    <option value="good">Good</option>
+                    <option value="better">Better</option>
+                    <option value="best">Best</option>
+                  </select>
+                </div>
+
+                <div className="font-semibold mt-2">Tier discounts (%)</div>
+                {(["good", "better", "best"] as const).map((t) => (
+                  <div key={t} className="flex items-center gap-2">
+                    <span className="w-20 capitalize">{t} promo</span>
+                    <input
+                      type="number"
+                      step={0.01}
+                      className="border rounded px-1 py-0.5 w-20"
+                      value={leak.promo[t]}
+                      onChange={(e) =>
+                        setLeak((L) => ({
+                          ...L,
+                          promo: {
+                            ...L.promo,
+                            [t]: clamp01(Number(e.target.value)),
+                          },
+                        }))
+                      }
+                    />
+                    <span className="w-20">volume</span>
+                    <input
+                      type="number"
+                      step={0.01}
+                      className="border rounded px-1 py-0.5 w-20"
+                      value={leak.volume[t]}
+                      onChange={(e) =>
+                        setLeak((L) => ({
+                          ...L,
+                          volume: {
+                            ...L.volume,
+                            [t]: clamp01(Number(e.target.value)),
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+
+                <div className="font-semibold mt-2">Global leakages</div>
+                <div className="flex items-center gap-2">
+                  <span className="w-32">Payment %</span>
+                  <input
+                    type="number"
+                    step={0.001}
+                    className="border rounded px-1 py-0.5 w-24"
+                    value={leak.paymentPct}
+                    onChange={(e) =>
+                      setLeak((L) => ({
+                        ...L,
+                        paymentPct: clamp01(Number(e.target.value)),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-32">Payment $</span>
+                  <input
+                    type="number"
+                    step={0.01}
+                    className="border rounded px-1 py-0.5 w-24"
+                    value={leak.paymentFixed}
+                    onChange={(e) =>
+                      setLeak((L) => ({
+                        ...L,
+                        paymentFixed: Math.max(0, Number(e.target.value)),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-32">FX %</span>
+                  <input
+                    type="number"
+                    step={0.001}
+                    className="border rounded px-1 py-0.5 w-24"
+                    value={leak.fxPct}
+                    onChange={(e) =>
+                      setLeak((L) => ({
+                        ...L,
+                        fxPct: clamp01(Number(e.target.value)),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-32">Refunds %</span>
+                  <input
+                    type="number"
+                    step={0.001}
+                    className="border rounded px-1 py-0.5 w-24"
+                    value={leak.refundsPct}
+                    onChange={(e) =>
+                      setLeak((L) => ({
+                        ...L,
+                        refundsPct: clamp01(Number(e.target.value)),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* Chart */}
+              <div>
+                <Waterfall
+                  title={`Waterfall — ${waterTier} (list $${listForWater.toFixed(
+                    2
+                  )})`}
+                  listPrice={listForWater}
+                  steps={water.steps}
+                />
+              </div>
+            </div>
+          </Section>
         </div>
 
         {/* Right: Journal */}
@@ -690,6 +850,11 @@ export default function App() {
                 Frontier shows profit vs Best price with current Good/Better
                 fixed.
               </div>
+              <div className="text-xs text-gray-700">
+                Pocket price ({waterTier}) ≈ ${water.pocket.toFixed(2)} from
+                list ${listForWater.toFixed(2)}
+              </div>
+
               <div className="text-xs text-gray-600">
                 Anchoring on refs{" "}
                 {`$${refPrices.good}/$${refPrices.better}/$${refPrices.best}`};
