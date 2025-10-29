@@ -9,7 +9,11 @@ import {
   formatCostChange,
   formatToggle,
 } from "./lib/logger";
-import { defaultSegments, type Segment } from "./lib/segments";
+import {
+  defaultSegments,
+  normalizeWeights,
+  type Segment,
+} from "./lib/segments";
 import { choiceShares } from "./lib/choice";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
@@ -70,10 +74,7 @@ export default function App() {
   };
 
   // ADD: latent-class segments state
-  const [segments] = useState<Segment[]>(defaultSegments);
-
-  // removed setters for now, until adding segments
-  // const [segments, setSegments] = useState<Segment[]>(defaultSegments);
+  const [segments, setSegments] = useState<Segment[]>(defaultSegments);
 
   // Estimate model once from synthetic data
   useEffect(() => {
@@ -509,12 +510,49 @@ export default function App() {
               </div>
               <div className="text-xs text-gray-600">
                 Best-price optimum ≈ <strong>${approx(bestPriceOpt)}</strong>{" "}
-                (profit ≈ <strong>{fmtUSD(bestProfitOpt)}</strong>).
-                Segments: Price-sens / Value / Premium.
+                (profit ≈ <strong>{fmtUSD(bestProfitOpt)}</strong>). Segments:
+                Price-sens / Value / Premium.
               </div>
               <div className="text-xs text-gray-500">
                 Frontier shows profit vs Best price with current Good/Better
                 fixed.
+              </div>
+            </div>
+          </Section>
+          
+          <Section title="Segments (mix)">
+            <div className="space-y-2 text-xs">
+              {segments.map((s, i) => (
+                <div key={s.name} className="flex items-center gap-2">
+                  <div className="w-28">{s.name}</div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={s.weight}
+                    onChange={(e) => {
+                      const w = Number(e.target.value);
+                      const next = segments.map((t, j) =>
+                        j === i ? { ...t, weight: w } : t
+                      );
+                      setSegments(normalizeWeights(next));
+                    }}
+                    className="flex-1"
+                    aria-label={`${s.name} weight`}
+                  />
+                  <div className="w-10 text-right">
+                    {Math.round(s.weight * 100)}%
+                  </div>
+                </div>
+              ))}
+              <div className="flex justify-end">
+                <button
+                  className="border rounded px-2 py-1"
+                  onClick={() => setSegments(normalizeWeights(segments))}
+                >
+                  Normalize
+                </button>
               </div>
             </div>
           </Section>
