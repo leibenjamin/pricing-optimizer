@@ -14,6 +14,7 @@ export type Constraints = {
   // optional charm-price snapping
   charm: boolean
   usePocketMargins?: boolean // (default false)
+  usePocketProfit?: boolean // (default false)
 }
 
 export type SearchRanges = {

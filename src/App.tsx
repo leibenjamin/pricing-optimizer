@@ -20,6 +20,7 @@ import { runOptimizeInWorker } from "./lib/optWorker";
 
 import { computePocketPrice, type Leakages, type Tier } from "./lib/waterfall";
 import { Waterfall } from "./components/Waterfall";
+import { LEAK_PRESETS } from "./lib/waterfallPresets";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
@@ -158,6 +159,7 @@ export default function App() {
     marginFloor: { good: 0.25, better: 0.25, best: 0.25 },
     charm: false,
     usePocketMargins: false,
+    usePocketProfit: false,
   });
 
   // Result of last run
@@ -642,6 +644,19 @@ export default function App() {
 
           <Section title="Pocket Price Waterfall">
             <div className="text-xs grid grid-cols-1 md:grid-cols-2 gap-3">
+              <select
+                className="border rounded px-2 py-1 text-xs"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (LEAK_PRESETS[v]) setLeak(LEAK_PRESETS[v]);
+                }}
+              >
+                <option>Choose preset…</option>
+                {Object.keys(LEAK_PRESETS).map((k) => (
+                  <option key={k}>{k}</option>
+                ))}
+              </select>
+
               {/* Controls */}
               <div className="space-y-2">
                 {/* Chart scope + quick help */}
@@ -1163,6 +1178,20 @@ export default function App() {
                     When enabled, margins are checked on pocket (after
                     promo/payment/FX/refunds) instead of list.
                   </p>
+
+                  <label className="flex items-center gap-2 sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={!!optConstraints.usePocketProfit}
+                      onChange={(e) =>
+                        setOptConstraints((c) => ({
+                          ...c,
+                          usePocketProfit: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span>Compute profit using pocket price</span>
+                  </label>
                 </div>
               </details>
             </div>
