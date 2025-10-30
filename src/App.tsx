@@ -266,6 +266,9 @@ export default function App() {
     [listForWater, waterTier, leak]
   );
 
+  // which preset is currently selected in the dropdown (for UI only)
+  const [presetSel, setPresetSel] = useState<string>("");
+
   function clamp01(x: number) {
     return Math.max(0, Math.min(1, x));
   }
@@ -683,21 +686,32 @@ export default function App() {
 
           <Section title="Pocket Price Waterfall">
             <div className="text-xs grid grid-cols-1 md:grid-cols-2 gap-3">
-              <select
-                className="border rounded px-2 py-1 text-xs"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (LEAK_PRESETS[v]) setLeak(LEAK_PRESETS[v]);
-                }}
-              >
-                <option>Choose preset…</option>
-                {Object.keys(LEAK_PRESETS).map((k) => (
-                  <option key={k}>{k}</option>
-                ))}
-              </select>
-
               {/* Controls */}
-              <div className="space-y-2">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <label className="w-28 text-xs text-gray-700">
+                    Choose preset
+                  </label>
+                  <select
+                    className="border rounded px-2 h-9 w-full md:w-64 bg-white"
+                    value={presetSel}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setPresetSel(v);
+                      if (LEAK_PRESETS[v]) setLeak(LEAK_PRESETS[v]);
+                    }}
+                  >
+                    <option value="" disabled>
+                      Choose preset…
+                    </option>
+                    {Object.keys(LEAK_PRESETS).map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Chart scope + quick help */}
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">Chart shows tier:</span>
@@ -890,7 +904,7 @@ export default function App() {
                   })}
                 </div>
               </details>
-              
+
               {/* ---- Channel blend (optional) ---- */}
               <details className="mt-3">
                 <summary className="cursor-pointer select-none text-xs font-medium">
@@ -907,8 +921,13 @@ export default function App() {
                         className="border rounded px-2 h-8 w-20"
                         value={row.w}
                         onChange={(e) => {
-                          const v = Math.max(0, Math.min(100, Number(e.target.value)))
-                          setChannelMix((cur) => cur.map((r, j) => (j === i ? { ...r, w: v } : r)))
+                          const v = Math.max(
+                            0,
+                            Math.min(100, Number(e.target.value))
+                          );
+                          setChannelMix((cur) =>
+                            cur.map((r, j) => (j === i ? { ...r, w: v } : r))
+                          );
                         }}
                       />
                       <span>%</span>
@@ -916,7 +935,11 @@ export default function App() {
                         className="border rounded px-2 h-8"
                         value={row.preset}
                         onChange={(e) =>
-                          setChannelMix((cur) => cur.map((r, j) => (j === i ? { ...r, preset: e.target.value } : r)))
+                          setChannelMix((cur) =>
+                            cur.map((r, j) =>
+                              j === i ? { ...r, preset: e.target.value } : r
+                            )
+                          )
                         }
                       >
                         {Object.keys(LEAK_PRESETS).map((k) => (
@@ -929,7 +952,9 @@ export default function App() {
                       {/* remove row */}
                       <button
                         className="ml-2 border rounded px-2 h-8 bg-white hover:bg-gray-50"
-                        onClick={() => setChannelMix((cur) => cur.filter((_, j) => j !== i))}
+                        onClick={() =>
+                          setChannelMix((cur) => cur.filter((_, j) => j !== i))
+                        }
                       >
                         Remove
                       </button>
@@ -940,7 +965,10 @@ export default function App() {
                   <button
                     className="border rounded px-3 h-8 bg-white hover:bg-gray-50"
                     onClick={() =>
-                      setChannelMix((cur) => [...cur, { preset: Object.keys(LEAK_PRESETS)[0], w: 0 }])
+                      setChannelMix((cur) => [
+                        ...cur,
+                        { preset: Object.keys(LEAK_PRESETS)[0], w: 0 },
+                      ])
                     }
                   >
                     Add row
@@ -952,8 +980,15 @@ export default function App() {
                       className="border rounded px-3 h-8 bg-white hover:bg-gray-50"
                       onClick={() =>
                         setChannelMix((cur) => {
-                          const sum = cur.reduce((s, r) => s + (isFinite(r.w) ? r.w : 0), 0) || 1
-                          return cur.map((r) => ({ ...r, w: Math.round((r.w / sum) * 100) }))
+                          const sum =
+                            cur.reduce(
+                              (s, r) => s + (isFinite(r.w) ? r.w : 0),
+                              0
+                            ) || 1;
+                          return cur.map((r) => ({
+                            ...r,
+                            w: Math.round((r.w / sum) * 100),
+                          }));
                         })
                       }
                     >
@@ -962,9 +997,12 @@ export default function App() {
                     <button
                       className="border rounded px-3 h-8 bg-white hover:bg-gray-50"
                       onClick={() => {
-                        const rows = channelMix.map((r) => ({ w: r.w, preset: r.preset }))
-                        const blended = blendLeaks(rows)
-                        setLeak(blended) // apply to all tiers
+                        const rows = channelMix.map((r) => ({
+                          w: r.w,
+                          preset: r.preset,
+                        }));
+                        const blended = blendLeaks(rows);
+                        setLeak(blended); // apply to all tiers
                       }}
                     >
                       Blend now → apply to leakages
@@ -972,8 +1010,6 @@ export default function App() {
                   </div>
                 </div>
               </details>
-
-
             </div>
           </Section>
         </div>
@@ -1076,7 +1112,7 @@ export default function App() {
             <div className="flex flex-col gap-3">
               {/* Header row wraps nicely on small screens */}
               <div className="flex flex-wrap items-end gap-3 text-xs">
-                <div className="font-semibold mr-2">Ranges ($)</div>
+                <span className="font-semibold mr-2">Ranges ($)</span>
 
                 {/* Good */}
                 <label className="flex items-center gap-1">
