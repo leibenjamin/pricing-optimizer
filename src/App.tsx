@@ -157,6 +157,7 @@ export default function App() {
     gapBB: 3,
     marginFloor: { good: 0.25, better: 0.25, best: 0.25 },
     charm: false,
+    usePocketMargins: false,
   });
 
   // Result of last run
@@ -184,6 +185,7 @@ export default function App() {
       refPrices,
       N,
       C: optConstraints,
+      leak,
     });
     cancelRef.current = cancel;
 
@@ -1140,6 +1142,27 @@ export default function App() {
                     />
                     <span>Charm endings (.99)</span>
                   </label>
+
+                  <label className="flex items-center gap-2 sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={!!optConstraints.usePocketMargins}
+                      onChange={(e) =>
+                        setOptConstraints((c) => ({
+                          ...c,
+                          usePocketMargins: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span>
+                      Use <em>pocket</em> price for margin floors
+                    </span>
+                  </label>
+
+                  <p className="text-[11px] text-gray-500 sm:col-span-2">
+                    When enabled, margins are checked on pocket (after
+                    promo/payment/FX/refunds) instead of list.
+                  </p>
                 </div>
               </details>
             </div>
