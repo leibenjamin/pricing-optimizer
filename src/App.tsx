@@ -642,18 +642,30 @@ export default function App() {
             <div className="text-xs grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Controls */}
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="w-20">Tier</span>
-                  <select
-                    className="border rounded px-2 py-1"
-                    value={waterTier}
-                    onChange={(e) => setWaterTier(e.target.value as Tier)}
-                  >
-                    <option value="good">Good</option>
-                    <option value="better">Better</option>
-                    <option value="best">Best</option>
-                  </select>
+                {/* Chart scope + quick help */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">Chart shows tier:</span>
+                  <div className="inline-flex overflow-hidden rounded border">
+                    {(["good", "better", "best"] as const).map((t) => (
+                      <button
+                        key={t}
+                        className={`px-2 py-1 capitalize ${
+                          waterTier === t
+                            ? "bg-gray-900 text-white"
+                            : "bg-white"
+                        }`}
+                        onClick={() => setWaterTier(t)}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+                <p className="text-[11px] text-gray-600">
+                  Tier discounts are per-tier (affect the selected tier’s
+                  chart). Global leakages (payment, FX, refunds) apply to all
+                  tiers.
+                </p>
 
                 <div className="font-semibold mt-2">Tier discounts (%)</div>
                 {(["good", "better", "best"] as const).map((t) => (
@@ -693,6 +705,35 @@ export default function App() {
                   </div>
                 ))}
 
+                {/* Copy helper */}
+                <div className="flex gap-2">
+                  <button
+                    className="border rounded px-2 py-1"
+                    onClick={() =>
+                      setLeak((L) => {
+                        const t = waterTier;
+                        return {
+                          ...L,
+                          promo: {
+                            good: L.promo[t],
+                            better: L.promo[t],
+                            best: L.promo[t],
+                          },
+                          volume: {
+                            good: L.volume[t],
+                            better: L.volume[t],
+                            best: L.volume[t],
+                          },
+                        };
+                      })
+                    }
+                    title="Copy the selected tier’s promo/volume to the other tiers"
+                  >
+                    Copy this tier → others
+                  </button>
+                </div>
+
+                {/* Global leakages */}
                 <div className="font-semibold mt-2">Global leakages</div>
                 <div className="flex items-center gap-2">
                   <span className="w-32">Payment %</span>
@@ -757,11 +798,10 @@ export default function App() {
               </div>
 
               {/* Chart */}
-              <div>
+              <div className="min-w-0">
                 <Waterfall
-                  title={`Waterfall — ${waterTier} (list $${listForWater.toFixed(
-                    2
-                  )})`}
+                  title="Pocket Price Waterfall"
+                  subtitle={`${waterTier} • list $${listForWater.toFixed(2)}`}
                   listPrice={listForWater}
                   steps={water.steps}
                 />
