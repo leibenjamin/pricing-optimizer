@@ -823,6 +823,30 @@ export default function App() {
                   steps={water.steps}
                 />
               </div>
+
+              {/* ---- Compare all tiers (small multiples) ---- */}
+              <details className="mt-3">
+                <summary className="cursor-pointer select-none text-xs font-medium">
+                  Compare all tiers
+                </summary>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
+                  {(["good", "better", "best"] as const).map((t) => {
+                    const list =
+                      t === "good" ? prices.good : t === "better" ? prices.better : prices.best
+                    const wf = computePocketPrice(list, t, leak)
+                    return (
+                      <div key={t} className="min-w-0">
+                        <Waterfall
+                          title={t}
+                          subtitle={`list $${list.toFixed(2)}`}
+                          listPrice={list}
+                          steps={wf.steps}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              </details>
             </div>
           </Section>
         </div>
