@@ -75,6 +75,11 @@ export default function App() {
     converged: boolean;
   } | null>(null);
 
+  const [channelMix, setChannelMix] = useState([
+    { preset: "Stripe (cards)", w: 70 },
+    { preset: "App Store (est.)", w: 30 },
+  ]);
+
   // ---- recent IDs helpers ----
   type RecentItem = { id: string; t: number };
   const RECENT_KEY = "po_recent_ids_v1";
@@ -265,6 +270,40 @@ export default function App() {
     return Math.max(0, Math.min(1, x));
   }
 
+  // Weighted blend of leakage presets (percent terms weighted linearly; fixed fee weighted avg)
+  function blendLeaks(rows: { w: number; preset: string }[]): Leakages {
+    // guard
+    const safeRows = rows.filter((r) => LEAK_PRESETS[r.preset] && r.w > 0);
+    if (safeRows.length === 0)
+      return LEAK_PRESETS[Object.keys(LEAK_PRESETS)[0]];
+
+    // start with a deep copy of the first preset
+    const init = JSON.parse(
+      JSON.stringify(LEAK_PRESETS[safeRows[0].preset])
+    ) as Leakages;
+    const acc = init;
+    let total = safeRows[0].w;
+
+    for (let i = 1; i < safeRows.length; i++) {
+      const { w, preset } = safeRows[i];
+      const L = LEAK_PRESETS[preset];
+      total += w;
+      (["promo", "volume"] as const).forEach((k) => {
+        (["good", "better", "best"] as const).forEach((t) => {
+          acc[k][t] = acc[k][t] * ((total - w) / total) + L[k][t] * (w / total);
+        });
+      });
+      acc.paymentPct =
+        acc.paymentPct * ((total - w) / total) + L.paymentPct * (w / total);
+      acc.paymentFixed =
+        acc.paymentFixed * ((total - w) / total) + L.paymentFixed * (w / total);
+      acc.fxPct = acc.fxPct * ((total - w) / total) + L.fxPct * (w / total);
+      acc.refundsPct =
+        acc.refundsPct * ((total - w) / total) + L.refundsPct * (w / total);
+    }
+    return acc;
+  }
+
   // Demand scale for demo math
   const N = 1000;
 
@@ -388,8 +427,8 @@ export default function App() {
                   </label>
                   <input
                     type="range"
-                    min={1}
-                    max={99}
+                    min={0}
+                    max={100}
                     value={prices[tier]}
                     onChange={(e) =>
                       setPrices((p) => {
@@ -412,8 +451,8 @@ export default function App() {
                 </label>
                 <input
                   type="range"
-                  min={1}
-                  max={99}
+                  min={0}
+                  max={100}
                   value={bestDraft}
                   onChange={(e) => {
                     const v = Number(e.target.value);
@@ -832,8 +871,12 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
                   {(["good", "better", "best"] as const).map((t) => {
                     const list =
-                      t === "good" ? prices.good : t === "better" ? prices.better : prices.best
-                    const wf = computePocketPrice(list, t, leak)
+                      t === "good"
+                        ? prices.good
+                        : t === "better"
+                        ? prices.better
+                        : prices.best;
+                    const wf = computePocketPrice(list, t, leak);
                     return (
                       <div key={t} className="min-w-0">
                         <Waterfall
@@ -843,10 +886,94 @@ export default function App() {
                           steps={wf.steps}
                         />
                       </div>
-                    )
+                    );
                   })}
                 </div>
               </details>
+              
+              {/* ---- Channel blend (optional) ---- */}
+              <details className="mt-3">
+                <summary className="cursor-pointer select-none text-xs font-medium">
+                  Channel blend (optional)
+                </summary>
+                <div className="mt-2 text-xs space-y-2">
+                  {channelMix.map((row, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-2">
+                      <span className="w-16">Row {i + 1}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        className="border rounded px-2 h-8 w-20"
+                        value={row.w}
+                        onChange={(e) => {
+                          const v = Math.max(0, Math.min(100, Number(e.target.value)))
+                          setChannelMix((cur) => cur.map((r, j) => (j === i ? { ...r, w: v } : r)))
+                        }}
+                      />
+                      <span>%</span>
+                      <select
+                        className="border rounded px-2 h-8"
+                        value={row.preset}
+                        onChange={(e) =>
+                          setChannelMix((cur) => cur.map((r, j) => (j === i ? { ...r, preset: e.target.value } : r)))
+                        }
+                      >
+                        {Object.keys(LEAK_PRESETS).map((k) => (
+                          <option key={k} value={k}>
+                            {k}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* remove row */}
+                      <button
+                        className="ml-2 border rounded px-2 h-8 bg-white hover:bg-gray-50"
+                        onClick={() => setChannelMix((cur) => cur.filter((_, j) => j !== i))}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* add row */}
+                  <button
+                    className="border rounded px-3 h-8 bg-white hover:bg-gray-50"
+                    onClick={() =>
+                      setChannelMix((cur) => [...cur, { preset: Object.keys(LEAK_PRESETS)[0], w: 0 }])
+                    }
+                  >
+                    Add row
+                  </button>
+
+                  {/* normalize & apply */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      className="border rounded px-3 h-8 bg-white hover:bg-gray-50"
+                      onClick={() =>
+                        setChannelMix((cur) => {
+                          const sum = cur.reduce((s, r) => s + (isFinite(r.w) ? r.w : 0), 0) || 1
+                          return cur.map((r) => ({ ...r, w: Math.round((r.w / sum) * 100) }))
+                        })
+                      }
+                    >
+                      Normalize %
+                    </button>
+                    <button
+                      className="border rounded px-3 h-8 bg-white hover:bg-gray-50"
+                      onClick={() => {
+                        const rows = channelMix.map((r) => ({ w: r.w, preset: r.preset }))
+                        const blended = blendLeaks(rows)
+                        setLeak(blended) // apply to all tiers
+                      }}
+                    >
+                      Blend now → apply to leakages
+                    </button>
+                  </div>
+                </div>
+              </details>
+
+
             </div>
           </Section>
         </div>
