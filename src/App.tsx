@@ -1115,11 +1115,11 @@ export default function App() {
             <div className="flex flex-col gap-3">
               {/* Header row wraps nicely on small screens */}
               <div className="flex flex-wrap items-end gap-3 text-xs">
-                <span className="font-semibold mr-2">Ranges ($)</span>
+                <span className="font-semibold mr-2 basis-full sm:basis-auto">Ranges ($)</span>
 
                 {/* Good */}
                 <label className="flex items-center gap-1">
-                  <span className="w-10">Good</span>
+                  <span className="w-12">Good</span>
                   <input
                     type="number"
                     className="border rounded px-2 h-8 w-16"
@@ -1155,7 +1155,7 @@ export default function App() {
 
                 {/* Better */}
                 <label className="flex items-center gap-1">
-                  <span className="w-10">Better</span>
+                  <span className="w-12">Better</span>
                   <input
                     type="number"
                     className="border rounded px-2 h-8 w-16"
@@ -1191,7 +1191,7 @@ export default function App() {
 
                 {/* Best */}
                 <label className="flex items-center gap-1">
-                  <span className="w-10">Best</span>
+                  <span className="w-12">Best</span>
                   <input
                     type="number"
                     className="border rounded px-2 h-8 w-16"
