@@ -36,6 +36,15 @@ echarts.use([
   CanvasRenderer,
 ]);
 
+const SHORT: Record<string, string> = {
+  Promo: "Promo",
+  volume: "Vol",
+  "Payment $": "Pay $",
+  "FX %": "FX",
+  "Refunds %": "Refunds",
+  Pocket: "Pocket",
+};
+
 export type WaterStep = { label: string; delta: number };
 
 // Compose a strict option type for this chart
@@ -73,7 +82,7 @@ export function Waterfall({
     if (!ref.current) return;
     if (!chartRef.current) chartRef.current = echarts.init(ref.current);
 
-    const categories = ["List", ...steps.map((s) => s.label)];
+    const categories = ["List", ...steps.map((s) => SHORT[s.label] ?? s.label)];
 
     // Build cumulative base and change arrays to simulate a waterfall:
     const changes: number[] = [];
@@ -97,6 +106,18 @@ export function Waterfall({
         running += d;
       }
     }
+
+    // For mini: only the final pocket bar gets a label (on top).
+    // For full: keep plain numbers (framework will label all bars above).
+    const changeData = changes.map((v, idx) => {
+      if (!localIsMini) return v;
+      // Explicit label shape (structural typing)
+      const lbl =
+        idx === changes.length - 1
+          ? { show: true, position: "top" as const, fontSize: 9 }
+          : { show: false };
+      return { value: v, label: lbl };
+    });
 
     // Strongly-typed tooltip formatter (no 'any')
     const tipFmt = (params: CallbackDataParams | CallbackDataParams[]) => {
@@ -128,8 +149,8 @@ export function Waterfall({
         subtextStyle: { fontSize: 12, color: "#6b7280" },
       },
       grid: localIsMini
-        ? { left: 24, right: 6, top: 22, bottom: 10 }
-        : { left: 48, right: 16, top: 40, bottom: 36 },
+        ? { left: 24, right: 20, top: 22, bottom: 10, containLabel: true }
+        : { left: 56, right: 28, top: 44, bottom: 40, containLabel: true },
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
@@ -141,7 +162,12 @@ export function Waterfall({
         data: categories,
         axisLabel: localIsMini
           ? { show: false } // hide category labels in mini
-          : { fontSize: 12, interval: 0 },
+          : {
+            fontSize: 12,
+            interval: 0,
+            margin: 8,
+            hideOverlap: true,
+          },
       },
       yAxis: {
         type: "value",
@@ -164,20 +190,20 @@ export function Waterfall({
           name: "change",
           type: "bar",
           stack: "total",
-          data: changes,
-          barCategoryGap: "40%",
+          data: changeData,
+          barWidth: localIsMini ? 10 : 22,    // narrower bars in minis
+          barCategoryGap: localIsMini ? "60%" : "40%",
           label: {
-            show: true,
+            show: !localIsMini,               // minis use per-point labels above
             position: localIsMini ? "inside" : "top",
             fontSize: localIsMini ? 9 : 11,
             padding: localIsMini ? 0 : [2, 3, 2, 3],
-            backgroundColor: localIsMini ? undefined : "rgba(255,255,255,0.8)",
+            backgroundColor: "rgba(255,255,255,0.8)",
             borderRadius: localIsMini ? 0 : 3,
             formatter: (p) => {
               // in mini: only label the final bar (Pocket)
               if (localIsMini && p.dataIndex !== changes.length - 1) return "";
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              return labelFmt(p as any);
+              return labelFmt(p);
             },
           },
           labelLayout: { hideOverlap: true, moveOverlap: "shiftY" },
