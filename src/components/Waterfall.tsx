@@ -52,18 +52,24 @@ export function Waterfall({
   subtitle,
   listPrice,
   steps,
+  variant = "full", // "full" | "mini"
   onDownloadLabel = "PNG",
 }: {
   title: string;
   subtitle?: string;
   listPrice: number;
   steps: WaterStep[];
+  variant?: "full" | "mini";
   onDownloadLabel?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
 
+  const isMini = variant === "mini";
+
   useEffect(() => {
+    const localIsMini = variant === "mini";
+
     if (!ref.current) return;
     if (!chartRef.current) chartRef.current = echarts.init(ref.current);
 
@@ -114,14 +120,16 @@ export function Waterfall({
 
     const option: ECOption = {
       title: {
-        text: title,
-        subtext: subtitle ?? "",
-        left: "center",
-        top: 6,
-        textStyle: { fontSize: 14, fontWeight: 700 },
+        text: localIsMini ? title : title,
+        subtext: localIsMini ? "" : subtitle ?? "",
+        left: localIsMini ? "center" : "center",
+        top: localIsMini ? 4 : 6,
+        textStyle: { fontSize: localIsMini ? 12 : 14, fontWeight: 700 },
         subtextStyle: { fontSize: 12, color: "#6b7280" },
       },
-      grid: { left: 56, right: 20, top: 56, bottom: 44 }, // more breathing room
+      grid: localIsMini
+        ? { left: 28, right: 6, top: 26, bottom: 24 }
+        : { left: 48, right: 16, top: 40, bottom: 36 }, // more breathing room
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
@@ -131,11 +139,14 @@ export function Waterfall({
       xAxis: {
         type: "category",
         data: categories,
-        axisLabel: { rotate: 0, margin: 12 },
+        axisLabel: {
+          fontSize: localIsMini ? 10 : 12,
+          interval: 0,
+        },
       },
       yAxis: {
         type: "value",
-        axisLabel: { formatter: (v: number) => `$${v}` },
+        axisLabel: { show: !localIsMini, formatter: (v: number) => `$${v}` },
         splitLine: { lineStyle: { color: "#eef2f7" } },
       },
       series: [
@@ -158,8 +169,8 @@ export function Waterfall({
           barCategoryGap: "40%",
           label: {
             show: true,
-            position: "top",
-            fontSize: 10,
+            position: localIsMini ? "inside" : "top",
+            fontSize: localIsMini ? 9 : 11,
             padding: [2, 3, 2, 3],
             backgroundColor: "rgba(255,255,255,0.8)",
             borderRadius: 3,
@@ -181,27 +192,29 @@ export function Waterfall({
       chartRef.current?.dispose();
       chartRef.current = null;
     };
-  }, [title, subtitle, listPrice, steps]);
+  }, [title, subtitle, listPrice, steps, variant]);
 
   return (
-    <div className="relative w-full h-80 md:h-72">
-      <button
-        className="absolute right-2 top-2 text-[10px] border rounded px-2 py-1 bg-white/70"
-        onClick={() => {
-          if (!chartRef.current) return;
-          const url = chartRef.current.getDataURL({
-            type: "png",
-            pixelRatio: 2,
-            backgroundColor: "#ffffff",
-          });
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "waterfall.png";
-          a.click();
-        }}
-      >
-        {onDownloadLabel}
-      </button>
+    <div className={`relative w-full ${isMini ? "h-56" : "h-80 md:h-72"}`}>
+      {!isMini && (
+        <button
+          className="absolute right-2 top-2 text-[10px] border rounded px-2 py-1 bg-white/70"
+          onClick={() => {
+            if (!chartRef.current) return;
+            const url = chartRef.current.getDataURL({
+              type: "png",
+              pixelRatio: 2,
+              backgroundColor: "#ffffff",
+            });
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "waterfall.png";
+            a.click();
+          }}
+        >
+          {onDownloadLabel}
+        </button>
+      )}
       <div ref={ref} className="w-full h-full" />
     </div>
   );
