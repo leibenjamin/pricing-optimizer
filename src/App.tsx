@@ -379,28 +379,26 @@ export default function App() {
   const grossMarginPct = revenue > 0 ? profit / revenue : 0;
 
   // ---- Tornado sensitivity data ----
-  const scenarioForTornado = useMemo(() => {
-    return {
-      N,
-      prices,
-      costs,
-      features,
-      segments,
-      refPrices,
-      leak,
-    };
-  }, [N, prices, costs, features, segments, refPrices, leak]);
+  const [tornadoPocket, setTornadoPocket] = useState(true);
+  const [tornadoPriceBump, setTornadoPriceBump] = useState(5);   // $
+  const [tornadoPctBump, setTornadoPctBump] = useState(2);       // pp
+
+  const scenarioForTornado = useMemo(() => ({
+    N, prices, costs, features, segments, refPrices, leak
+  }), [N, prices, costs, features, segments, refPrices, leak]);
 
   const tornadoRows = useMemo(() => {
-    const rows = tornadoProfit(scenarioForTornado);
-    // Adapt to the chart prop shape
-    return rows.map((r) => ({
-      name: r.name,
-      base: r.base,
-      deltaLow: r.deltaLow,
-      deltaHigh: r.deltaHigh,
-    }));
-  }, [scenarioForTornado]);
+    return tornadoProfit(scenarioForTornado, {
+      usePocket: tornadoPocket,
+      priceBump: tornadoPriceBump,
+      costBump: 2,
+      pctSmall: tornadoPctBump / 100,
+      payPct:   tornadoPctBump / 200,  // half as aggressive as generic pct
+      payFixed: 0.05,
+      refBump:  2,
+      segTilt:  0.10,
+    }).map(r => ({ name: r.name, base: r.base, deltaLow: r.deltaLow, deltaHigh: r.deltaHigh }));
+  }, [scenarioForTornado, tornadoPocket, tornadoPriceBump, tornadoPctBump]);
 
   async function saveScenarioShortLink() {
     // what to persist
@@ -711,15 +709,41 @@ export default function App() {
             </div>
           </Section>
 
-          <Section title="Tornado: What moves profit?">
-            <div style={{ contentVisibility: "auto", containIntrinsicSize: "380px" }}>
+          <Section title="Tornado — what moves profit?">
+            <div className="flex flex-wrap items-center gap-3 text-xs mb-2">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={tornadoPocket} onChange={e=>setTornadoPocket(e.target.checked)} />
+                Compute using <span className="font-medium">pocket</span> margin
+              </label>
+              <label className="flex items-center gap-1">
+                Price bump $
+                <input
+                  type="number" className="border rounded px-2 h-7 w-16"
+                  value={tornadoPriceBump}
+                  onChange={e=>setTornadoPriceBump(Number(e.target.value)||0)}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                % bump (FX/Refunds/Payment)
+                <input
+                  type="number" step="0.5" className="border rounded px-2 h-7 w-16"
+                  value={tornadoPctBump}
+                  onChange={e=>setTornadoPctBump(Number(e.target.value)||0)}
+                />
+                <span>pp</span>
+              </label>
+            </div>
+
+            <div style={{ contentVisibility: "auto", containIntrinsicSize: "360px" }}>
               <Tornado rows={tornadoRows} />
             </div>
-            <p className="text-[11px] text-gray-600">
-              One-way sensitivity on current scenario. Bars show change in profit
-              when each driver is nudged down (left) or up (right). Sorted by impact.
+
+            <p className="text-[11px] text-gray-600 mt-1">
+              One-way sensitivity on current scenario. Bars show change in profit when each driver is nudged down (left) or up (right).
+              Toggle pocket to account for promos/fees/FX/refunds; adjust bump sizes to test robustness.
             </p>
           </Section>
+
 
           <Section title="Pocket Price Waterfall">
             <div className="text-xs grid grid-cols-1 md:grid-cols-2 gap-3">
