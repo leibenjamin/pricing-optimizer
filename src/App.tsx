@@ -22,6 +22,9 @@ import { computePocketPrice, type Leakages, type Tier } from "./lib/waterfall";
 import { Waterfall } from "./components/Waterfall";
 import { LEAK_PRESETS } from "./lib/waterfallPresets";
 
+import Tornado from "./components/Tornado";
+import { tornadoProfit } from "./lib/sensitivity";
+
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -375,6 +378,30 @@ export default function App() {
   const profitPerCustomer = profit / N;
   const grossMarginPct = revenue > 0 ? profit / revenue : 0;
 
+  // ---- Tornado sensitivity data ----
+  const scenarioForTornado = useMemo(() => {
+    return {
+      N,
+      prices,
+      costs,
+      features,
+      segments,
+      refPrices,
+      leak,
+    };
+  }, [N, prices, costs, features, segments, refPrices, leak]);
+
+  const tornadoRows = useMemo(() => {
+    const rows = tornadoProfit(scenarioForTornado);
+    // Adapt to the chart prop shape
+    return rows.map((r) => ({
+      name: r.name,
+      base: r.base,
+      deltaLow: r.deltaLow,
+      deltaHigh: r.deltaHigh,
+    }));
+  }, [scenarioForTornado]);
+
   async function saveScenarioShortLink() {
     // what to persist
     const payload = { prices, costs, features };
@@ -682,6 +709,16 @@ export default function App() {
             >
               <TakeRateChart data={probs} />
             </div>
+          </Section>
+
+          <Section title="Tornado: What moves profit?">
+            <div style={{ contentVisibility: "auto", containIntrinsicSize: "380px" }}>
+              <Tornado rows={tornadoRows} />
+            </div>
+            <p className="text-[11px] text-gray-600">
+              One-way sensitivity on current scenario. Bars show change in profit
+              when each driver is nudged down (left) or up (right). Sorted by impact.
+            </p>
           </Section>
 
           <Section title="Pocket Price Waterfall">
