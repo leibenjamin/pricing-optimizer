@@ -882,23 +882,30 @@ export default function App() {
                 <summary className="cursor-pointer select-none text-xs font-medium">
                   Compare all tiers
                 </summary>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
-                    {(["good", "better", "best"] as const).map((t) => {
-                      const list = t === "good" ? prices.good : t === "better" ? prices.better : prices.best;
-                      const wf = computePocketPrice(list, t, leak);
-                      return (
-                        <div key={t} className="min-w-0 h-56">
-                          <Waterfall
-                            title={t}
-                            subtitle={`list $${list.toFixed(2)}`}
-                            listPrice={list}
-                            steps={wf.steps}
-                            variant="mini"
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
+                  {(["good", "better", "best"] as const).map((t) => {
+                    const list =
+                      t === "good"
+                        ? prices.good
+                        : t === "better"
+                        ? prices.better
+                        : prices.best;
+                    const wf = computePocketPrice(list, t, leak);
+                    return (
+                      <div key={t} className="min-w-0 h-56 overflow-hidden">
+                        {" "}
+                        {/* added overflow-hidden */}
+                        <Waterfall
+                          title={t}
+                          subtitle={`list $${list.toFixed(2)}`}
+                          listPrice={list}
+                          steps={wf.steps}
+                          variant="mini"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </details>
 
               {/* ---- Channel blend (optional) ---- */}

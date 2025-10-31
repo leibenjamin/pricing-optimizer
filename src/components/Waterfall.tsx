@@ -115,7 +115,7 @@ export function Waterfall({
       else if (typeof raw === "object")
         v = Number((raw as { value?: unknown }).value ?? 0);
       else v = Number(raw);
-      return `$${v.toFixed(2)}`;
+      return `$${v.toFixed(localIsMini ? 2 : 2)}`; // keep 2 decimals; can switch to 1 if preferred
     };
 
     const option: ECOption = {
@@ -128,8 +128,8 @@ export function Waterfall({
         subtextStyle: { fontSize: 12, color: "#6b7280" },
       },
       grid: localIsMini
-        ? { left: 28, right: 6, top: 26, bottom: 24 }
-        : { left: 48, right: 16, top: 40, bottom: 36 }, // more breathing room
+        ? { left: 24, right: 6, top: 22, bottom: 10 }
+        : { left: 48, right: 16, top: 40, bottom: 36 },
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
@@ -139,10 +139,9 @@ export function Waterfall({
       xAxis: {
         type: "category",
         data: categories,
-        axisLabel: {
-          fontSize: localIsMini ? 10 : 12,
-          interval: 0,
-        },
+        axisLabel: localIsMini
+          ? { show: false } // hide category labels in mini
+          : { fontSize: 12, interval: 0 },
       },
       yAxis: {
         type: "value",
@@ -171,13 +170,17 @@ export function Waterfall({
             show: true,
             position: localIsMini ? "inside" : "top",
             fontSize: localIsMini ? 9 : 11,
-            padding: [2, 3, 2, 3],
-            backgroundColor: "rgba(255,255,255,0.8)",
-            borderRadius: 3,
-            formatter: labelFmt,
+            padding: localIsMini ? 0 : [2, 3, 2, 3],
+            backgroundColor: localIsMini ? undefined : "rgba(255,255,255,0.8)",
+            borderRadius: localIsMini ? 0 : 3,
+            formatter: (p) => {
+              // in mini: only label the final bar (Pocket)
+              if (localIsMini && p.dataIndex !== changes.length - 1) return "";
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              return labelFmt(p as any);
+            },
           },
-          // hide overlapping labels & allow ECharts to nudge them
-          labelLayout: { hideOverlap: true },
+          labelLayout: { hideOverlap: true, moveOverlap: "shiftY" },
         },
       ],
       animation: true,
@@ -195,7 +198,7 @@ export function Waterfall({
   }, [title, subtitle, listPrice, steps, variant]);
 
   return (
-    <div className={`relative w-full ${isMini ? "h-56" : "h-80 md:h-72"}`}>
+    <div className={`relative w-full ${isMini ? "h-56" : "h-80 md:h-72"} overflow-hidden`}>
       {!isMini && (
         <button
           className="absolute right-2 top-2 text-[10px] border rounded px-2 py-1 bg-white/70"
