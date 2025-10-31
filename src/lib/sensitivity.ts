@@ -1,22 +1,18 @@
 // src/lib/sensitivity.ts
 import { choiceShares } from "./choice";
+import { computePocketPrice, type Leakages } from "./waterfall";
 import type { Segment } from "./segments";
-import type { Leakages } from "./waterfall";
 
-// Helper: clamp to [0,1]
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
 export type Scenario = {
   N: number;
   prices: { good: number; better: number; best: number };
   costs: { good: number; better: number; best: number };
-  features: {
-    featA: { good: number; better: number; best: number };
-    featB: { good: number; better: number; best: number };
-  };
+  features: { featA: { good:number; better:number; best:number }, featB: { good:number; better:number; best:number } };
   segments: Segment[];
-  refPrices: { good: number; better: number; best: number };
-  leak: Leakages; // (used by “pocket” variant later if you want)
+  refPrices: { good:number; better:number; best:number };
+  leak: Leakages;
 };
 
 export function evalProfitList(s: Scenario): number {
@@ -33,52 +29,67 @@ export function evalProfitList(s: Scenario): number {
   );
 }
 
-/** One-way sensitivity: vary one field up/down, compute profit delta. */
+export function evalProfitPocket(s: Scenario): number {
+  const probs = choiceShares(s.prices, s.features, s.segments, s.refPrices);
+  const take = {
+    good: Math.round(s.N * probs.good),
+    better: Math.round(s.N * probs.better),
+    best: Math.round(s.N * probs.best),
+  };
+  const pG = computePocketPrice(s.prices.good,   "good",   s.leak).pocket;
+  const pB = computePocketPrice(s.prices.better, "better", s.leak).pocket;
+  const pH = computePocketPrice(s.prices.best,   "best",   s.leak).pocket;
+  return (
+    take.good   * (pG - s.costs.good)   +
+    take.better * (pB - s.costs.better) +
+    take.best   * (pH - s.costs.best)
+  );
+}
+
 export type TornadoRow = {
   name: string;
   base: number;
-  low: number;   // profit at "low" value of the driver
-  high: number;  // profit at "high" value of the driver
+  low: number;
+  high: number;
   deltaLow: number;
   deltaHigh: number;
 };
 
-/**
- * Build a standard set of drivers and ± shocks, then compute up/down profit.
- * - “pct” shocks are absolute (e.g., +0.02 = +2pp).
- * - prices/costs shocks are in dollars.
- * - ref price shocks move all 3 refs together by ±$2 (anchoring).
- * - segment tilt shifts weight from Value to Price-sensitive (and back), then re-normalizes.
- */
-export function tornadoProfit(s0: Scenario): TornadoRow[] {
-  const base = evalProfitList(s0);
+export type TornadoOpts = {
+  usePocket?: boolean;  // default false (list). true => pocket
+  priceBump?: number;   // ±$ on ladder
+  costBump?: number;    // ±$ on unit cost
+  pctSmall?: number;    // ±pp for FX/refunds (0.02 = 2pp)
+  payPct?: number;      // ±pp for processor %
+  payFixed?: number;    // ±$ for processor fixed
+  refBump?: number;     // ±$ shift in ref price
+  segTilt?: number;     // ± share tilt between first two segments
+};
 
-  // Shocks (feel free to tune):
-  const priceBump = 5;   // ±$5 on ladder elements
-  const costBump  = 2;   // ±$2 on unit cost
-  const pctSmall  = 0.02; // ±2pp for promo/volume/refunds/fx
-  const payPct    = 0.005; // ±0.5pp on processor %
-  const payFixed  = 0.05;  // ±$0.05
-  const refBump   = 2;     // ±$2 on all three reference prices
-  const segTilt   = 0.10;  // ±10pp tilt between two segments
+export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
+  const {
+    usePocket = false,
+    priceBump = 5,
+    costBump  = 2,
+    pctSmall  = 0.02,
+    payPct    = 0.005,
+    payFixed  = 0.05,
+    refBump   = 2,
+    segTilt   = 0.10,
+  } = o;
+
+  const evalProfit = usePocket ? evalProfitPocket : evalProfitList;
+  const base = evalProfit(s0);
 
   const rows: TornadoRow[] = [];
-
-  function vary(mutator: (s: Scenario, sign: -1 | 1) => void, name: string) {
+  function vary(mutator: (s: Scenario, sign: -1|1) => void, name: string) {
     const sLow: Scenario = structuredClone(s0);
     const sHigh: Scenario = structuredClone(s0);
     mutator(sLow, -1);
-    mutator(sHigh, 1);
-    const low = evalProfitList(sLow);
-    const high = evalProfitList(sHigh);
-    rows.push({
-      name,
-      base,
-      low,
-      high,
-      deltaLow: low - base,
-      deltaHigh: high - base,
-    });
+    mutator(sHigh,  1);
+    const low  = evalProfit(sLow);
+    const high = evalProfit(sHigh);
+    rows.push({ name, base, low, high, deltaLow: low-base, deltaHigh: high-base });
   }
 
   // Prices
@@ -91,45 +102,37 @@ export function tornadoProfit(s0: Scenario): TornadoRow[] {
   vary((s, sign) => { s.costs.better = Math.max(0, s.costs.better + sign * costBump); }, "Better cost");
   vary((s, sign) => { s.costs.best   = Math.max(0, s.costs.best   + sign * costBump); }, "Best cost");
 
-  // Promos/Volume by tier (these affect utility via price perception in your choice model only indirectly through price itself,
-  // but many teams still want to see their assumed promo levers—here we model them as “effective discount” on list for choice.)
-  // If you’d rather keep them strictly in pocket math, delete these three and use the waterfall-only tornado later.
-  vary((s, sign) => { s.refPrices.good   += sign * refBump; }, "Ref price (Good)");
-  vary((s, sign) => { s.refPrices.better += sign * refBump; }, "Ref price (Better)");
-  vary((s, sign) => { s.refPrices.best   += sign * refBump; }, "Ref price (Best)");
-
-  // Global ref-price anchor shift (moves all)
+  // Reference prices (anchoring)
+  vary((s, sign) => { s.refPrices.good   += sign * refBump; }, "Ref (Good)");
+  vary((s, sign) => { s.refPrices.better += sign * refBump; }, "Ref (Better)");
+  vary((s, sign) => { s.refPrices.best   += sign * refBump; }, "Ref (Best)");
   vary((s, sign) => {
     s.refPrices.good   += sign * refBump;
     s.refPrices.better += sign * refBump;
     s.refPrices.best   += sign * refBump;
-  }, "Refs (all tiers)");
+  }, "Refs (all)");
 
-  // Processor %
-  vary((s, sign) => { s.leak.paymentPct = clamp01(s.leak.paymentPct + sign * payPct); }, "Payment %");
-  // Processor fixed $
+  // Processor / FX / Refunds (relevant when usePocket = true, but we still show list-mode results for “what-if”)
+  vary((s, sign) => { s.leak.paymentPct   = clamp01(s.leak.paymentPct   + sign * payPct);   }, "Payment %");
   vary((s, sign) => { s.leak.paymentFixed = Math.max(0, s.leak.paymentFixed + sign * payFixed); }, "Payment $");
-  // FX
-  vary((s, sign) => { s.leak.fxPct = clamp01(s.leak.fxPct + sign * pctSmall); }, "FX %");
-  // Refunds
-  vary((s, sign) => { s.leak.refundsPct = clamp01(s.leak.refundsPct + sign * pctSmall); }, "Refunds %");
+  vary((s, sign) => { s.leak.fxPct        = clamp01(s.leak.fxPct        + sign * pctSmall); }, "FX %");
+  vary((s, sign) => { s.leak.refundsPct   = clamp01(s.leak.refundsPct   + sign * pctSmall); }, "Refunds %");
 
-  // Segment tilt: move weight between first two segments (price-sensitive ↔ value-seeker)
+  // Segment tilt (between first two segments)
   if (s0.segments.length >= 2) {
     vary((s, sign) => {
       const i = 0, j = 1;
-      const w = Math.min(segTilt, s.segments[j].weight); // don’t go negative
+      const w = Math.min(segTilt, s.segments[j].weight);
       s.segments[i].weight = clamp01(s.segments[i].weight + sign * w);
       s.segments[j].weight = clamp01(s.segments[j].weight - sign * w);
-      // quick renorm
       const sum = s.segments.reduce((a, b) => a + b.weight, 0) || 1;
-      s.segments = s.segments.map((t) => ({ ...t, weight: t.weight / sum }));
+      s.segments = s.segments.map(t => ({ ...t, weight: t.weight / sum }));
     }, "Segment mix tilt");
   }
 
-  // Sort by max absolute swing
-  rows.sort((a, b) => Math.max(Math.abs(b.deltaLow), Math.abs(b.deltaHigh)) -
-                      Math.max(Math.abs(a.deltaLow), Math.abs(a.deltaHigh)));
-
+  rows.sort((a, b) =>
+    Math.max(Math.abs(b.deltaLow), Math.abs(b.deltaHigh)) -
+    Math.max(Math.abs(a.deltaLow), Math.abs(a.deltaHigh))
+  );
   return rows;
 }
