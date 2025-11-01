@@ -22,6 +22,7 @@ import { computePocketPrice, type Leakages, type Tier } from "./lib/waterfall";
 import { Waterfall } from "./components/Waterfall";
 import { LEAK_PRESETS } from "./lib/waterfallPresets";
 
+import { gridOptimize } from "./lib/optQuick";
 import Tornado from "./components/Tornado";
 import { tornadoProfit } from "./lib/sensitivity";
 
@@ -380,12 +381,21 @@ export default function App() {
 
   // ---- Tornado sensitivity data ----
   const [tornadoPocket, setTornadoPocket] = useState(true);
-  const [tornadoPriceBump, setTornadoPriceBump] = useState(5);   // $
-  const [tornadoPctBump, setTornadoPctBump] = useState(2);       // pp
+  const [tornadoPriceBump, setTornadoPriceBump] = useState(5); // $
+  const [tornadoPctBump, setTornadoPctBump] = useState(2); // pp
 
-  const scenarioForTornado = useMemo(() => ({
-    N, prices, costs, features, segments, refPrices, leak
-  }), [N, prices, costs, features, segments, refPrices, leak]);
+  const scenarioForTornado = useMemo(
+    () => ({
+      N,
+      prices,
+      costs,
+      features,
+      segments,
+      refPrices,
+      leak,
+    }),
+    [N, prices, costs, features, segments, refPrices, leak]
+  );
 
   const tornadoRows = useMemo(() => {
     return tornadoProfit(scenarioForTornado, {
@@ -393,12 +403,63 @@ export default function App() {
       priceBump: tornadoPriceBump,
       costBump: 2,
       pctSmall: tornadoPctBump / 100,
-      payPct:   tornadoPctBump / 200,  // half as aggressive as generic pct
+      payPct: tornadoPctBump / 200, // half as aggressive as generic pct
       payFixed: 0.05,
-      refBump:  2,
-      segTilt:  0.10,
-    }).map(r => ({ name: r.name, base: r.base, deltaLow: r.deltaLow, deltaHigh: r.deltaHigh }));
+      refBump: 2,
+      segTilt: 0.1,
+    }).map((r) => ({
+      name: r.name,
+      base: r.base,
+      deltaLow: r.deltaLow,
+      deltaHigh: r.deltaHigh,
+    }));
   }, [scenarioForTornado, tornadoPocket, tornadoPriceBump, tornadoPctBump]);
+
+  // ---- Optimizer (quick grid) ----
+  // A fast, in-component grid optimizer used for compare/tornado visuals.
+  // Does NOT replace the Worker-based optimizer you already have.
+  const quickOpt = useMemo(() => {
+    const ranges = optRanges;
+    // Coerce possibly-undefined flags to strict booleans
+    const usePocketFloors = optConstraints.usePocketMargins ?? false;
+    const usePocketProfit = optConstraints.usePocketProfit ?? false;
+
+    const C = {
+      gapGB: optConstraints.gapGB,
+      gapBB: optConstraints.gapBB,
+      marginFloor: optConstraints.marginFloor,
+      usePocketForFloors: usePocketFloors,
+    };
+
+    return gridOptimize(
+      N,
+      ranges,
+      costs,
+      features,
+      segments,
+      refPrices,
+      leak,
+      C,
+      /* usePocketForProfit: */ usePocketProfit
+    );
+  }, [N, optRanges, costs, features, segments, refPrices, leak, optConstraints]);
+
+  // ---- Tornado data (current & optimized) ----
+  const tornadoRowsCurrent = useMemo(() => tornadoProfit(
+    { N, prices, costs, features, segments, refPrices, leak },
+    { usePocket: tornadoPocket, priceBump: tornadoPriceBump, pctSmall: tornadoPctBump/100, payPct: tornadoPctBump/200 }
+  ).map(r => ({ name: r.name, base: r.base, deltaLow: r.deltaLow, deltaHigh: r.deltaHigh })), 
+  [N, prices, costs, features, segments, refPrices, leak, tornadoPocket, tornadoPriceBump, tornadoPctBump]);
+
+  const tornadoRowsOptim = useMemo(() => {
+    if (!quickOpt.best) return [];
+    const p = quickOpt.best;
+    return tornadoProfit(
+      { N, prices: p, costs, features, segments, refPrices, leak },
+      { usePocket: tornadoPocket, priceBump: tornadoPriceBump, pctSmall: tornadoPctBump/100, payPct: tornadoPctBump/200 }
+    ).map(r => ({ name: r.name, base: r.base, deltaLow: r.deltaLow, deltaHigh: r.deltaHigh }));
+  }, [quickOpt, N, costs, features, segments, refPrices, leak, tornadoPocket, tornadoPriceBump, tornadoPctBump]);
+
 
   async function saveScenarioShortLink() {
     // what to persist
@@ -712,38 +773,182 @@ export default function App() {
           <Section title="Tornado — what moves profit?">
             <div className="flex flex-wrap items-center gap-3 text-xs mb-2">
               <label className="flex items-center gap-2">
-                <input type="checkbox" checked={tornadoPocket} onChange={e=>setTornadoPocket(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={tornadoPocket}
+                  onChange={(e) => setTornadoPocket(e.target.checked)}
+                />
                 Compute using <span className="font-medium">pocket</span> margin
               </label>
               <label className="flex items-center gap-1">
                 Price bump $
                 <input
-                  type="number" className="border rounded px-2 h-7 w-16"
+                  type="number"
+                  className="border rounded px-2 h-7 w-16"
                   value={tornadoPriceBump}
-                  onChange={e=>setTornadoPriceBump(Number(e.target.value)||0)}
+                  onChange={(e) =>
+                    setTornadoPriceBump(Number(e.target.value) || 0)
+                  }
                 />
               </label>
               <label className="flex items-center gap-1">
                 % bump (FX/Refunds/Payment)
                 <input
-                  type="number" step="0.5" className="border rounded px-2 h-7 w-16"
+                  type="number"
+                  step="0.5"
+                  className="border rounded px-2 h-7 w-16"
                   value={tornadoPctBump}
-                  onChange={e=>setTornadoPctBump(Number(e.target.value)||0)}
+                  onChange={(e) =>
+                    setTornadoPctBump(Number(e.target.value) || 0)
+                  }
                 />
                 <span>pp</span>
               </label>
             </div>
 
-            <div style={{ contentVisibility: "auto", containIntrinsicSize: "360px" }}>
+            <div
+              style={{
+                contentVisibility: "auto",
+                containIntrinsicSize: "360px",
+              }}
+            >
               <Tornado rows={tornadoRows} />
             </div>
 
             <p className="text-[11px] text-gray-600 mt-1">
-              One-way sensitivity on current scenario. Bars show change in profit when each driver is nudged down (left) or up (right).
-              Toggle pocket to account for promos/fees/FX/refunds; adjust bump sizes to test robustness.
+              One-way sensitivity on current scenario. Bars show change in
+              profit when each driver is nudged down (left) or up (right).
+              Toggle pocket to account for promos/fees/FX/refunds; adjust bump
+              sizes to test robustness.
             </p>
           </Section>
 
+          <Section title="Current vs Optimized">
+            {(() => {
+              const curProfit = optConstraints.usePocketProfit
+                ? // pocket profit using current prices
+                  (() => {
+                    const probs = choiceShares(
+                      prices,
+                      features,
+                      segments,
+                      refPrices
+                    );
+                    const take = {
+                      good: Math.round(N * probs.good),
+                      better: Math.round(N * probs.better),
+                      best: Math.round(N * probs.best),
+                    };
+                    const pG = computePocketPrice(
+                      prices.good,
+                      "good",
+                      leak
+                    ).pocket;
+                    const pB = computePocketPrice(
+                      prices.better,
+                      "better",
+                      leak
+                    ).pocket;
+                    const pH = computePocketPrice(
+                      prices.best,
+                      "best",
+                      leak
+                    ).pocket;
+                    return (
+                      take.good * (pG - costs.good) +
+                      take.better * (pB - costs.better) +
+                      take.best * (pH - costs.best)
+                    );
+                  })()
+                : // list profit
+                  (() => {
+                    const probs = choiceShares(
+                      prices,
+                      features,
+                      segments,
+                      refPrices
+                    );
+                    const take = {
+                      good: Math.round(N * probs.good),
+                      better: Math.round(N * probs.better),
+                      best: Math.round(N * probs.best),
+                    };
+                    return (
+                      take.good * (prices.good - costs.good) +
+                      take.better * (prices.better - costs.better) +
+                      take.best * (prices.best - costs.best)
+                    );
+                  })();
+
+              const best = quickOpt.best;
+              const bestProfit = quickOpt.profit;
+
+              if (!best)
+                return (
+                  <div className="text-xs text-gray-600">
+                    No feasible ladder in the current ranges & floors.
+                  </div>
+                );
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                  <div className="rounded border p-3">
+                    <div className="font-semibold mb-1">Current</div>
+                    <div>Good: ${prices.good}</div>
+                    <div>Better: ${prices.better}</div>
+                    <div>Best: ${prices.best}</div>
+                    <div className="mt-2 text-xs text-gray-600">
+                      Profit: ${Math.round(curProfit).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="rounded border p-3">
+                    <div className="font-semibold mb-1">Optimized</div>
+                    <div>Good: ${best.good}</div>
+                    <div>Better: ${best.better}</div>
+                    <div>Best: ${best.best}</div>
+                    <div className="mt-2 text-xs text-gray-600">
+                      Profit: ${Math.round(bestProfit).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="rounded border p-3 flex flex-col gap-2">
+                    <div className="font-semibold">Delta</div>
+                    <div>
+                      Δ Profit:{" "}
+                      <span className="font-medium">
+                        ${Math.round(bestProfit - curProfit).toLocaleString()}
+                      </span>
+                    </div>
+                    <button
+                      className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
+                      onClick={() => {
+                        setPrices(best); // apply ladder
+                        pushJ(`Applied optimized ladder: ${best.good}/${best.better}/${best.best}`);
+                      }}
+                    >
+                      Apply optimized ladder
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </Section>
+
+          <Section title="Sensitivity shift: Current vs Optimized">
+            {quickOpt.best ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-xs font-medium mb-1">Current ladder</div>
+                  <Tornado rows={tornadoRowsCurrent} />
+                </div>
+                <div>
+                  <div className="text-xs font-medium mb-1">Optimized ladder</div>
+                  <Tornado rows={tornadoRowsOptim} />
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-gray-600">No feasible ladder to compare.</div>
+            )}
+          </Section>
 
           <Section title="Pocket Price Waterfall">
             <div className="text-xs grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1176,7 +1381,9 @@ export default function App() {
             <div className="flex flex-col gap-3">
               {/* Header row wraps nicely on small screens */}
               <div className="flex flex-wrap items-end gap-3 text-xs">
-                <span className="font-semibold mr-2 basis-full sm:basis-auto">Ranges ($)</span>
+                <span className="font-semibold mr-2 basis-full sm:basis-auto">
+                  Ranges ($)
+                </span>
 
                 {/* Good */}
                 <label className="flex items-center gap-1">
@@ -1412,7 +1619,7 @@ export default function App() {
                   <label className="flex items-center gap-2 sm:col-span-2">
                     <input
                       type="checkbox"
-                      checked={!!optConstraints.usePocketMargins}
+                      checked={optConstraints.usePocketMargins}
                       onChange={(e) =>
                         setOptConstraints((c) => ({
                           ...c,
@@ -1433,7 +1640,7 @@ export default function App() {
                   <label className="flex items-center gap-2 sm:col-span-2">
                     <input
                       type="checkbox"
-                      checked={!!optConstraints.usePocketProfit}
+                      checked={optConstraints.usePocketProfit}
                       onChange={(e) =>
                         setOptConstraints((c) => ({
                           ...c,
