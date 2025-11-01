@@ -56,7 +56,7 @@ type ECOption = ComposeOption<
   | DatasetComponentOption
 >;
 
-export function Waterfall({
+export default function Waterfall({
   title,
   subtitle,
   listPrice,

@@ -1,6 +1,11 @@
+import { Suspense, lazy } from "react";
+// replace direct imports:
+const FrontierChartReal = lazy(() => import("./components/FrontierChart"));
+const Tornado = lazy(() => import("./components/Tornado"));
+const Waterfall = lazy(() => import("./components/Waterfall"));
+const TakeRateChart = lazy(() => import("./components/TakeRateChart"));
+
 import { useEffect, useMemo, useRef, useState } from "react";
-import FrontierChartReal from "./components/FrontierChart";
-import TakeRateChart from "./components/TakeRateChart";
 import { defaultSim } from "./lib/simulate";
 import { fitMNL } from "./lib/mnl";
 import {
@@ -19,11 +24,9 @@ import { type Constraints, type SearchRanges } from "./lib/optimize";
 import { runOptimizeInWorker } from "./lib/optWorker";
 
 import { computePocketPrice, type Leakages, type Tier } from "./lib/waterfall";
-import { Waterfall } from "./components/Waterfall";
 import { LEAK_PRESETS } from "./lib/waterfallPresets";
 
 import { gridOptimize } from "./lib/optQuick";
-import Tornado from "./components/Tornado";
 import { tornadoProfit } from "./lib/sensitivity";
 
 import { simulateCohort } from "./lib/simCohort";
@@ -256,9 +259,16 @@ export default function App() {
 
   const [kpiFloorAdj, setKpiFloorAdj] = useState(0); // -10..+10 (pp)
 
-  const lastAppliedPricesRef = useRef<{good:number;better:number;best:number} | null>(null);
-  const lastAppliedFloorsRef = useRef<{good:number;better:number;best:number} | null>(null);
-
+  const lastAppliedPricesRef = useRef<{
+    good: number;
+    better: number;
+    best: number;
+  } | null>(null);
+  const lastAppliedFloorsRef = useRef<{
+    good: number;
+    better: number;
+    best: number;
+  } | null>(null);
 
   useEffect(() => {
     return () => {
@@ -460,23 +470,77 @@ export default function App() {
       C,
       /* usePocketForProfit: */ usePocketProfit
     );
-  }, [N, optRanges, costs, features, segments, refPrices, leak, optConstraints]);
+  }, [
+    N,
+    optRanges,
+    costs,
+    features,
+    segments,
+    refPrices,
+    leak,
+    optConstraints,
+  ]);
 
   // ---- Tornado data (current & optimized) ----
-  const tornadoRowsCurrent = useMemo(() => tornadoProfit(
-    { N, prices, costs, features, segments, refPrices, leak },
-    { usePocket: tornadoPocket, priceBump: tornadoPriceBump, pctSmall: tornadoPctBump/100, payPct: tornadoPctBump/200 }
-  ).map(r => ({ name: r.name, base: r.base, deltaLow: r.deltaLow, deltaHigh: r.deltaHigh })), 
-  [N, prices, costs, features, segments, refPrices, leak, tornadoPocket, tornadoPriceBump, tornadoPctBump]);
+  const tornadoRowsCurrent = useMemo(
+    () =>
+      tornadoProfit(
+        { N, prices, costs, features, segments, refPrices, leak },
+        {
+          usePocket: tornadoPocket,
+          priceBump: tornadoPriceBump,
+          pctSmall: tornadoPctBump / 100,
+          payPct: tornadoPctBump / 200,
+        }
+      ).map((r) => ({
+        name: r.name,
+        base: r.base,
+        deltaLow: r.deltaLow,
+        deltaHigh: r.deltaHigh,
+      })),
+    [
+      N,
+      prices,
+      costs,
+      features,
+      segments,
+      refPrices,
+      leak,
+      tornadoPocket,
+      tornadoPriceBump,
+      tornadoPctBump,
+    ]
+  );
 
   const tornadoRowsOptim = useMemo(() => {
     if (!quickOpt.best) return [];
     const p = quickOpt.best;
     return tornadoProfit(
       { N, prices: p, costs, features, segments, refPrices, leak },
-      { usePocket: tornadoPocket, priceBump: tornadoPriceBump, pctSmall: tornadoPctBump/100, payPct: tornadoPctBump/200 }
-    ).map(r => ({ name: r.name, base: r.base, deltaLow: r.deltaLow, deltaHigh: r.deltaHigh }));
-  }, [quickOpt, N, costs, features, segments, refPrices, leak, tornadoPocket, tornadoPriceBump, tornadoPctBump]);
+      {
+        usePocket: tornadoPocket,
+        priceBump: tornadoPriceBump,
+        pctSmall: tornadoPctBump / 100,
+        payPct: tornadoPctBump / 200,
+      }
+    ).map((r) => ({
+      name: r.name,
+      base: r.base,
+      deltaLow: r.deltaLow,
+      deltaHigh: r.deltaHigh,
+    }));
+  }, [
+    quickOpt,
+    N,
+    costs,
+    features,
+    segments,
+    refPrices,
+    leak,
+    tornadoPocket,
+    tornadoPriceBump,
+    tornadoPctBump,
+  ]);
 
   // Cohort retention (percent, per-month). Default 92%.
   const [retentionPct, setRetentionPct] = useState<number>(() => {
@@ -773,33 +837,38 @@ export default function App() {
         {/* Center: Charts */}
         <div className="col-span-12 md:col-span-6 space-y-4 min-w-0">
           <Section title="Profit Frontier" className="overflow-hidden">
-            <div
-              style={{
-                contentVisibility: "auto",
-                containIntrinsicSize: "420px",
-              }}
+            <Suspense
+              fallback={
+                <div className="text-xs text-gray-500 p-2">
+                  Loading frontier…
+                </div>
+              }
             >
               <FrontierChartReal
                 points={frontier.points}
                 optimum={frontier.optimum}
               />
-            </div>
+            </Suspense>
           </Section>
 
           <Section title="Take-Rate Bars" className="overflow-hidden">
-            <div
-              style={{
-                contentVisibility: "auto",
-                containIntrinsicSize: "320px",
-              }}
+            <Suspense
+              fallback={
+                <div className="text-xs text-gray-500 p-2">Loading bars…</div>
+              }
             >
               <TakeRateChart data={probs} />
-            </div>
+            </Suspense>
           </Section>
 
           <Section title="Cohort rehearsal (12 months)">
             {(() => {
-              const probsNow = choiceShares(prices, features, segments, refPrices);
+              const probsNow = choiceShares(
+                prices,
+                features,
+                segments,
+                refPrices
+              );
               const pts = simulateCohort(
                 prices,
                 probsNow,
@@ -820,7 +889,9 @@ export default function App() {
                         max={99.9}
                         step={0.1}
                         value={retentionPct}
-                        onChange={(e) => setRetentionPct(Number(e.target.value))}
+                        onChange={(e) =>
+                          setRetentionPct(Number(e.target.value))
+                        }
                       />
                       <input
                         type="number"
@@ -848,7 +919,9 @@ export default function App() {
                         const rows = pts
                           .map((p) => `${p.month},${p.margin.toFixed(4)}`)
                           .join("\n");
-                        const blob = new Blob([header + rows], { type: "text/csv" });
+                        const blob = new Blob([header + rows], {
+                          type: "text/csv",
+                        });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement("a");
                         a.href = url;
@@ -874,7 +947,6 @@ export default function App() {
               );
             })()}
           </Section>
-
 
           <Section title="Tornado — what moves profit?">
             <div className="flex flex-wrap items-center gap-3 text-xs mb-2">
@@ -912,14 +984,15 @@ export default function App() {
               </label>
             </div>
 
-            <div
-              style={{
-                contentVisibility: "auto",
-                containIntrinsicSize: "360px",
-              }}
+            <Suspense
+              fallback={
+                <div className="text-xs text-gray-500 p-2">
+                  Loading tornado…
+                </div>
+              }
             >
               <Tornado rows={tornadoRows} />
-            </div>
+            </Suspense>
 
             <p className="text-[11px] text-gray-600 mt-1">
               One-way sensitivity on current scenario. Bars show change in
@@ -1027,10 +1100,12 @@ export default function App() {
                     <button
                       className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
                       onClick={() => {
-                        lastAppliedPricesRef.current = { ...prices };      // stash
-                        setPrices(best);                                    // apply
-                        pushJ?.(`Applied optimized ladder: ${best.good}/${best.better}/${best.best}`);
-                     }}
+                        lastAppliedPricesRef.current = { ...prices }; // stash
+                        setPrices(best); // apply
+                        pushJ?.(
+                          `Applied optimized ladder: ${best.good}/${best.better}/${best.best}`
+                        );
+                      }}
                     >
                       Apply optimized ladder
                     </button>
@@ -1051,18 +1126,35 @@ export default function App() {
                     </button>
                   </div>
                   <div className="mt-3 text-xs">
-                    <div className="font-medium mb-1">Why this recommendation?</div>
+                    <div className="font-medium mb-1">
+                      Why this recommendation?
+                    </div>
                     <ul className="list-disc ml-5 space-y-1">
                       {(() => {
-                        const binds = explainGaps(best, { gapGB: optConstraints.gapGB, gapBB: optConstraints.gapBB });
-                        return binds.length ? binds.map((b, i) => <li key={i}>{b}</li>) : <li>No gap constraints binding.</li>;
+                        const binds = explainGaps(best, {
+                          gapGB: optConstraints.gapGB,
+                          gapBB: optConstraints.gapBB,
+                        });
+                        return binds.length ? (
+                          binds.map((b, i) => <li key={i}>{b}</li>)
+                        ) : (
+                          <li>No gap constraints binding.</li>
+                        );
                       })()}
                       {(() => {
                         const td = topDriver(tornadoRowsOptim);
-                        return <li>Largest profit driver near optimum: {td ?? "n/a"}</li>;
+                        return (
+                          <li>
+                            Largest profit driver near optimum: {td ?? "n/a"}
+                          </li>
+                        );
                       })()}
                       <li>
-                        Floors: pocket margin ≥ {Math.round(optConstraints.marginFloor.good*100)}% / {Math.round(optConstraints.marginFloor.better*100)}% / {Math.round(optConstraints.marginFloor.best*100)}% (G/B/Best).
+                        Floors: pocket margin ≥{" "}
+                        {Math.round(optConstraints.marginFloor.good * 100)}% /{" "}
+                        {Math.round(optConstraints.marginFloor.better * 100)}% /{" "}
+                        {Math.round(optConstraints.marginFloor.best * 100)}%
+                        (G/B/Best).
                       </li>
                     </ul>
                   </div>
@@ -1076,15 +1168,23 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div>
                   <div className="text-xs font-medium mb-1">Current ladder</div>
-                  <Tornado rows={tornadoRowsCurrent} />
+                  <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading…</div>}>
+                    <Tornado rows={tornadoRowsCurrent} />
+                  </Suspense>
                 </div>
                 <div>
-                  <div className="text-xs font-medium mb-1">Optimized ladder</div>
-                  <Tornado rows={tornadoRowsOptim} />
+                  <div className="text-xs font-medium mb-1">
+                    Optimized ladder
+                  </div>
+                  <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading…</div>}>
+                    <Tornado rows={tornadoRowsOptim} />
+                  </Suspense>
                 </div>
               </div>
             ) : (
-              <div className="text-xs text-gray-600">No feasible ladder to compare.</div>
+              <div className="text-xs text-gray-600">
+                No feasible ladder to compare.
+              </div>
             )}
           </Section>
 
@@ -1273,12 +1373,14 @@ export default function App() {
 
               {/* Chart */}
               <div className="min-w-0">
-                <Waterfall
-                  title="Pocket Price Waterfall"
-                  subtitle={`${waterTier} • list $${listForWater.toFixed(2)}`}
-                  listPrice={listForWater}
-                  steps={water.steps}
-                />
+                <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading waterfall…</div>}>
+                  <Waterfall
+                    title="Pocket Price Waterfall"
+                    subtitle={`${waterTier} • list $${listForWater.toFixed(2)}`}
+                    listPrice={listForWater}
+                    steps={water.steps}
+                  />
+                </Suspense>
               </div>
 
               {/* ---- Compare all tiers (small multiples) ---- */}
@@ -1299,13 +1401,15 @@ export default function App() {
                       <div key={t} className="min-w-0 h-56 overflow-hidden">
                         {" "}
                         {/* added overflow-hidden */}
-                        <Waterfall
-                          title={t}
-                          subtitle={`list $${list.toFixed(2)}`}
-                          listPrice={list}
-                          steps={wf.steps}
-                          variant="mini"
-                        />
+                        <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading…</div>}>
+                          <Waterfall
+                            title={t}
+                            subtitle={`list $${list.toFixed(2)}`}
+                            listPrice={list}
+                            steps={wf.steps}
+                            variant="mini"
+                          />
+                        </Suspense>
                       </div>
                     );
                   })}
@@ -1428,7 +1532,7 @@ export default function App() {
               <select
                 className="border rounded px-2 h-8"
                 onChange={(e) => {
-                  const p = PRESETS.find(x => x.id === e.target.value);
+                  const p = PRESETS.find((x) => x.id === e.target.value);
                   if (!p) return;
                   setPrices(p.prices);
                   setCosts(p.costs);
@@ -1438,8 +1542,14 @@ export default function App() {
                 }}
                 defaultValue=""
               >
-                <option value="" disabled>Choose a preset…</option>
-                {PRESETS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                <option value="" disabled>
+                  Choose a preset…
+                </option>
+                {PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
               </select>
               <button
                 className="border rounded px-2 h-8 bg-white hover:bg-gray-50"
@@ -1450,10 +1560,10 @@ export default function App() {
                   setRefPrices({ good: 12, better: 24, best: 45 });
                   setLeak({
                     promo: { good: 0.05, better: 0.05, best: 0.05 },
-                    volume: { good: 0.00, better: 0.00, best: 0.00 },
+                    volume: { good: 0.0, better: 0.0, best: 0.0 },
                     paymentPct: 0.029,
-                    paymentFixed: 0.30,
-                    fxPct: 0.00,
+                    paymentFixed: 0.3,
+                    fxPct: 0.0,
                     refundsPct: 0.02,
                   });
                   pushJ?.("Reset to defaults");
@@ -1463,10 +1573,10 @@ export default function App() {
               </button>
             </div>
             <p className="text-[11px] text-gray-600 mt-1">
-              Applies prices, costs, reference prices, and leakage profile in one click.
+              Applies prices, costs, reference prices, and leakage profile in
+              one click.
             </p>
           </Section>
-
 
           <Section title="Scenario Journal">
             <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
@@ -1857,7 +1967,8 @@ export default function App() {
               const floors0 = optConstraints.marginFloor;
 
               // Adjusted floors (slider)
-              const adj = (x: number) => Math.max(0, Math.min(0.95, x + kpiFloorAdj / 100));
+              const adj = (x: number) =>
+                Math.max(0, Math.min(0.95, x + kpiFloorAdj / 100));
               const floors1 = {
                 good: adj(floors0.good),
                 better: adj(floors0.better),
@@ -1894,25 +2005,42 @@ export default function App() {
               return (
                 <>
                   {/* KPI number + explain line + apply button */}
-                  <div className={`rounded border px-4 py-3 inline-flex items-center gap-4 ${tone}`}>
+                  <div
+                    className={`rounded border px-4 py-3 inline-flex items-center gap-4 ${tone}`}
+                  >
                     <div>
-                      <div className="text-2xl font-semibold leading-tight">{pct1}%</div>
-                      <div className="text-xs">feasible ladders (pocket floors)</div>
+                      <div className="text-2xl font-semibold leading-tight">
+                        {pct1}%
+                      </div>
+                      <div className="text-xs">
+                        feasible ladders (pocket floors)
+                      </div>
                       <div className="text-[11px] text-gray-600 mt-1">
-                        baseline {pct0}% → {pct1}% {delta >= 0 ? `(+${delta}pp)` : `(${delta}pp)`} •{" "}
-                        {moved.tested.toLocaleString()} combos • step ${optRanges.step}
+                        baseline {pct0}% → {pct1}%{" "}
+                        {delta >= 0 ? `(+${delta}pp)` : `(${delta}pp)`} •{" "}
+                        {moved.tested.toLocaleString()} combos • step $
+                        {optRanges.step}
                       </div>
                     </div>
                     <button
                       className="text-xs border rounded px-3 py-1 bg-white hover:bg-gray-50"
                       onClick={() => {
-                        lastAppliedFloorsRef.current = { ...optConstraints.marginFloor }; // stash
+                        lastAppliedFloorsRef.current = {
+                          ...optConstraints.marginFloor,
+                        }; // stash
                         // Write adjusted floors back to constraints
-                        setOptConstraints((prev) => ({ ...prev, marginFloor: { ...floors1 } }));
+                        setOptConstraints((prev) => ({
+                          ...prev,
+                          marginFloor: { ...floors1 },
+                        }));
                         // Optional: log to journal if you use pushJ
                         if (typeof pushJ === "function") {
                           pushJ(
-                            `Applied floors: good ${Math.round(floors1.good*100)}% • better ${Math.round(floors1.better*100)}% • best ${Math.round(floors1.best*100)}%`
+                            `Applied floors: good ${Math.round(
+                              floors1.good * 100
+                            )}% • better ${Math.round(
+                              floors1.better * 100
+                            )}% • best ${Math.round(floors1.best * 100)}%`
                           );
                         }
                       }}
@@ -1926,7 +2054,10 @@ export default function App() {
                       onClick={() => {
                         const prev = lastAppliedFloorsRef.current;
                         if (!prev) return;
-                        setOptConstraints((c) => ({ ...c, marginFloor: { ...prev } }));
+                        setOptConstraints((c) => ({
+                          ...c,
+                          marginFloor: { ...prev },
+                        }));
                         lastAppliedFloorsRef.current = null;
                         pushJ?.("Undo: restored previous margin floors");
                       }}
@@ -1934,24 +2065,32 @@ export default function App() {
                       Undo apply floors
                     </button>
                   </div>
-                  
 
                   {/* Mini heatmap (Good × Better slice) */}
                   <div className="mt-3">
                     {(() => {
-                      const { cells, gTicks, bTicks, bestUsed } = feasibilitySliceGB(
-                        optRanges,
-                        costs,
-                        floors1,
-                        { gapGB: optConstraints.gapGB, gapBB: optConstraints.gapBB },
-                        leak
-                      );
+                      const { cells, gTicks, bTicks, bestUsed } =
+                        feasibilitySliceGB(
+                          optRanges,
+                          costs,
+                          floors1,
+                          {
+                            gapGB: optConstraints.gapGB,
+                            gapBB: optConstraints.gapBB,
+                          },
+                          leak
+                        );
                       return (
                         <>
                           <div className="text-[11px] text-gray-600 mb-1">
-                            Slice with Best fixed near lower feasible bound (≈ ${bestUsed}).
+                            Slice with Best fixed near lower feasible bound (≈ $
+                            {bestUsed}).
                           </div>
-                          <HeatmapMini cells={cells} gTicks={gTicks} bTicks={bTicks} />
+                          <HeatmapMini
+                            cells={cells}
+                            gTicks={gTicks}
+                            bTicks={bTicks}
+                          />
                         </>
                       );
                     })()}
@@ -1960,8 +2099,6 @@ export default function App() {
               );
             })()}
           </Section>
-
-
 
           <Section title="Segments (mix)">
             <details open className="text-xs">
