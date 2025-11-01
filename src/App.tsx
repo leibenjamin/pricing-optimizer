@@ -156,13 +156,47 @@ export default function App() {
             prices: typeof prices;
             costs: typeof costs;
             features: typeof features;
+            refPrices?: typeof refPrices;
+            leak?: typeof leak;
+            segments?: typeof segments;
+            analysis?: {
+              tornadoPocket?: boolean;
+              tornadoPriceBump?: number;
+              tornadoPctBump?: number;
+              retentionPct?: number;
+              kpiFloorAdj?: number;
+            };
           };
         };
         setPrices(scenario.prices);
         setCosts(scenario.costs);
         setFeatures(scenario.features);
+        if (scenario.refPrices) setRefPrices(scenario.refPrices);
+        if (scenario.leak) setLeak(scenario.leak);
+        if (scenario.segments) setSegments(scenario.segments);
+
+        // Restore analysis knobs if present
+        if (scenario.analysis) {
+          if (typeof scenario.analysis.tornadoPocket === "boolean") {
+            setTornadoPocket(scenario.analysis.tornadoPocket);
+          }
+          if (typeof scenario.analysis.tornadoPriceBump === "number") {
+            setTornadoPriceBump(scenario.analysis.tornadoPriceBump);
+          }
+          if (typeof scenario.analysis.tornadoPctBump === "number") {
+            setTornadoPctBump(scenario.analysis.tornadoPctBump);
+          }
+          if (typeof scenario.analysis.retentionPct === "number") {
+            setRetentionPct(scenario.analysis.retentionPct);
+          }
+          if (typeof scenario.analysis.kpiFloorAdj === "number") {
+            setKpiFloorAdj(scenario.analysis.kpiFloorAdj);
+          }
+        }
+
         rememberId(sid);
         pushJ(`[${now()}] Loaded scenario ${sid}`);
+
       } catch (e) {
         pushJ(`[${now()}] Load error for id ${sid}: ${(e as Error).message}`);
       }
@@ -554,7 +588,21 @@ export default function App() {
 
   async function saveScenarioShortLink() {
     // what to persist
-    const payload = { prices, costs, features };
+    const payload = {
+      prices,
+      costs,
+      features,
+      refPrices,
+      leak,
+      segments,
+      analysis: {
+        tornadoPocket,
+        tornadoPriceBump,
+        tornadoPctBump,
+        retentionPct,   // percent number, e.g. 92
+        kpiFloorAdj,    // +/- pp slider for floor coverage KPI
+      },
+    };
     try {
       const res = await fetch("/api/save", {
         method: "POST",
