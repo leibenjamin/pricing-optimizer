@@ -36,6 +36,8 @@ import { feasibilitySliceGB } from "./lib/coverage";
 
 import { PRESETS } from "./lib/presets";
 
+import { explainGaps, topDriver } from "./lib/explain";
+
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -1028,6 +1030,22 @@ export default function App() {
                     >
                       Apply optimized ladder
                     </button>
+                  </div>
+                  <div className="mt-3 text-xs">
+                    <div className="font-medium mb-1">Why this recommendation?</div>
+                    <ul className="list-disc ml-5 space-y-1">
+                      {(() => {
+                        const binds = explainGaps(best, { gapGB: optConstraints.gapGB, gapBB: optConstraints.gapBB });
+                        return binds.length ? binds.map((b, i) => <li key={i}>{b}</li>) : <li>No gap constraints binding.</li>;
+                      })()}
+                      {(() => {
+                        const td = topDriver(tornadoRowsOptim);
+                        return <li>Largest profit driver near optimum: {td ?? "n/a"}</li>;
+                      })()}
+                      <li>
+                        Floors: pocket margin ≥ {Math.round(optConstraints.marginFloor.good*100)}% / {Math.round(optConstraints.marginFloor.better*100)}% / {Math.round(optConstraints.marginFloor.best*100)}% (G/B/Best).
+                      </li>
+                    </ul>
                   </div>
                 </div>
               );
