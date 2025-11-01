@@ -1,5 +1,4 @@
 // src/components/MiniLine.tsx
-import React from "react";
 
 export default function MiniLine({
   title,

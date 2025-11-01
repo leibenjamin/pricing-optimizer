@@ -463,6 +463,15 @@ export default function App() {
     ).map(r => ({ name: r.name, base: r.base, deltaLow: r.deltaLow, deltaHigh: r.deltaHigh }));
   }, [quickOpt, N, costs, features, segments, refPrices, leak, tornadoPocket, tornadoPriceBump, tornadoPctBump]);
 
+  // Cohort retention (percent, per-month). Default 92%.
+  const [retentionPct, setRetentionPct] = useState<number>(() => {
+    const saved = localStorage.getItem("cohort_retention_pct");
+    const v = saved ? Number(saved) : 92;
+    return Number.isFinite(v) ? Math.min(99.9, Math.max(70, v)) : 92;
+  });
+  useEffect(() => {
+    localStorage.setItem("cohort_retention_pct", String(retentionPct));
+  }, [retentionPct]);
 
   async function saveScenarioShortLink() {
     // what to persist
@@ -775,47 +784,78 @@ export default function App() {
 
           <Section title="Cohort rehearsal (12 months)">
             {(() => {
-              // Use REAL current choice shares as weights
               const probsNow = choiceShares(prices, features, segments, refPrices);
-              const pts = simulateCohort(prices, probsNow, leak, costs, 12, 0.92);
+              const pts = simulateCohort(
+                prices,
+                probsNow,
+                leak,
+                costs,
+                12,
+                retentionPct / 100 // <- slider drives retention
+              );
 
               return (
-                <div className="flex items-start justify-between gap-3">
-                  <div className="text-xs text-gray-600">
-                    Weighted by current choice shares.
-                    <br />
-                    Retention 92%/mo (editable in code).
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs">
+                      <label className="font-medium">Monthly retention</label>
+                      <input
+                        type="range"
+                        min={70}
+                        max={99.9}
+                        step={0.1}
+                        value={retentionPct}
+                        onChange={(e) => setRetentionPct(Number(e.target.value))}
+                      />
+                      <input
+                        type="number"
+                        step={0.1}
+                        min={70}
+                        max={99.9}
+                        value={retentionPct}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          if (!Number.isFinite(v)) return;
+                          setRetentionPct(Math.min(99.9, Math.max(70, v)));
+                        }}
+                        className="w-16 h-7 border rounded px-2"
+                      />
+                      <span>%</span>
+                      <span className="text-gray-500 ml-2">
+                        (churn ≈ {(100 - retentionPct).toFixed(1)}%/mo)
+                      </span>
+                    </div>
+
+                    <button
+                      className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50"
+                      onClick={() => {
+                        const header = "month,margin\n";
+                        const rows = pts
+                          .map((p) => `${p.month},${p.margin.toFixed(4)}`)
+                          .join("\n");
+                        const blob = new Blob([header + rows], { type: "text/csv" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `cohort_margin_12m_ret${retentionPct}.csv`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      Export CSV
+                    </button>
                   </div>
-                  <button
-                    className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50"
-                    onClick={() => {
-                      const header = "month,margin\n";
-                      const rows = pts
-                        .map((p) => `${p.month},${p.margin.toFixed(4)}`)
-                        .join("\n");
-                      const blob = new Blob([header + rows], { type: "text/csv" });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = "cohort_margin_12m.csv";
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                  >
-                    Export CSV
-                  </button>
-                </div>
-              );
-            })()}
-            {(() => {
-              const probsNow = choiceShares(prices, features, segments, refPrices);
-              const pts = simulateCohort(prices, probsNow, leak, costs, 12, 0.92);
-              return (
-                <MiniLine
-                  title="Pocket margin by cohort month"
-                  x={pts.map((p) => p.month)}
-                  y={pts.map((p) => p.margin)}
-                />
+
+                  <div className="mt-2">
+                    <MiniLine
+                      title={`Pocket margin by cohort month (retention ${retentionPct.toFixed(
+                        1
+                      )}%)`}
+                      x={pts.map((p) => p.month)}
+                      y={pts.map((p) => p.margin)}
+                    />
+                  </div>
+                </>
               );
             })()}
           </Section>
