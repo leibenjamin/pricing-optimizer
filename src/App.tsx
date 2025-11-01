@@ -26,6 +26,9 @@ import { gridOptimize } from "./lib/optQuick";
 import Tornado from "./components/Tornado";
 import { tornadoProfit } from "./lib/sensitivity";
 
+import { simulateCohort } from "./lib/simCohort";
+import MiniLine from "./components/MiniLine";
+
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -769,6 +772,54 @@ export default function App() {
               <TakeRateChart data={probs} />
             </div>
           </Section>
+
+          <Section title="Cohort rehearsal (12 months)">
+            {(() => {
+              // Use REAL current choice shares as weights
+              const probsNow = choiceShares(prices, features, segments, refPrices);
+              const pts = simulateCohort(prices, probsNow, leak, costs, 12, 0.92);
+
+              return (
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-xs text-gray-600">
+                    Weighted by current choice shares.
+                    <br />
+                    Retention 92%/mo (editable in code).
+                  </div>
+                  <button
+                    className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50"
+                    onClick={() => {
+                      const header = "month,margin\n";
+                      const rows = pts
+                        .map((p) => `${p.month},${p.margin.toFixed(4)}`)
+                        .join("\n");
+                      const blob = new Blob([header + rows], { type: "text/csv" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = "cohort_margin_12m.csv";
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Export CSV
+                  </button>
+                </div>
+              );
+            })()}
+            {(() => {
+              const probsNow = choiceShares(prices, features, segments, refPrices);
+              const pts = simulateCohort(prices, probsNow, leak, costs, 12, 0.92);
+              return (
+                <MiniLine
+                  title="Pocket margin by cohort month"
+                  x={pts.map((p) => p.month)}
+                  y={pts.map((p) => p.margin)}
+                />
+              );
+            })()}
+          </Section>
+
 
           <Section title="Tornado — what moves profit?">
             <div className="flex flex-wrap items-center gap-3 text-xs mb-2">
