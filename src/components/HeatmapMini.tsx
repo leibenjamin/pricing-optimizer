@@ -36,9 +36,48 @@ export default function HeatmapMini({
   const ch = bTicks.length > 1 ? yScale(bTicks[0]) - yScale(bTicks[1]) : 16;
 
   return (
-    <div className="w-full">
+    <div className="w-full relative">
       <div className="text-xs font-medium mb-1">{title}</div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto select-none">
+
+      <button
+        className="absolute right-0 -top-1 text-[10px] border rounded px-2 py-1 bg-white/80 hover:bg-white z-10"
+        onClick={() => {
+          const svg = document.querySelector<SVGSVGElement>("svg[data-heatmap-mini]");
+          if (!svg) return;
+          const s = new XMLSerializer().serializeToString(svg);
+          const blob = new Blob([s], { type: "image/svg+xml;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = svg.viewBox.baseVal.width;
+            canvas.height = svg.viewBox.baseVal.height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return;
+            // white background for better legibility
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            URL.revokeObjectURL(url);
+            canvas.toBlob((png) => {
+              if (!png) return;
+              const dl = document.createElement("a");
+              dl.href = URL.createObjectURL(png);
+              dl.download = "feasibility_heatmap.png";
+              dl.click();
+              setTimeout(() => URL.revokeObjectURL(dl.href), 1000);
+            }, "image/png");
+          };
+          img.src = url;
+        }}
+        aria-label="Export heatmap as PNG"
+        title="Export PNG"
+      >
+        PNG
+      </button>
+
+      <svg data-heatmap-mini viewBox={`0 0 ${W} ${H}`} className="w-full h-auto select-none">
         {/* axes */}
         <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="#e5e7eb" />
         <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="#e5e7eb" />
