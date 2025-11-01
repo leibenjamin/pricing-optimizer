@@ -31,6 +31,9 @@ import MiniLine from "./components/MiniLine";
 
 import { pocketCoverage } from "./lib/coverage";
 
+import HeatmapMini from "./components/HeatmapMini";
+import { feasibilitySliceGB } from "./lib/coverage";
+
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -1752,7 +1755,7 @@ export default function App() {
           </Section>
 
           <Section title="KPI — Pocket floor coverage">
-            {/* Sensitivity control (optional) */}
+            {/* Sensitivity control */}
             <div className="flex items-center gap-2 text-xs mb-2">
               <span className="text-gray-600">Floor sensitivity:</span>
               <input
@@ -1766,42 +1769,101 @@ export default function App() {
             </div>
 
             {(() => {
-              // Apply temporary adjustment to floors for “what would it take?” exploration
-              const adj = (x: number) => Math.max(0, Math.min(0.95, x + kpiFloorAdj / 100));
+              // Baseline floors (no adjustment)
+              const floors0 = optConstraints.marginFloor;
 
-              const floors = {
-                good: adj(optConstraints.marginFloor.good),
-                better: adj(optConstraints.marginFloor.better),
-                best: adj(optConstraints.marginFloor.best),
+              // Adjusted floors (slider)
+              const adj = (x: number) => Math.max(0, Math.min(0.95, x + kpiFloorAdj / 100));
+              const floors1 = {
+                good: adj(floors0.good),
+                better: adj(floors0.better),
+                best: adj(floors0.best),
               };
 
-              const { coverage, tested } = pocketCoverage(
+              // Compute coverage
+              const base = pocketCoverage(
                 optRanges,
                 costs,
-                floors,
+                floors0,
+                { gapGB: optConstraints.gapGB, gapBB: optConstraints.gapBB },
+                leak
+              );
+              const moved = pocketCoverage(
+                optRanges,
+                costs,
+                floors1,
                 { gapGB: optConstraints.gapGB, gapBB: optConstraints.gapBB },
                 leak
               );
 
-              const pct = Math.round(coverage * 100);
+              const pct0 = Math.round(base.coverage * 100);
+              const pct1 = Math.round(moved.coverage * 100);
+              const delta = pct1 - pct0;
+
               const tone =
-                pct >= 70
+                pct1 >= 70
                   ? "text-green-700 bg-green-50 border-green-200"
-                  : pct >= 40
+                  : pct1 >= 40
                   ? "text-amber-700 bg-amber-50 border-amber-200"
                   : "text-red-700 bg-red-50 border-red-200";
 
               return (
-                <div className={`inline-block rounded border px-4 py-3 ${tone}`}>
-                  <div className="text-2xl font-semibold leading-tight">{pct}%</div>
-                  <div className="text-xs">of ladders feasible (pocket floors)</div>
-                  <div className="text-[11px] text-gray-600 mt-1">
-                    {tested.toLocaleString()} combinations tested • step ${optRanges.step}
+                <>
+                  {/* KPI number + explain line + apply button */}
+                  <div className={`rounded border px-4 py-3 inline-flex items-center gap-4 ${tone}`}>
+                    <div>
+                      <div className="text-2xl font-semibold leading-tight">{pct1}%</div>
+                      <div className="text-xs">feasible ladders (pocket floors)</div>
+                      <div className="text-[11px] text-gray-600 mt-1">
+                        baseline {pct0}% → {pct1}% {delta >= 0 ? `(+${delta}pp)` : `(${delta}pp)`} •{" "}
+                        {moved.tested.toLocaleString()} combos • step ${optRanges.step}
+                      </div>
+                    </div>
+                    <button
+                      className="text-xs border rounded px-3 py-1 bg-white hover:bg-gray-50"
+                      onClick={() => {
+                        // Write adjusted floors back to constraints
+                        setOptConstraints((prev) => ({
+                          ...prev,
+                          marginFloor: { ...floors1 },
+                        }));
+                        // Optional: log to journal if you use pushJ
+                        if (typeof pushJ === "function") {
+                          pushJ(
+                            `Applied floors: good ${(floors1.good*100).toFixed(0)}% • better ${(floors1.better*100).toFixed(0)}% • best ${(floors1.best*100).toFixed(0)}%`
+                          );
+                        }
+                      }}
+                    >
+                      Apply adjusted floors
+                    </button>
                   </div>
-                </div>
+
+                  {/* Mini heatmap (Good × Better slice) */}
+                  <div className="mt-3">
+                    {(() => {
+                      const { cells, gTicks, bTicks, bestUsed } = feasibilitySliceGB(
+                        optRanges,
+                        costs,
+                        floors1,
+                        { gapGB: optConstraints.gapGB, gapBB: optConstraints.gapBB },
+                        leak
+                      );
+                      return (
+                        <>
+                          <div className="text-[11px] text-gray-600 mb-1">
+                            Slice with Best fixed near lower feasible bound (≈ ${bestUsed}).
+                          </div>
+                          <HeatmapMini cells={cells} gTicks={gTicks} bTicks={bTicks} />
+                        </>
+                      );
+                    })()}
+                  </div>
+                </>
               );
             })()}
           </Section>
+
 
 
           <Section title="Segments (mix)">
