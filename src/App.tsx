@@ -29,6 +29,8 @@ import { tornadoProfit } from "./lib/sensitivity";
 import { simulateCohort } from "./lib/simCohort";
 import MiniLine from "./components/MiniLine";
 
+import { pocketCoverage } from "./lib/coverage";
+
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -244,6 +246,9 @@ export default function App() {
   const [optError, setOptError] = useState<string | null>(null);
   const runIdRef = useRef(0);
   const cancelRef = useRef<null | (() => void)>(null);
+
+  const [kpiFloorAdj, setKpiFloorAdj] = useState(0); // -10..+10 (pp)
+
 
   useEffect(() => {
     return () => {
@@ -1745,6 +1750,59 @@ export default function App() {
               </details>
             </div>
           </Section>
+
+          <Section title="KPI — Pocket floor coverage">
+            {/* Sensitivity control (optional) */}
+            <div className="flex items-center gap-2 text-xs mb-2">
+              <span className="text-gray-600">Floor sensitivity:</span>
+              <input
+                type="range"
+                min={-10}
+                max={10}
+                value={kpiFloorAdj}
+                onChange={(e) => setKpiFloorAdj(Number(e.target.value))}
+              />
+              <span className="w-10 text-right">{kpiFloorAdj} pp</span>
+            </div>
+
+            {(() => {
+              // Apply temporary adjustment to floors for “what would it take?” exploration
+              const adj = (x: number) => Math.max(0, Math.min(0.95, x + kpiFloorAdj / 100));
+
+              const floors = {
+                good: adj(optConstraints.marginFloor.good),
+                better: adj(optConstraints.marginFloor.better),
+                best: adj(optConstraints.marginFloor.best),
+              };
+
+              const { coverage, tested } = pocketCoverage(
+                optRanges,
+                costs,
+                floors,
+                { gapGB: optConstraints.gapGB, gapBB: optConstraints.gapBB },
+                leak
+              );
+
+              const pct = Math.round(coverage * 100);
+              const tone =
+                pct >= 70
+                  ? "text-green-700 bg-green-50 border-green-200"
+                  : pct >= 40
+                  ? "text-amber-700 bg-amber-50 border-amber-200"
+                  : "text-red-700 bg-red-50 border-red-200";
+
+              return (
+                <div className={`inline-block rounded border px-4 py-3 ${tone}`}>
+                  <div className="text-2xl font-semibold leading-tight">{pct}%</div>
+                  <div className="text-xs">of ladders feasible (pocket floors)</div>
+                  <div className="text-[11px] text-gray-600 mt-1">
+                    {tested.toLocaleString()} combinations tested • step ${optRanges.step}
+                  </div>
+                </div>
+              );
+            })()}
+          </Section>
+
 
           <Section title="Segments (mix)">
             <details open className="text-xs">
