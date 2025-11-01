@@ -62,23 +62,33 @@ export function gridSearch(
 
         const p: Prices = { good: pg, better: pb, best: pBest }
 
-        // margin floors
-        // compute effective “price” to test margin floors
-        const effGood   = C.usePocketMargins && leak ? computePocketPrice(p.good,   "good",   leak).pocket   : p.good
-        const effBetter = C.usePocketMargins && leak ? computePocketPrice(p.better, "better", leak).pocket : p.better
-        const effBest   = C.usePocketMargins && leak ? computePocketPrice(p.best,   "best",   leak).pocket   : p.best
+        // 1) Margin floors — use pocket iff requested
+        const effGood   = C.usePocketMargins && leak ? computePocketPrice(p.good,   "good",   leak).pocket   : p.good;
+        const effBetter = C.usePocketMargins && leak ? computePocketPrice(p.better, "better", leak).pocket : p.better;
+        const effBest   = C.usePocketMargins && leak ? computePocketPrice(p.best,   "best",   leak).pocket   : p.best;
+        
+        const mg = (effGood   - costs.good)   / Math.max(1e-6, effGood);
+        const mb = (effBetter - costs.better) / Math.max(1e-6, effBetter);
+        const mB = (effBest   - costs.best)   / Math.max(1e-6, effBest);
+        if (mg < C.marginFloor.good || mb < C.marginFloor.better || mB < C.marginFloor.best) continue;
 
-        const mg = (effGood   - costs.good)   / Math.max(1e-6, effGood)
-        const mb = (effBetter - costs.better) / Math.max(1e-6, effBetter)
-        const mB = (effBest   - costs.best)   / Math.max(1e-6, effBest)
+        // 2) Demand for this ladder (your existing call)
+        const probs = choiceShares(p, feats, segs, refPrices);
+        const q = {
+          good:   Math.round(N * probs.good),
+          better: Math.round(N * probs.better),
+          best:   Math.round(N * probs.best),
+        };
 
-        if (mg < C.marginFloor.good || mb < C.marginFloor.better || mB < C.marginFloor.best) continue
+        // 3) Profit — use pocket iff requested
+        const priceGood   = C.usePocketProfit && leak ? computePocketPrice(p.good,   "good",   leak).pocket   : p.good;
+        const priceBetter = C.usePocketProfit && leak ? computePocketPrice(p.better, "better", leak).pocket : p.better;
+        const priceBest   = C.usePocketProfit && leak ? computePocketPrice(p.best,   "best",   leak).pocket   : p.best;
 
-        const shares = choiceShares(p, feats, segs, refPrices)
         const profit =
-          N * ( shares.good   * (p.good   - costs.good)
-              + shares.better * (p.better - costs.better)
-              + shares.best   * (p.best   - costs.best) )
+          q.good   * (priceGood   - costs.good) +
+          q.better * (priceBetter - costs.better) +
+          q.best   * (priceBest   - costs.best);
 
         if (profit > best.profit) best = { prices: p, profit }
       }
