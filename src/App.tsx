@@ -34,6 +34,8 @@ import { pocketCoverage } from "./lib/coverage";
 import HeatmapMini from "./components/HeatmapMini";
 import { feasibilitySliceGB } from "./lib/coverage";
 
+import { PRESETS } from "./lib/presets";
+
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -1384,6 +1386,51 @@ export default function App() {
 
         {/* Right: Journal */}
         <div className="col-span-12 md:col-span-3 space-y-4 min-w-0 md:sticky md:top-4 self-start">
+          <Section title="Preset scenarios">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <select
+                className="border rounded px-2 h-8"
+                onChange={(e) => {
+                  const p = PRESETS.find(x => x.id === e.target.value);
+                  if (!p) return;
+                  setPrices(p.prices);
+                  setCosts(p.costs);
+                  setRefPrices(p.refPrices);
+                  setLeak(p.leak);
+                  pushJ?.(`Loaded preset: ${p.name}`);
+                }}
+                defaultValue=""
+              >
+                <option value="" disabled>Choose a preset…</option>
+                {PRESETS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <button
+                className="border rounded px-2 h-8 bg-white hover:bg-gray-50"
+                onClick={() => {
+                  // quick reset back to your repo defaults (adjust if your defaults changed)
+                  setPrices({ good: 10, better: 20, best: 40 });
+                  setCosts({ good: 3, better: 5, best: 8 });
+                  setRefPrices({ good: 12, better: 24, best: 45 });
+                  setLeak({
+                    promo: { good: 0.05, better: 0.05, best: 0.05 },
+                    volume: { good: 0.00, better: 0.00, best: 0.00 },
+                    paymentPct: 0.029,
+                    paymentFixed: 0.30,
+                    fxPct: 0.00,
+                    refundsPct: 0.02,
+                  });
+                  pushJ?.("Reset to defaults");
+                }}
+              >
+                Reset
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-600 mt-1">
+              Applies prices, costs, reference prices, and leakage profile in one click.
+            </p>
+          </Section>
+
+
           <Section title="Scenario Journal">
             <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
               {journal.length === 0 ? (
