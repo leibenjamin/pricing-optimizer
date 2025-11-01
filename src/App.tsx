@@ -256,6 +256,9 @@ export default function App() {
 
   const [kpiFloorAdj, setKpiFloorAdj] = useState(0); // -10..+10 (pp)
 
+  const lastAppliedPricesRef = useRef<{good:number;better:number;best:number} | null>(null);
+  const lastAppliedFloorsRef = useRef<{good:number;better:number;best:number} | null>(null);
+
 
   useEffect(() => {
     return () => {
@@ -1024,11 +1027,27 @@ export default function App() {
                     <button
                       className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
                       onClick={() => {
-                        setPrices(best); // apply ladder
-                        pushJ(`Applied optimized ladder: ${best.good}/${best.better}/${best.best}`);
-                      }}
+                        lastAppliedPricesRef.current = { ...prices };      // stash
+                        setPrices(best);                                    // apply
+                        pushJ?.(`Applied optimized ladder: ${best.good}/${best.better}/${best.best}`);
+                     }}
                     >
                       Apply optimized ladder
+                    </button>
+                  </div>
+                  <div className="mt-2">
+                    <button
+                      className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50 disabled:opacity-50"
+                      disabled={!lastAppliedPricesRef.current}
+                      onClick={() => {
+                        const prev = lastAppliedPricesRef.current;
+                        if (!prev) return;
+                        setPrices(prev);
+                        lastAppliedPricesRef.current = null;
+                        pushJ?.("Undo: restored ladder to previous prices");
+                      }}
+                    >
+                      Undo apply ladder
                     </button>
                   </div>
                   <div className="mt-3 text-xs">
@@ -1887,22 +1906,35 @@ export default function App() {
                     <button
                       className="text-xs border rounded px-3 py-1 bg-white hover:bg-gray-50"
                       onClick={() => {
+                        lastAppliedFloorsRef.current = { ...optConstraints.marginFloor }; // stash
                         // Write adjusted floors back to constraints
-                        setOptConstraints((prev) => ({
-                          ...prev,
-                          marginFloor: { ...floors1 },
-                        }));
+                        setOptConstraints((prev) => ({ ...prev, marginFloor: { ...floors1 } }));
                         // Optional: log to journal if you use pushJ
                         if (typeof pushJ === "function") {
                           pushJ(
-                            `Applied floors: good ${(floors1.good*100).toFixed(0)}% • better ${(floors1.better*100).toFixed(0)}% • best ${(floors1.best*100).toFixed(0)}%`
+                            `Applied floors: good ${Math.round(floors1.good*100)}% • better ${Math.round(floors1.better*100)}% • best ${Math.round(floors1.best*100)}%`
                           );
                         }
                       }}
                     >
                       Apply adjusted floors
                     </button>
+
+                    <button
+                      className="ml-2 text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50 disabled:opacity-50"
+                      disabled={!lastAppliedFloorsRef.current}
+                      onClick={() => {
+                        const prev = lastAppliedFloorsRef.current;
+                        if (!prev) return;
+                        setOptConstraints((c) => ({ ...c, marginFloor: { ...prev } }));
+                        lastAppliedFloorsRef.current = null;
+                        pushJ?.("Undo: restored previous margin floors");
+                      }}
+                    >
+                      Undo apply floors
+                    </button>
                   </div>
+                  
 
                   {/* Mini heatmap (Good × Better slice) */}
                   <div className="mt-3">
