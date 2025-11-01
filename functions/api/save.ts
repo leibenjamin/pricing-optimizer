@@ -2,47 +2,62 @@
 // functions/api/save.ts
 import { z } from "zod"
 
-// KV binding name must match your Pages binding config: SCENARIOS
 export interface Env {
   SCENARIOS: KVNamespace
 }
 
-// Reuse your existing Prices:
-const Prices = z.object({ good: z.number(), better: z.number(), best: z.number() })
+// helper to enforce finite numbers (no NaN/Infinity)
+const Num = z.number().finite()
 
-// NEW: analysis knobs we want to persist (make them optional with defaults)
+const Prices = z.object({
+  good: Num, better: Num, best: Num,
+})
+
+const TierFlags = z.object({
+  good: Num, better: Num, best: Num,
+}) // used for featA/featB (0/1) and also promo/volume (% in [0..1])
+
+const Leakages = z.object({
+  promo: TierFlags,             // 0..1
+  volume: TierFlags,            // 0..1
+  paymentPct: Num,              // 0..1
+  paymentFixed: Num,            // >=0
+  fxPct: Num,                   // 0..1
+  refundsPct: Num,              // 0..1
+})
+
+const Segment = z.object({
+  name: z.string().optional(),
+  weight: Num, // 0..1, you normalize client-side
+  beta: z.object({
+    price: Num,
+    featA: Num,
+    featB: Num,
+    refAnchor: Num.optional(),
+  })
+})
+
 const Analysis = z.object({
-  tornadoPocket: z.boolean().default(true),
-  tornadoPriceBump: z.number().default(5),
-  tornadoPctBump: z.number().default(2),
-  retentionPct: z.number().default(92),
-  kpiFloorAdj: z.number().default(0),
-}).partial() // allow saving only some keys
+  tornadoPocket: z.boolean().optional(),
+  tornadoPriceBump: Num.optional(),
+  tornadoPctBump: Num.optional(),
+  retentionPct: Num.optional(),
+  kpiFloorAdj: Num.optional(),
+}).passthrough() // allow future keys
 
-// Your Scenario schema + leak/segments (mirror your current shapes)
 const ScenarioSchema = z.object({
   prices: Prices,
   costs: Prices,
-  features: z.object({ featA: Prices, featB: Prices }),
+  features: z.object({ featA: TierFlags, featB: TierFlags }),
   refPrices: Prices,
-  leak: z.object({
-    promo: Prices, volume: Prices,
-    paymentPct: z.number(), paymentFixed: z.number(),
-    fxPct: z.number(), refundsPct: z.number(),
-  }),
-  segments: z.array(z.object({
-    weight: z.number(),
-    beta: z.object({
-      price: z.number(), featA: z.number(), featB: z.number(),
-      refAnchor: z.number().optional()
-    })
-  })).optional(),
-
-  // NEW:
+  leak: Leakages,
+  segments: z.array(Segment).optional(),
   analysis: Analysis.optional(),
-})
+}).passthrough() // allow extra keys so future expansions don't break
+
 type Scenario = z.infer<typeof ScenarioSchema>
 
+// short id generator
 function shortId(len = 7) {
   const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
   const bytes = new Uint8Array(len)
@@ -52,9 +67,8 @@ function shortId(len = 7) {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
-    // 1) Validate body
-    const body = await request.json().catch(() => null)
-    const parsed = ScenarioSchema.safeParse(body)
+    const json = await request.json().catch(() => null)
+    const parsed = ScenarioSchema.safeParse(json)
     if (!parsed.success) {
       return new Response(
         JSON.stringify({ error: "Invalid body", issues: parsed.error.issues }),
@@ -63,17 +77,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
     const scenario: Scenario = parsed.data
 
-    // 2) Try a few random ids to avoid collisions
+    // Try a few random ids to avoid collisions
     for (let i = 0; i < 5; i++) {
       const id = shortId()
       const exists = await env.SCENARIOS.get(id)
       if (exists) continue
 
-      // TTL 180 days (adjust as you like)
+      // Save ~180 days
       await env.SCENARIOS.put(id, JSON.stringify(scenario), {
         expirationTtl: 60 * 60 * 24 * 180,
       })
-
       return new Response(JSON.stringify({ id }), {
         headers: { "Content-Type": "application/json" },
       })

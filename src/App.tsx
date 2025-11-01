@@ -45,6 +45,14 @@ const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 
+type SaveError = {
+  error?: string;
+  issues?: Array<{ path?: Array<string | number>; message?: string }>;
+};
+function isSaveError(x: unknown): x is SaveError {
+  return !!x && typeof x === "object";
+}
+
 function Section({
   title,
   children,
@@ -610,7 +618,21 @@ export default function App() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        pushJ(`[${now()}] Save failed: HTTP ${res.status}`);
+        let detail = "";
+        try {
+          const body = (await res.json()) as unknown;
+          if (isSaveError(body)) {
+            if (body.error) detail += ` — ${body.error}`;
+            if (Array.isArray(body.issues) && body.issues.length) {
+              const i0 = body.issues[0];
+              const at = i0?.path ? ` at ${i0.path.join(".")}` : "";
+              detail += `${at}: ${i0?.message ?? ""}`;
+            }
+          }
+        } catch {
+          // ignore JSON parse errors; we'll just show the status
+        }
+        pushJ(`[${now()}] Save failed: HTTP ${res.status}${detail}`);
         return;
       }
       const { id } = (await res.json()) as { id: string };
