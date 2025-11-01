@@ -7,12 +7,39 @@ export interface Env {
   SCENARIOS: KVNamespace
 }
 
-// Schema for the scenario we store
+// Reuse your existing Prices:
 const Prices = z.object({ good: z.number(), better: z.number(), best: z.number() })
+
+// NEW: analysis knobs we want to persist (make them optional with defaults)
+const Analysis = z.object({
+  tornadoPocket: z.boolean().default(true),
+  tornadoPriceBump: z.number().default(5),
+  tornadoPctBump: z.number().default(2),
+  retentionPct: z.number().default(92),
+  kpiFloorAdj: z.number().default(0),
+}).partial() // allow saving only some keys
+
+// Your Scenario schema + leak/segments (mirror your current shapes)
 const ScenarioSchema = z.object({
   prices: Prices,
   costs: Prices,
   features: z.object({ featA: Prices, featB: Prices }),
+  refPrices: Prices,
+  leak: z.object({
+    promo: Prices, volume: Prices,
+    paymentPct: z.number(), paymentFixed: z.number(),
+    fxPct: z.number(), refundsPct: z.number(),
+  }),
+  segments: z.array(z.object({
+    weight: z.number(),
+    beta: z.object({
+      price: z.number(), featA: z.number(), featB: z.number(),
+      refAnchor: z.number().optional()
+    })
+  })).optional(),
+
+  // NEW:
+  analysis: Analysis.optional(),
 })
 type Scenario = z.infer<typeof ScenarioSchema>
 
