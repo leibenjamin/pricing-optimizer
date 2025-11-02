@@ -73,6 +73,93 @@ function Section({
   );
 }
 
+// --- Segments: typed normalizer (no `any`) ---
+type SegmentNested = {
+  weight: number;
+  beta: { price: number; featA: number; featB: number; refAnchor?: number };
+};
+type SegmentFlat = {
+  weight: number;
+  price: number;
+  featA: number;
+  featB: number;
+  refAnchor?: number;
+};
+type SegmentNormalized = SegmentNested;
+
+function toFinite(n: unknown): number | null {
+  const v = typeof n === "number" ? n : Number(n);
+  return Number.isFinite(v) ? v : null;
+}
+
+function isSegmentNested(s: unknown): s is SegmentNested {
+  if (!s || typeof s !== "object") return false;
+  const ss = s as Record<string, unknown>;
+  const b = ss["beta"];
+  if (!b || typeof b !== "object") return false;
+  const bb = b as Record<string, unknown>;
+  return (
+    toFinite(ss["weight"]) !== null &&
+    toFinite(bb["price"]) !== null &&
+    toFinite(bb["featA"]) !== null &&
+    toFinite(bb["featB"]) !== null
+  );
+}
+
+function isSegmentFlat(s: unknown): s is SegmentFlat {
+  if (!s || typeof s !== "object") return false;
+  const ss = s as Record<string, unknown>;
+  return (
+    toFinite(ss["weight"]) !== null &&
+    toFinite(ss["price"]) !== null &&
+    toFinite(ss["featA"]) !== null &&
+    toFinite(ss["featB"]) !== null
+  );
+}
+
+function normalizeSegmentsForSave(
+  segs: unknown
+): SegmentNormalized[] {
+  if (!Array.isArray(segs)) return [];
+  const out: SegmentNormalized[] = [];
+  for (const s of segs) {
+    if (isSegmentNested(s)) {
+      const weight = toFinite(s.weight)!;
+      const price = toFinite(s.beta.price)!;
+      const featA = toFinite(s.beta.featA)!;
+      const featB = toFinite(s.beta.featB)!;
+      const refAnchor = toFinite(s.beta.refAnchor);
+      out.push({
+        weight,
+        beta: {
+          price,
+          featA,
+          featB,
+          ...(refAnchor !== null ? { refAnchor } : {}),
+        },
+      });
+    } else if (isSegmentFlat(s)) {
+      const weight = toFinite(s.weight)!;
+      const price = toFinite(s.price)!;
+      const featA = toFinite(s.featA)!;
+      const featB = toFinite(s.featB)!;
+      const refAnchor = toFinite(s.refAnchor);
+      out.push({
+        weight,
+        beta: {
+          price,
+          featA,
+          featB,
+          ...(refAnchor !== null ? { refAnchor } : {}),
+        },
+      });
+    }
+    // invalid rows are skipped
+  }
+  return out;
+}
+
+
 export default function App() {
   const [journal, setJournal] = useState<string[]>([]);
   const pushJ = (msg: string) => setJournal((j) => [msg, ...j].slice(0, 200));
@@ -595,59 +682,75 @@ export default function App() {
   }, [retentionPct]);
 
   async function saveScenarioShortLink() {
-    // what to persist
-    const payload = {
-      prices,
-      costs,
-      features,
-      refPrices,
-      leak,
-      segments,
-      analysis: {
-        tornadoPocket,
-        tornadoPriceBump,
-        tornadoPctBump,
-        retentionPct,   // percent number, e.g. 92
-        kpiFloorAdj,    // +/- pp slider for floor coverage KPI
-      },
-    };
     try {
+      const segs = normalizeSegmentsForSave(segments);
+
+      type Payload = {
+        prices: typeof prices;
+        costs: typeof costs;
+        features: typeof features;
+        refPrices: typeof refPrices;
+        leak: typeof leak;
+        analysis: {
+          tornadoPocket: boolean;
+          tornadoPriceBump: number;
+          tornadoPctBump: number;
+          retentionPct: number;
+          kpiFloorAdj: number;
+        };
+        segments?: SegmentNormalized[];
+      };
+
+      const payload: Payload = {
+        prices,
+        costs,
+        features,
+        refPrices,
+        leak,
+        analysis: {
+          tornadoPocket,
+          tornadoPriceBump,
+          tornadoPctBump,
+          retentionPct,
+          kpiFloorAdj,
+        },
+        ...(segs.length ? { segments: segs } : {}),
+      };
+
+
       const res = await fetch("/api/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
       if (!res.ok) {
         let detail = "";
         try {
-          const body = (await res.json()) as unknown;
-          if (isSaveError(body)) {
-            if (body.error) detail += ` — ${body.error}`;
-            if (Array.isArray(body.issues) && body.issues.length) {
-              const i0 = body.issues[0];
+          const bodyUnknown: unknown = await res.json();
+          if (isSaveError(bodyUnknown)) {
+            if (bodyUnknown.error) detail += ` — ${bodyUnknown.error}`;
+            if (Array.isArray(bodyUnknown.issues) && bodyUnknown.issues.length) {
+              const i0 = bodyUnknown.issues[0];
               const at = i0?.path ? ` at ${i0.path.join(".")}` : "";
               detail += `${at}: ${i0?.message ?? ""}`;
             }
           }
         } catch {
-          // ignore JSON parse errors; we'll just show the status
+          // ignore parse errors
         }
         pushJ(`[${now()}] Save failed: HTTP ${res.status}${detail}`);
         return;
       }
-      const { id } = (await res.json()) as { id: string };
-      const shortUrl = `${location.origin}${location.pathname}?s=${id}`;
-      history.replaceState(null, "", `?s=${id}`);
-      rememberId(id);
 
-      try {
-        await navigator.clipboard.writeText(shortUrl);
-      } catch {
-        /* empty */
-      }
-      pushJ(`[${now()}] Saved as ${id} (link copied)`);
+      const { id } = (await res.json()) as { id: string };
+      const url = new URL(window.location.href);
+      url.searchParams.set("s", id);
+      window.history.replaceState(null, "", url.toString());
+      rememberId(id);
+      pushJ(`[${now()}] Saved scenario ${id}`);
     } catch (e) {
-      pushJ(`[${now()}] Save error: ${(e as Error).message}`);
+      pushJ(`[${now()}] Save failed: ${(e as Error).message}`);
     }
   }
 
