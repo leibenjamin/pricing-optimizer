@@ -114,5 +114,37 @@ export default function FrontierChartReal({
     chartRef.current.resize();
   }, [points, optimum]);
 
-  return <div className="h-64 w-full" ref={divRef} />;
+  return (
+    <div className="w-full">
+      {/* tiny toolbar */}
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-xs text-gray-600">
+          Profit Frontier
+        </div>
+        <button
+          className="text-[11px] border rounded px-2 py-1 bg-white hover:bg-gray-50"
+          aria-label="Export frontier as PNG"
+          onClick={() => {
+            const inst = chartRef.current;
+            if (!inst) return;
+            const url = inst.getDataURL({
+              type: "png",
+              pixelRatio: 2,
+              backgroundColor: "#ffffff",
+            });
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "profit_frontier.png";
+            a.click();
+          }}
+        >
+          PNG
+        </button>
+      </div>
+
+      {/* chart root */}
+      <div className="h-64 w-full" ref={divRef} />
+    </div>
+  );
+
 }

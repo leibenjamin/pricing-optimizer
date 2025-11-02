@@ -65,5 +65,39 @@ export default function TakeRateChart({ data }: { data: TakeRateData }) {
     chartRef.current.resize()
   }, [data])
 
-  return <div className="h-64 w-full" ref={divRef} />
+  return (
+    <div className="w-full">
+      {/* tiny toolbar */}
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-xs text-gray-600">Take-rate by tier</div>
+        <button
+          className="text-[11px] border rounded px-2 py-1 bg-white hover:bg-gray-50"
+          aria-label="Download take-rate CSV"
+          onClick={() => {
+            const rows = [
+              ["tier", "take_rate_pct"],
+              ["None",  (data.none   * 100).toFixed(2)],
+              ["Good",  (data.good   * 100).toFixed(2)],
+              ["Better",(data.better * 100).toFixed(2)],
+              ["Best",  (data.best   * 100).toFixed(2)],
+            ];
+            const csv = rows.map(r => r.join(",")).join("\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "take_rate.csv";
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }}
+        >
+          CSV
+        </button>
+      </div>
+
+      {/* chart root */}
+      <div className="h-64 w-full" ref={divRef} />
+    </div>
+  );
+
 }
