@@ -162,6 +162,66 @@ function normalizeSegmentsForSave(
 
 export default function App() {
   const [journal, setJournal] = useState<string[]>([]);
+
+  // --- Toasts ---
+  type Toast = { id: number; kind: "error" | "success" | "info"; msg: string; ttl?: number };
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toast = (kind: Toast["kind"], msg: string, ttl = 4000) => {
+    const id = Date.now() + Math.random();
+    setToasts((ts) => [...ts, { id, kind, msg, ttl }]);
+  };
+
+  function Toasts() {
+    return (
+      <div
+        className="fixed bottom-4 right-4 z-9999 space-y-2"
+        role="region"
+        aria-live="polite"
+        aria-label="Notifications"
+      >
+        {toasts.map((t) => {
+          const tone =
+            t.kind === "error"
+              ? "border-red-300 bg-red-50 text-red-800"
+              : t.kind === "success"
+              ? "border-green-300 bg-green-50 text-green-800"
+              : "border-slate-300 bg-white text-slate-800";
+          return (
+            <div
+              key={t.id}
+              className={`w-72 max-w-[90vw] rounded-md border shadow px-3 py-2 text-sm ${tone}`}
+            >
+              <div className="flex items-start gap-2">
+                <div className="mt-0.5">
+                  {t.kind === "error" ? "⚠️" : t.kind === "success" ? "✅" : "ℹ️"}
+                </div>
+                <div className="flex-1">{t.msg}</div>
+                <button
+                  className="opacity-60 hover:opacity-100"
+                  aria-label="Dismiss"
+                  onClick={() => setToasts((ts) => ts.filter((x) => x.id !== t.id))}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // auto-dismiss after ttl
+  useEffect(() => {
+    const timers = toasts.map((t) =>
+      setTimeout(() => {
+        setToasts((ts) => ts.filter((x) => x.id !== t.id));
+      }, t.ttl ?? 4000)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [toasts]);
+
+
   const pushJ = (msg: string) => setJournal((j) => [msg, ...j].slice(0, 200));
   // Draft value for Best while dragging, and the drag start (for the "from" price)
 
@@ -244,6 +304,7 @@ export default function App() {
         const res = await fetch(`/api/get?s=${encodeURIComponent(sid)}`);
         if (!res.ok) {
           pushJ(`[${now()}] Load failed for id ${sid} (HTTP ${res.status})`);
+          toast("error", `Load failed (HTTP ${res.status})`);
           return;
         }
         const { scenario } = (await res.json()) as {
@@ -293,7 +354,9 @@ export default function App() {
         pushJ(`[${now()}] Loaded scenario ${sid}`);
 
       } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
         pushJ(`[${now()}] Load error for id ${sid}: ${(e as Error).message}`);
+        toast("error", `Load error: ${msg}`);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -354,6 +417,7 @@ export default function App() {
             out.prices.better
           }/$${out.prices.best} (profit≈$${Math.round(out.profit)})`
         );
+        toast("success", "Optimizer finished");
       })
       .catch((e) => {
         if (runIdRef.current !== runId) return;
@@ -363,6 +427,7 @@ export default function App() {
             e instanceof Error ? e.message : String(e)
           }`
         );
+        toast("error", `Optimizer error: ${e instanceof Error ? e.message : String(e)}`);
       })
       .finally(() => {
         if (runIdRef.current === runId) {
@@ -797,6 +862,7 @@ export default function App() {
           // ignore parse errors
         }
         pushJ(`[${now()}] Save failed: HTTP ${res.status}${detail}`);
+        toast("error", `Save failed (HTTP ${res.status}${detail})`);
         return;
       }
 
@@ -806,8 +872,10 @@ export default function App() {
       window.history.replaceState(null, "", url.toString());
       rememberId(id);
       pushJ(`[${now()}] Saved scenario ${id}`);
+      toast("success", `Saved: ${id}`);
     } catch (e) {
       pushJ(`[${now()}] Save failed: ${(e as Error).message}`);
+      toast("error", `Save failed: ${(e as Error).message}`);
     }
   }
 
@@ -1021,6 +1089,7 @@ export default function App() {
 
                       if (!isScenarioImport(obj)) {
                         pushJ?.(`[${now()}] Import failed: missing core keys`);
+                        toast("error", "Import failed: invalid JSON (missing required fields)");
                         alert("Invalid JSON: missing required fields.");
                         e.currentTarget.value = "";
                         return;
@@ -1048,10 +1117,12 @@ export default function App() {
                       }
 
                       pushJ?.(`[${now()}] Imported scenario JSON`);
+                      toast("success", "Imported scenario");
                     } catch (err) {
                       pushJ?.(
                         `[${now()}] Import failed: ${err instanceof Error ? err.message : String(err)}`
                       );
+                      toast("error", `Import failed: ${err instanceof Error ? err.message : String(err)}`);
                       alert("Failed to import JSON.");
                     }
                     e.currentTarget.value = ""; // allow re-upload same file
@@ -2508,6 +2579,7 @@ export default function App() {
           </Section>
         </div>
       </main>
+      <Toasts />
     </div>
   );
 }
