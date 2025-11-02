@@ -681,6 +681,64 @@ export default function App() {
     localStorage.setItem("cohort_retention_pct", String(retentionPct));
   }, [retentionPct]);
 
+  // --- UI adapter: nested -> your UI's flattened segment shape ---
+  type SegmentNested = {
+    weight: number;
+    beta: { price: number; featA: number; featB: number; refAnchor?: number };
+  };
+  function mapNormalizedToUI(norm: SegmentNested[]): typeof segments {
+    const ui = norm.map((s) => ({
+      name: "" as string,
+      weight: s.weight,
+      betaPrice: s.beta.price,
+      betaFeatA: s.beta.featA,
+      betaFeatB: s.beta.featB,
+      ...(s.beta.refAnchor !== undefined ? { betaRefAnchor: s.beta.refAnchor } : {}),
+    }));
+    return ui as unknown as typeof segments;
+  }
+
+  // --- JSON snapshot (portable) ---
+  function buildScenarioSnapshot(args: {
+    prices: typeof prices;
+    costs: typeof costs;
+    features: typeof features;
+    refPrices: typeof refPrices;
+    leak: typeof leak;
+    segments: typeof segments;
+    tornadoPocket: boolean;
+    tornadoPriceBump: number;
+    tornadoPctBump: number;
+    retentionPct: number;
+    kpiFloorAdj: number;
+  }) {
+    const segs = normalizeSegmentsForSave(args.segments);
+    return {
+      prices: args.prices,
+      costs: args.costs,
+      features: args.features,
+      refPrices: args.refPrices,
+      leak: args.leak,
+      ...(segs.length ? { segments: segs } : {}),
+      analysis: {
+        tornadoPocket: args.tornadoPocket,
+        tornadoPriceBump: args.tornadoPriceBump,
+        tornadoPctBump: args.tornadoPctBump,
+        retentionPct: args.retentionPct,
+        kpiFloorAdj: args.kpiFloorAdj,
+      },
+    };
+  }
+
+  // --- Import guard for JSON ---
+  type ScenarioImport = ReturnType<typeof buildScenarioSnapshot>;
+  function isScenarioImport(x: unknown): x is ScenarioImport {
+    if (!x || typeof x !== "object") return false;
+    const o = x as Record<string, unknown>;
+    return typeof o.prices === "object" && typeof o.costs === "object" && typeof o.features === "object";
+  }
+
+
   async function saveScenarioShortLink() {
     try {
       const segs = normalizeSegmentsForSave(segments);
@@ -716,7 +774,6 @@ export default function App() {
         },
         ...(segs.length ? { segments: segs } : {}),
       };
-
 
       const res = await fetch("/api/save", {
         method: "POST",
@@ -909,7 +966,7 @@ export default function App() {
                 </label>
               ))}
             </div>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               <button
                 className="text-xs border px-2 py-1 rounded"
                 onClick={saveScenarioShortLink}
@@ -921,7 +978,90 @@ export default function App() {
               <button
                 className="text-xs border px-2 py-1 rounded"
                 onClick={() => {
-                  // optional: copy long URL (fully encoded state) as a fallback/share
+                  const snap = buildScenarioSnapshot({
+                    prices,
+                    costs,
+                    features,
+                    refPrices,
+                    leak,
+                    segments,
+                    tornadoPocket,
+                    tornadoPriceBump,
+                    tornadoPctBump,
+                    retentionPct,
+                    kpiFloorAdj,
+                  });
+                  const blob = new Blob([JSON.stringify(snap, null, 2)], {
+                    type: "application/json",
+                  });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "pricing_scenario.json";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  pushJ?.(`[${now()}] Exported scenario JSON`);
+                }}
+              >
+                Export JSON
+              </button>
+
+              <label className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50 cursor-pointer">
+                Import JSON
+                <input
+                  type="file"
+                  accept="application/json"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    try {
+                      const text = await f.text();
+                      const obj: unknown = JSON.parse(text);
+
+                      if (!isScenarioImport(obj)) {
+                        pushJ?.(`[${now()}] Import failed: missing core keys`);
+                        alert("Invalid JSON: missing required fields.");
+                        e.currentTarget.value = "";
+                        return;
+                      }
+
+                      const sc = obj as ScenarioImport;
+
+                      if (sc.prices) setPrices(sc.prices);
+                      if (sc.costs) setCosts(sc.costs);
+                      if (sc.features) setFeatures(sc.features);
+                      if (sc.refPrices) setRefPrices(sc.refPrices);
+                      if (sc.leak) setLeak(sc.leak);
+                      if (sc.segments) setSegments(mapNormalizedToUI(normalizeSegmentsForSave(sc.segments)));
+                      if (sc.analysis) {
+                        if (typeof sc.analysis.tornadoPocket === "boolean")
+                          setTornadoPocket(sc.analysis.tornadoPocket);
+                        if (typeof sc.analysis.tornadoPriceBump === "number")
+                          setTornadoPriceBump(sc.analysis.tornadoPriceBump);
+                        if (typeof sc.analysis.tornadoPctBump === "number")
+                          setTornadoPctBump(sc.analysis.tornadoPctBump);
+                        if (typeof sc.analysis.retentionPct === "number")
+                          setRetentionPct(sc.analysis.retentionPct);
+                        if (typeof sc.analysis.kpiFloorAdj === "number")
+                          setKpiFloorAdj(sc.analysis.kpiFloorAdj);
+                      }
+
+                      pushJ?.(`[${now()}] Imported scenario JSON`);
+                    } catch (err) {
+                      pushJ?.(
+                        `[${now()}] Import failed: ${err instanceof Error ? err.message : String(err)}`
+                      );
+                      alert("Failed to import JSON.");
+                    }
+                    e.currentTarget.value = ""; // allow re-upload same file
+                  }}
+                />
+              </label>
+
+              <button
+                className="text-xs border px-2 py-1 rounded"
+                onClick={() => {
                   const q = new URLSearchParams({
                     p: [prices.good, prices.better, prices.best].join(","),
                     c: [costs.good, costs.better, costs.best].join(","),
@@ -936,9 +1076,7 @@ export default function App() {
                       features.featB.best,
                     ].join(","),
                   });
-                  const longUrl = `${location.origin}${
-                    location.pathname
-                  }?${q.toString()}`;
+                  const longUrl = `${location.origin}${location.pathname}?${q.toString()}`;
                   navigator.clipboard.writeText(longUrl).catch(() => {});
                   pushJ(`[${now()}] Copied long URL state`);
                 }}
