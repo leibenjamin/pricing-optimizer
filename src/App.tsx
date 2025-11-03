@@ -958,7 +958,7 @@ export default function App() {
 
               <a
                 className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
-                href="mailto:ben@benlei.org"
+                href="mailto:contact@benlei.org"
               >
                 Contact
               </a>
