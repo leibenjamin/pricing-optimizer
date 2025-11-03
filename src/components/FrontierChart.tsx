@@ -49,6 +49,7 @@ export default function FrontierChartReal({
 }: {
   points: FrontierPoint[];
   optimum: FrontierPoint | null;
+  chartId?: string;
 }) {
   const divRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ECharts | null>(null);
