@@ -882,10 +882,41 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white text-gray-900">
       <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold">
-            Good–Better–Best Pricing Optimizer
-          </h1>
+       <div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
+          <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-semibold">Pricing Optimizer</h1>
+              <p className="text-sm text-slate-600">
+                Good/Better/Best ladder • pocket price waterfall • profit frontier • tornado sensitivity • cohorts
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <a
+                className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
+                href="https://github.com/leibenjamin/pricing-optimizer"
+                target="_blank"
+                rel="noreferrer"
+              >
+                View source
+              </a>
+              <a
+                className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
+                href="mailto:ben@benlei.org"
+              >
+                Contact
+              </a>
+              {/* optional: small “case study” anchor in your README or benlei.org page */}
+              <a
+                className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
+                href="https://www.benlei.org/#pricing-optimizer-case-study"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Case study
+              </a>
+            </div>
+          </header>
           <div className="text-sm text-gray-500">
             v0.3 • Latent-class choice model (3 segments)
           </div>
@@ -1041,6 +1072,20 @@ export default function App() {
                 title="Create a short link (saved in Cloudflare KV)"
               >
                 Save short link
+              </button>
+
+              <button
+                className="border rounded px-2 py-1 text-sm bg-white hover:bg-gray-50"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(window.location.href);
+                    toast?.("success", "URL copied to clipboard");
+                  } catch {
+                    toast?.("error", "Copy failed—select and copy the address bar");
+                  }
+                }}
+              >
+                Copy link
               </button>
 
               <button
