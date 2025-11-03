@@ -41,6 +41,9 @@ import { PRESETS } from "./lib/presets";
 
 import { explainGaps, topDriver } from "./lib/explain";
 
+import ActionCluster from "./components/ActionCluster";
+
+
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -1378,28 +1381,29 @@ export default function App() {
 
         {/* Center: Charts */}
         <div className="col-span-12 md:col-span-6 space-y-4 min-w-0">
-          <Section id="profit-frontier" title="Profit Frontier" className="overflow-hidden">
-            <Suspense
-              fallback={
-                <div className="text-xs text-gray-500 p-2">
-                  Loading frontier…
-                </div>
-              }
-            >
+          <Section
+            id="profit-frontier"
+            title="Profit Frontier"
+            className="overflow-hidden"
+            actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
+          >
+            <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading frontier…</div>}>
               <FrontierChartReal
+                id="frontier-main"
                 points={frontier.points}
                 optimum={frontier.optimum}
               />
             </Suspense>
           </Section>
 
-          <Section id="take-rate" title="Take-Rate Bars" className="overflow-hidden">
-            <Suspense
-              fallback={
-                <div className="text-xs text-gray-500 p-2">Loading bars…</div>
-              }
-            >
-              <TakeRateChart data={probs} />
+          <Section
+            id="take-rate"
+            title="Take-Rate Bars"
+            className="overflow-hidden"
+            actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
+          >
+            <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading bars…</div>}>
+              <TakeRateChart id="takerate-main" data={probs} />
             </Suspense>
           </Section>
 
@@ -1730,7 +1734,11 @@ export default function App() {
             )}
           </Section>
 
-          <Section id="pocket-price-waterfall" title="Pocket Price Waterfall">
+          <Section
+            id="pocket-price-waterfall"
+            title="Pocket Price Waterfall"
+            actions={<ActionCluster chart="waterfall" id="waterfall-main" csv={true} />}
+          >
             <div className="text-xs grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Controls */}
               <div className="space-y-3">
@@ -1917,6 +1925,7 @@ export default function App() {
               <div className="min-w-0">
                 <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading waterfall…</div>}>
                   <Waterfall
+                    id="waterfall-main"
                     title="Pocket Price Waterfall"
                     subtitle={`${waterTier} • list $${listForWater.toFixed(2)}`}
                     listPrice={listForWater}

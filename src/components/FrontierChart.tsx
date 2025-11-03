@@ -43,9 +43,12 @@ export interface FrontierPoint {
   profit: number;
 }
 
+type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
+
 export default function FrontierChartReal({
   points,
   optimum,
+  chartId,
 }: {
   points: FrontierPoint[];
   optimum: FrontierPoint | null;
@@ -114,6 +117,40 @@ export default function FrontierChartReal({
     chartRef.current.setOption(option, true);
     chartRef.current.resize();
   }, [points, optimum]);
+
+  // Listen for export events from ActionCluster
+  useEffect(() => {
+    if (!chartId) return;
+    const onExport = (ev: Event) => {
+      const e = ev as ExportEvent;
+      if (!e.detail || e.detail.id !== chartId) return;
+
+      if (e.detail.type === "png") {
+        if (!chartRef.current) return;
+        const url = chartRef.current.getDataURL({
+          type: "png",
+          pixelRatio: 2,
+          backgroundColor: "#ffffff",
+        });
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "profit_frontier.png";
+        a.click();
+      } else if (e.detail.type === "csv") {
+        const rows = [["best_price", "profit"], ...points.map(p => [p.bestPrice, p.profit])];
+        const csv = rows.map(r => r.join(",")).join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "profit_frontier.csv";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    };
+    window.addEventListener("export:frontier", onExport as EventListener);
+    return () => window.removeEventListener("export:frontier", onExport as EventListener);
+  }, [chartId, points]);
 
   return (
     <div className="w-full">
