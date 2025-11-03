@@ -56,11 +56,13 @@ function isSaveError(x: unknown): x is SaveError {
 function Section({
   title,
   id,
+  actions,
   children,
   className = "",
 }: {
   title: string;
   id?: string;
+  actions?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -69,11 +71,15 @@ function Section({
       id={id}
       className={`rounded-2xl shadow p-4 border border-gray-200 bg-white ${className}`}
     >
-      <h2 className="font-semibold text-lg mb-3">{title}</h2>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="font-semibold text-lg">{title}</h2>
+        {actions ? <div className="shrink-0">{actions}</div> : null}
+      </div>
       <div className="space-y-3">{children}</div>
     </section>
   );
 }
+
 
 // --- Segments: typed normalizer (no `any`) ---
 type SegmentNested = {
