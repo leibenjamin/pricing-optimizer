@@ -55,19 +55,21 @@ function isSaveError(x: unknown): x is SaveError {
 
 function Section({
   title,
+  id,
   children,
   className = "",
 }: {
   title: string;
+  id?: string;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <section
+      id={id}
       className={`rounded-2xl shadow p-4 border border-gray-200 bg-white ${className}`}
     >
       <h2 className="font-semibold text-lg mb-3">{title}</h2>
-      {/* ensure consistent vertical rhythm inside all sections */}
       <div className="space-y-3">{children}</div>
     </section>
   );
@@ -959,7 +961,7 @@ export default function App() {
       <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4">
         {/* Left: Scenario Panel */}
         <div className="col-span-12 md:col-span-3 space-y-4 min-w-0">
-          <Section title="Scenario Panel">
+          <Section id="scenario" title="Scenario Panel">
             <div className="space-y-4">
               {/* GOOD & BETTER: keep current immediate-commit + log-on-change behavior */}
               {(["good", "better"] as const).map((tier) => (
