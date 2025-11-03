@@ -926,6 +926,36 @@ export default function App() {
         </div>
       </header>
 
+      {/* Sticky KPI bar (desktop & tablet) */}
+      <div
+        className="sticky top-0 z-60 hidden md:block bg-white/80 backdrop-blur border-b"
+        role="region"
+        aria-label="Key metrics"
+      >
+        <div className="mx-auto max-w-7xl px-4 py-2 grid grid-cols-5 gap-4 text-sm">
+          <div className="truncate">
+            <div className="text-[11px] text-gray-500">Revenue (N=1000)</div>
+            <div className="font-medium">{fmtUSD(revenue)}</div>
+          </div>
+          <div className="truncate">
+            <div className="text-[11px] text-gray-500">Profit (N=1000)</div>
+            <div className="font-medium">{fmtUSD(profit)}</div>
+          </div>
+          <div className="truncate">
+            <div className="text-[11px] text-gray-500">Active customers</div>
+            <div className="font-medium">{activeCustomers.toLocaleString()}</div>
+          </div>
+          <div className="truncate">
+            <div className="text-[11px] text-gray-500">ARPU (active)</div>
+            <div className="font-medium">{fmtUSD(arpu)}</div>
+          </div>
+          <div className="truncate">
+            <div className="text-[11px] text-gray-500">Gross margin</div>
+            <div className="font-medium">{fmtPct(grossMarginPct)}</div>
+          </div>
+        </div>
+      </div>
+
       <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4">
         {/* Left: Scenario Panel */}
         <div className="col-span-12 md:col-span-3 space-y-4 min-w-0">
