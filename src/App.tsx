@@ -1925,7 +1925,7 @@ export default function App() {
               <div className="min-w-0">
                 <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading waterfall…</div>}>
                   <Waterfall
-                    id="waterfall-main"
+                    chartId="waterfall-main"
                     title="Pocket Price Waterfall"
                     subtitle={`${waterTier} • list $${listForWater.toFixed(2)}`}
                     listPrice={listForWater}

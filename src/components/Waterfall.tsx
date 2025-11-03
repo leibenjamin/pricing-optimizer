@@ -61,8 +61,9 @@ export default function Waterfall({
   subtitle,
   listPrice,
   steps,
-  variant = "full", // "full" | "mini"
+  variant = "full",
   onDownloadLabel = "PNG",
+  chartId,
 }: {
   title: string;
   subtitle?: string;
@@ -70,6 +71,7 @@ export default function Waterfall({
   steps: WaterStep[];
   variant?: "full" | "mini";
   onDownloadLabel?: string;
+  chartId?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
@@ -222,6 +224,48 @@ export default function Waterfall({
       chartRef.current = null;
     };
   }, [title, subtitle, listPrice, steps, variant]);
+
+  type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
+
+  useEffect(() => {
+    if (!chartId) return;
+    const onExport = (ev: Event) => {
+      const e = ev as ExportEvent;
+      if (!e.detail || e.detail.id !== chartId) return;
+
+      if (e.detail.type === "png") {
+        if (!chartRef.current) return;
+        const url = chartRef.current.getDataURL({
+          type: "png",
+          pixelRatio: 2,
+          backgroundColor: "#ffffff",
+        });
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "pocket_waterfall.png";
+        a.click();
+      } else if (e.detail.type === "csv") {
+        // Mirror the columns: List, then each leakage delta, then Pocket
+        const pocket = steps.length ? steps[steps.length - 1].delta : listPrice;
+        const rows: Array<[string, number]> = [["List", listPrice]];
+        for (let i = 0; i < steps.length - 1; i++) {
+          rows.push([steps[i].label, steps[i].delta]);
+        }
+        rows.push(["Pocket", pocket]);
+
+        const csv = ["label,value", ...rows.map(([k, v]) => `${k},${v}`)].join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "pocket_waterfall.csv";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    };
+    window.addEventListener("export:waterfall", onExport as EventListener);
+    return () => window.removeEventListener("export:waterfall", onExport as EventListener);
+  }, [chartId, listPrice, steps]);
 
   return (
     <div className={`relative w-full ${isMini ? "h-56" : "h-80 md:h-72"} overflow-hidden`}>
