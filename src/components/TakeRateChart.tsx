@@ -29,7 +29,13 @@ export interface TakeRateData {
   best: number
 }
 
-export default function TakeRateChart({ data }: { data: TakeRateData }) {
+export default function TakeRateChart({
+  data,
+  chartId,
+}: {
+  data: TakeRateData;
+  chartId?: string;
+}) {
   const divRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<ECharts | null>(null)
 
@@ -64,6 +70,47 @@ export default function TakeRateChart({ data }: { data: TakeRateData }) {
     chartRef.current.setOption(option, true)
     chartRef.current.resize()
   }, [data])
+
+  type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
+
+  useEffect(() => {
+    if (!chartId) return;
+    const onExport = (ev: Event) => {
+      const e = ev as ExportEvent;
+      if (!e.detail || e.detail.id !== chartId) return;
+
+      if (e.detail.type === "png") {
+        if (!chartRef.current) return;
+        const url = chartRef.current.getDataURL({
+          type: "png",
+          pixelRatio: 2,
+          backgroundColor: "#ffffff",
+        });
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "take_rate.png";
+        a.click();
+      } else if (e.detail.type === "csv") {
+        const rows = [
+          ["tier", "take_rate_pct"],
+          ["None",  (data.none   * 100).toFixed(2)],
+          ["Good",  (data.good   * 100).toFixed(2)],
+          ["Better",(data.better * 100).toFixed(2)],
+          ["Best",  (data.best   * 100).toFixed(2)],
+        ];
+        const csv = rows.map(r => r.join(",")).join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "take_rate.csv";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    };
+    window.addEventListener("export:takerate", onExport as EventListener);
+    return () => window.removeEventListener("export:takerate", onExport as EventListener);
+  }, [chartId, data]);
 
   return (
     <div className="w-full">

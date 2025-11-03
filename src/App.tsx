@@ -1389,7 +1389,7 @@ export default function App() {
           >
             <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading frontier…</div>}>
               <FrontierChartReal
-                id="frontier-main"
+                chartId="frontier-main"
                 points={frontier.points}
                 optimum={frontier.optimum}
               />
@@ -1403,7 +1403,7 @@ export default function App() {
             actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
           >
             <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading bars…</div>}>
-              <TakeRateChart id="takerate-main" data={probs} />
+              <TakeRateChart chartId="takerate-main" data={probs} />
             </Suspense>
           </Section>
 
