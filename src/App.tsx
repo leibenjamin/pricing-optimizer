@@ -223,6 +223,29 @@ export default function App() {
     return () => timers.forEach(clearTimeout);
   }, [toasts]);
 
+  const [activeSection, setActiveSection] = useState<string>("profit-frontier");
+
+  function labelFor(id: string) {
+    switch (id) {
+      case "profit-frontier": return "Profit Frontier";
+      case "pocket-price-waterfall": return "Pocket Price Waterfall";
+      case "cohort-rehearsal": return "Cohort Rehearsal";
+      case "tornado": return "Tornado";
+      case "global-optimizer": return "Global Optimizer";
+      default: return id;
+    }
+  }
+
+  function scrollToId(id: string) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    // Account for the sticky header height (KPIs + nav)
+    const stickyHeight = 80; // tweak if needed (px)
+    const top = el.getBoundingClientRect().top + window.scrollY - stickyHeight;
+    window.scrollTo({ top, behavior: "smooth" });
+  }
+
+
 
   const pushJ = (msg: string) => setJournal((j) => [msg, ...j].slice(0, 200));
   // Draft value for Best while dragging, and the drag start (for the "from" price)
@@ -881,6 +904,36 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    const ids = ["profit-frontier", "pocket-price-waterfall", "cohort-rehearsal", "tornado", "global-optimizer"];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Pick the most visible section
+        let best: { id: string; ratio: number } | null = null;
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          const id = e.target.id;
+          const ratio = e.intersectionRatio;
+          if (!best || ratio > best.ratio) best = { id, ratio };
+        }
+        if (best) setActiveSection(best.id);
+      },
+      {
+        // Trigger when ~40% in view; adjust rootMargin to sit below the sticky
+        threshold: [0.25, 0.4, 0.6],
+        rootMargin: "-80px 0px -40% 0px", // top offset for the sticky KPI+nav
+      }
+    );
+
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+
   return (
     <div className="min-h-screen bg-white text-gray-900">
       <header className="border-b border-gray-200 bg-white">
@@ -930,33 +983,54 @@ export default function App() {
 
       {/* Sticky KPI bar (desktop & tablet) */}
       <div
-        className="sticky top-0 z-60 hidden md:block bg-white/80 backdrop-blur border-b"
-        role="region"
-        aria-label="Key metrics"
-      >
-        <div className="mx-auto max-w-7xl px-4 py-2 grid grid-cols-5 gap-4 text-sm">
-          <div className="truncate">
-            <div className="text-[11px] text-gray-500">Revenue (N=1000)</div>
-            <div className="font-medium">{fmtUSD(revenue)}</div>
-          </div>
-          <div className="truncate">
-            <div className="text-[11px] text-gray-500">Profit (N=1000)</div>
-            <div className="font-medium">{fmtUSD(profit)}</div>
-          </div>
-          <div className="truncate">
-            <div className="text-[11px] text-gray-500">Active customers</div>
-            <div className="font-medium">{activeCustomers.toLocaleString()}</div>
-          </div>
-          <div className="truncate">
-            <div className="text-[11px] text-gray-500">ARPU (active)</div>
-            <div className="font-medium">{fmtUSD(arpu)}</div>
-          </div>
-          <div className="truncate">
-            <div className="text-[11px] text-gray-500">Gross margin</div>
-            <div className="font-medium">{fmtPct(grossMarginPct)}</div>
-          </div>
+      className="sticky top-0 z-60 hidden md:block bg-white/80 backdrop-blur border-b"
+      role="region"
+      aria-label="Key metrics and quick navigation"
+    >
+      {/* KPIs */}
+      <div className="mx-auto max-w-7xl px-4 py-2 grid grid-cols-5 gap-4 text-sm">
+        <div className="truncate">
+          <div className="text-[11px] text-gray-500">Revenue (N=1000)</div>
+          <div className="font-medium">{fmtUSD(revenue)}</div>
+        </div>
+        <div className="truncate">
+          <div className="text-[11px] text-gray-500">Profit (N=1000)</div>
+          <div className="font-medium">{fmtUSD(profit)}</div>
+        </div>
+        <div className="truncate">
+          <div className="text-[11px] text-gray-500">Active customers</div>
+          <div className="font-medium">{activeCustomers.toLocaleString()}</div>
+        </div>
+        <div className="truncate">
+          <div className="text-[11px] text-gray-500">ARPU (active)</div>
+          <div className="font-medium">{fmtUSD(arpu)}</div>
+        </div>
+        <div className="truncate">
+          <div className="text-[11px] text-gray-500">Gross margin</div>
+          <div className="font-medium">{fmtPct(grossMarginPct)}</div>
         </div>
       </div>
+
+      {/* Mini top-nav */}
+      <nav className="mx-auto max-w-7xl px-3 pb-2">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar text-sm">
+          {["profit-frontier","pocket-price-waterfall","cohort-rehearsal","tornado","global-optimizer"].map((id) => (
+            <button
+              key={id}
+              onClick={() => scrollToId(id)}
+              className={
+                "px-3 py-1 rounded border bg-white hover:bg-gray-50 " +
+                (activeSection === id ? "border-blue-500 text-blue-600" : "border-gray-200 text-gray-700")
+              }
+              aria-current={activeSection === id ? "page" : undefined}
+            >
+              {labelFor(id)}
+            </button>
+          ))}
+        </div>
+      </nav>
+    </div>
+
 
       <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4">
         {/* Left: Scenario Panel */}
@@ -1237,7 +1311,7 @@ export default function App() {
             </div>
           </Section>
 
-          <Section title="Reference prices">
+          <Section id="reference-prices" title="Reference prices">
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2 items-center">
               <label className="text-sm">Good</label>
               <input
@@ -1281,7 +1355,7 @@ export default function App() {
             </div>
           </Section>
 
-          <Section title="Methods">
+          <Section id="methods" title="Methods">
             <p className="text-sm text-gray-700">
               MNL: U = β₀(j) + βₚ·price + β_A·featA + β_B·featB; outside option
               intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
@@ -1298,7 +1372,7 @@ export default function App() {
 
         {/* Center: Charts */}
         <div className="col-span-12 md:col-span-6 space-y-4 min-w-0">
-          <Section title="Profit Frontier" className="overflow-hidden">
+          <Section id="profit-frontier" title="Profit Frontier" className="overflow-hidden">
             <Suspense
               fallback={
                 <div className="text-xs text-gray-500 p-2">
@@ -1313,7 +1387,7 @@ export default function App() {
             </Suspense>
           </Section>
 
-          <Section title="Take-Rate Bars" className="overflow-hidden">
+          <Section id="take-rate" title="Take-Rate Bars" className="overflow-hidden">
             <Suspense
               fallback={
                 <div className="text-xs text-gray-500 p-2">Loading bars…</div>
@@ -1323,7 +1397,7 @@ export default function App() {
             </Suspense>
           </Section>
 
-          <Section title="Cohort rehearsal (12 months)">
+          <Section id="cohort-rehearsal" title="Cohort rehearsal (12 months)">
             {(() => {
               const probsNow = choiceShares(
                 prices,
@@ -1410,7 +1484,7 @@ export default function App() {
             })()}
           </Section>
 
-          <Section title="Tornado — what moves profit?">
+          <Section id="tornado" title="Tornado — what moves profit?">
             <div className="flex flex-wrap items-center gap-3 text-xs mb-2">
               <label className="flex items-center gap-2">
                 <input
@@ -1464,7 +1538,7 @@ export default function App() {
             </p>
           </Section>
 
-          <Section title="Current vs Optimized">
+          <Section id="current-vs-optimized" title="Current vs Optimized">
             {(() => {
               const curProfit = optConstraints.usePocketProfit
                 ? // pocket profit using current prices
@@ -1625,7 +1699,7 @@ export default function App() {
             })()}
           </Section>
 
-          <Section title="Sensitivity shift: Current vs Optimized">
+          <Section id="tornado-compare" title="Sensitivity shift: Current vs Optimized">
             {quickOpt.best ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div>
@@ -1650,7 +1724,7 @@ export default function App() {
             )}
           </Section>
 
-          <Section title="Pocket Price Waterfall">
+          <Section id="pocket-price-waterfall" title="Pocket Price Waterfall">
             <div className="text-xs grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Controls */}
               <div className="space-y-3">
@@ -1989,7 +2063,7 @@ export default function App() {
 
         {/* Right: Journal */}
         <div className="col-span-12 md:col-span-3 space-y-4 min-w-0 md:sticky md:top-4 self-start">
-          <Section title="Preset scenarios">
+          <Section id="preset-scenarios" title="Preset scenarios">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <select
                 className="border rounded px-2 h-8"
@@ -2040,7 +2114,7 @@ export default function App() {
             </p>
           </Section>
 
-          <Section title="Scenario Journal">
+          <Section id="scenario-journal" title="Scenario Journal">
             <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
               {journal.length === 0 ? (
                 <li className="text-gray-400">
@@ -2097,7 +2171,7 @@ export default function App() {
             </div>
           </Section>
 
-          <Section title="Callouts">
+          <Section id="callouts" title="Callouts">
             <div className="text-sm text-gray-700 space-y-2">
               <div>
                 <strong>So what?</strong> Conversion ≈{" "}
@@ -2131,7 +2205,7 @@ export default function App() {
             </div>
           </Section>
 
-          <Section title="Global Optimizer">
+          <Section id="global-optimizer" title="Global Optimizer">
             {/* Compact header: inline ranges + actions */}
             <div className="flex flex-col gap-3">
               {/* Header row wraps nicely on small screens */}
@@ -2410,7 +2484,7 @@ export default function App() {
             </div>
           </Section>
 
-          <Section title="KPI — Pocket floor coverage">
+          <Section id="kpi-pocket-coverage" title="KPI — Pocket floor coverage">
             {/* Sensitivity control */}
             <div className="flex items-center gap-2 text-xs mb-2">
               <span className="text-gray-600">Floor sensitivity:</span>
@@ -2562,7 +2636,7 @@ export default function App() {
             })()}
           </Section>
 
-          <Section title="Segments (mix)">
+          <Section id="segments-mix" title="Segments (mix)">
             <details open className="text-xs">
               <summary className="cursor-pointer select-none font-medium mb-2">
                 Adjust segment weights
@@ -2604,7 +2678,7 @@ export default function App() {
             </details>
           </Section>
 
-          <Section title="Recent short links">
+          <Section id="recent-short-links" title="Recent short links">
             <details className="text-xs">
               <summary className="cursor-pointer select-none font-medium mb-2">
                 Show recents

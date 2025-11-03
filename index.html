@@ -14,6 +14,9 @@
     <meta name="theme-color" content="#111827" />
     <meta name="robots" content="index,follow,max-image-preview:large" />
 
+    <!-- Preconnects for performance -->
+    <link rel="preconnect" href="https://static.cloudflareinsights.com" crossorigin>
+
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="benlei.org" />
@@ -60,6 +63,8 @@
   <!-- End Cloudflare Web Analytics -->
 
   <body>
+    <a href="#frontier" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2
+  focus:bg-white focus:border focus:px-3 focus:py-1 focus:rounded">Skip to content</a>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
