@@ -152,6 +152,7 @@ export default function FrontierChartReal({
     return () => window.removeEventListener("export:frontier", onExport as EventListener);
   }, [chartId, points]);
 
+
   return (
     <div className="w-full">
       {/* tiny toolbar */}
