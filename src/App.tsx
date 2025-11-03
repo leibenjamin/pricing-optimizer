@@ -900,21 +900,24 @@ export default function App() {
               >
                 View source
               </a>
+
               <a
                 className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
                 href="mailto:ben@benlei.org"
               >
                 Contact
               </a>
-              {/* optional: small “case study” anchor in your README or benlei.org page */}
-              <a
-                className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
-                href="https://www.benlei.org/#pricing-optimizer-case-study"
-                target="_blank"
-                rel="noreferrer"
+
+              {/* Case study (future) */}
+              <button
+                type="button"
+                aria-disabled="true"
+                disabled
+                title="Coming soon"
+                className="border rounded px-3 py-1 text-sm bg-gray-100 text-gray-400 cursor-not-allowed"
               >
-                Case study
-              </a>
+                Case study (soon)
+              </button>
             </div>
           </header>
           <div className="text-sm text-gray-500">
