@@ -20,7 +20,7 @@ import {
   type Segment,
 } from "./lib/segments";
 import { choiceShares } from "./lib/choice";
-import { type Constraints, type SearchRanges } from "./lib/optimize";
+import { type SearchRanges } from "./lib/optimize";
 import { runOptimizeInWorker } from "./lib/optWorker";
 
 import { computePocketPrice, type Leakages, type Tier } from "./lib/waterfall";
@@ -43,6 +43,7 @@ import { explainGaps, topDriver } from "./lib/explain";
 
 import ActionCluster from "./components/ActionCluster";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { useStickyState } from "./lib/useStickyState";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
@@ -270,9 +271,9 @@ export default function App() {
   const pushJ = (msg: string) => setJournal((j) => [msg, ...j].slice(0, 200));
   // Draft value for Best while dragging, and the drag start (for the "from" price)
 
-  const [prices, setPrices] = useState({ good: 9, better: 15, best: 25 });
+  const [prices, setPrices] = useStickyState("po:prices", { good: 9, better: 15, best: 25 });
 
-  const [refPrices, setRefPrices] = useState({ good: 9, better: 15, best: 25 });
+  const [refPrices, setRefPrices] = useStickyState("po:refs", { good: 10, better: 18, best: 30 });
   // (optional) a quick helper to set refs from current sliders
   const setRefsFromCurrent = () =>
     setRefPrices({
@@ -287,7 +288,7 @@ export default function App() {
     featA: { good: 1, better: 1, best: 1 },
     featB: { good: 0, better: 1, best: 1 },
   });
-  const [costs, setCosts] = useState({ good: 3, better: 5, best: 8 });
+  const [costs, setCosts] = useStickyState("po:costs", { good: 3, better: 5, best: 8 });
   const [fitInfo, setFitInfo] = useState<{
     logLik: number;
     iters: number;
@@ -413,7 +414,7 @@ export default function App() {
     best: [15, 60],
     step: 1,
   });
-  const [optConstraints, setOptConstraints] = useState<Constraints>({
+  const [optConstraints, setOptConstraints] = useStickyState("po:constraints", {
     gapGB: 2,
     gapBB: 3,
     marginFloor: { good: 0.25, better: 0.25, best: 0.25 },
@@ -517,7 +518,7 @@ export default function App() {
     };
   }, []);
 
-  const [leak, setLeak] = useState<Leakages>({
+  const [leak, setLeak] = useStickyState("po:leak", {
     promo: { good: 0.05, better: 0.05, best: 0.05 }, // 5% promo
     volume: { good: 0.03, better: 0.03, best: 0.03 }, // 3% volume
     paymentPct: 0.029, // 2.9% processor
@@ -1243,6 +1244,26 @@ export default function App() {
                 }}
               >
                 Copy link
+              </button>
+              
+              <button
+                className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50"
+                onClick={() => {
+                  localStorage.removeItem("po:prices");
+                  localStorage.removeItem("po:costs");
+                  localStorage.removeItem("po:refs");
+                  localStorage.removeItem("po:leak");
+                  localStorage.removeItem("po:constraints");
+                  // You can also hard reset state if you want immediate UI reflect:
+                  setPrices({ good: 9, better: 15, best: 25 });
+                  setCosts({ good: 3, better: 5, best: 8 });
+                  setRefPrices({ good: 10, better: 18, best: 30 });
+                  setLeak({ promo: { good: 0.05, better: 0.05, best: 0.05 }, volume: { good: 0.03, better: 0.03, best: 0.03 }, paymentPct: 0.029, paymentFixed: 0.3, fxPct: 0, refundsPct: 0.02 });
+                  setOptConstraints({ gapGB: 2, gapBB: 4, marginFloor: { good: 0.25, better: 0.25, best: 0.25 }, charm: false, usePocketProfit: false, usePocketMargins: false });
+                }}
+                aria-label="Reset all settings to defaults"
+              >
+                Reset defaults
               </button>
 
               <button
