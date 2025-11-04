@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   init,
   use as echartsUse,
@@ -20,6 +20,7 @@ import {
   type TooltipComponentOption,
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
+import type { CallbackDataParams } from "echarts/types/dist/shared";
 
 echartsUse([
   LineChart,
@@ -57,6 +58,13 @@ export default function FrontierChartReal({
   const divRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ECharts | null>(null);
 
+  const [vw, setVw] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1024);
+  useEffect(() => {
+    const on = () => setVw(window.innerWidth);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+
   // Init once
   useEffect(() => {
     if (!divRef.current) return;
@@ -76,30 +84,54 @@ export default function FrontierChartReal({
     const xs = points.map((p) => p.bestPrice);
     const ys = points.map((p) => p.profit);
 
+    const isNarrow = vw < 768;
+    const axisFont = isNarrow ? 10 : 12;
+    const labelFont = isNarrow ? 10 : 12;
+    const topPad = isNarrow ? 10 : 16;
+    const rightPad = isNarrow ? 8 : 12;
+    const bottomPad = isNarrow ? 24 : 30;
+
     const option: ECOption = {
       animation: false,
       title: {
         text: "Profit vs Best Price (Good/Better fixed)",
         left: "center",
         top: 8,
+        // Title font size scales with viewport width
+        textStyle: { fontSize: isNarrow ? 12 : 14 },
       },
-      grid: { left: 60, right: 20, top: 70, bottom: 40 }, // ↑ more top padding
+      grid: {
+        left: 40,
+        right: rightPad,
+        top: topPad,
+        bottom: bottomPad,
+        containLabel: true,
+      },
       xAxis: {
         type: "value",
         name: "Best price",
-        nameLocation: "middle",
-        nameGap: 28,
+        nameTextStyle: { fontSize: axisFont },      // axis name font
+        axisLabel: { fontSize: axisFont },          // tick label font
       },
       yAxis: {
         type: "value",
         name: "Profit (N=1000)",
-        nameLocation: "middle",
-        nameGap: 42, // ↑ room for y-axis name
-        axisLabel: { formatter: (v: number) => v.toLocaleString() },
+        nameTextStyle: { fontSize: axisFont },
+        axisLabel: { fontSize: axisFont },
       },
       tooltip: { trigger: "axis" },
       series: [
-        { type: "line", smooth: true, data: xs.map((x, i) => [x, ys[i]]) },
+        {
+          type: "line",
+          smooth: true,
+          data: xs.map((x, i) => [x, ys[i]]),
+          // If you want to show data labels on the line, enable this:
+          label: {
+            show: false,               // set to true if wanting labels
+            position: "top",
+            fontSize: labelFont,
+          },
+        } as LineSeriesOption,
         ...(optimum
           ? [
               {
@@ -108,6 +140,21 @@ export default function FrontierChartReal({
                 symbolSize: 12,
                 itemStyle: { borderWidth: 1 },
                 emphasis: { focus: "series" },
+                // If you want to label the optimum dot:
+                label: {
+                  show: true,
+                  formatter: (p: CallbackDataParams) => {
+                    // ECharts can pass a number, object, or tuple; guard and format only tuples
+                    const v = p?.value as number[] | undefined;
+                    if (Array.isArray(v) && v.length >= 2) {
+                      const [price, prof] = v;
+                      return `$${price.toFixed(2)} • ${prof.toFixed(0)}`;
+                    }
+                    return ""; // fallback (hides text if value isn’t a tuple)
+                  },
+                  fontSize: labelFont,
+                  position: "top",
+                },
               } as ScatterSeriesOption,
             ]
           : []),
@@ -116,7 +163,7 @@ export default function FrontierChartReal({
 
     chartRef.current.setOption(option, true);
     chartRef.current.resize();
-  }, [points, optimum]);
+  }, [points, optimum, vw]);
 
   // Listen for export events from ActionCluster
   useEffect(() => {
@@ -155,34 +202,8 @@ export default function FrontierChartReal({
 
   return (
     <div className="w-full">
-      {/* tiny toolbar */}
-      <div className="flex items-center justify-between mb-1">
-        <div className="text-xs text-gray-600">
-          Profit Frontier
-        </div>
-        <button
-          className="text-[11px] border rounded px-2 py-1 bg-white hover:bg-gray-50"
-          aria-label="Export frontier as PNG"
-          onClick={() => {
-            const inst = chartRef.current;
-            if (!inst) return;
-            const url = inst.getDataURL({
-              type: "png",
-              pixelRatio: 2,
-              backgroundColor: "#ffffff",
-            });
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "profit_frontier.png";
-            a.click();
-          }}
-        >
-          PNG
-        </button>
-      </div>
-
       {/* chart root */}
-      <div className="h-64 w-full" ref={divRef} />
+      <div className="h-64 w-full" ref={divRef} role="img" aria-label="Profit frontier chart" />
     </div>
   );
 
