@@ -2167,7 +2167,12 @@ export default function App() {
         </div>
 
         {/* Right: Journal */}
-        <div className="col-span-12 md:col-span-3 space-y-3 md:space-y-4 min-w-0 md:sticky md:top-4 self-start md:text-[13px]">
+        <div
+          className="col-span-12 md:col-span-3 space-y-3 md:space-y-4 min-w-0
+                    md:sticky md:top-4 self-start md:text-[13px]
+                    md:max-h-[calc(100vh-2rem)] md:overflow-auto pr-1"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           <Section id="preset-scenarios" title="Preset scenarios">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <select
