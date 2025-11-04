@@ -1,5 +1,5 @@
 // src/components/Waterfall.tsx
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as echarts from "echarts/core";
 
 // charts
@@ -78,8 +78,25 @@ export default function Waterfall({
 
   const isMini = variant === "mini";
 
+  const [vw, setVw] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1024);
+  useEffect(() => {
+    const on = () => setVw(window.innerWidth);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+
   useEffect(() => {
     const localIsMini = variant === "mini";
+
+    // viewport-aware sizes
+    const isNarrow = vw < 768;
+    const axisFont  = localIsMini ? (isNarrow ? 9  : 10) : (isNarrow ? 11 : 12);
+    const labelFont = localIsMini ? (isNarrow ? 9  : 10) : (isNarrow ? 11 : 12);
+    const gridTop   = localIsMini ? (isNarrow ? 16 : 22) : (isNarrow ? 32 : 44);
+    const gridBot   = localIsMini ? (isNarrow ?  8 : 10) : (isNarrow ? 28 : 40);
+    const rightPad  = isNarrow ? 16 : 28;
+    const leftPad   = isNarrow ? 40 : 56;
+    const barW      = localIsMini ? (isNarrow ? 8  : 10) : (isNarrow ? 18 : 22);
 
     if (!ref.current) return;
     if (!chartRef.current) chartRef.current = echarts.init(ref.current);
@@ -145,14 +162,21 @@ export default function Waterfall({
       title: {
         text: localIsMini ? title : title,
         subtext: localIsMini ? "" : subtitle ?? "",
-        left: localIsMini ? "center" : "center",
+        left: "center",
         top: localIsMini ? 4 : 6,
-        textStyle: { fontSize: localIsMini ? 12 : 14, fontWeight: 700 },
-        subtextStyle: { fontSize: 12, color: "#6b7280" },
+        textStyle: {
+          fontSize: localIsMini ? (isNarrow ? 11 : 12) : (isNarrow ? 13 : 14),
+          fontWeight: 700,
+        },
+        subtextStyle: { fontSize: isNarrow ? 11 : 12, color: "#6b7280" },
       },
-      grid: localIsMini
-        ? { left: 24, right: 20, top: 22, bottom: 10, containLabel: true }
-        : { left: 56, right: 28, top: 44, bottom: 40, containLabel: true },
+      grid: {
+        left: leftPad,
+        right: rightPad,
+        top: gridTop,
+        bottom: gridBot,
+        containLabel: true,
+      },
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
@@ -163,17 +187,21 @@ export default function Waterfall({
         type: "category",
         data: categories,
         axisLabel: localIsMini
-          ? { show: false } // hide category labels in mini
+          ? { show: false }
           : {
-            fontSize: 12,
-            interval: 0,
-            margin: 8,
-            hideOverlap: true,
-          },
+              fontSize: axisFont,
+              interval: 0,
+              margin: 8,
+              hideOverlap: true,
+            },
       },
       yAxis: {
         type: "value",
-        axisLabel: { show: !localIsMini, formatter: (v: number) => `$${v}` },
+        axisLabel: {
+          show: !localIsMini,
+          formatter: (v: number) => `$${v}`,
+          fontSize: axisFont,
+        },
         splitLine: { lineStyle: { color: "#eef2f7" } },
       },
       series: [
@@ -193,17 +221,16 @@ export default function Waterfall({
           type: "bar",
           stack: "total",
           data: changeData,
-          barWidth: localIsMini ? 10 : 22,    // narrower bars in minis
+          barWidth: barW,
           barCategoryGap: localIsMini ? "60%" : "40%",
           label: {
-            show: !localIsMini,               // minis use per-point labels above
+            show: !localIsMini,
             position: localIsMini ? "inside" : "top",
-            fontSize: localIsMini ? 9 : 11,
+            fontSize: labelFont,
             padding: localIsMini ? 0 : [2, 3, 2, 3],
             backgroundColor: "rgba(255,255,255,0.8)",
             borderRadius: localIsMini ? 0 : 3,
             formatter: (p) => {
-              // in mini: only label the final bar (Pocket)
               if (localIsMini && p.dataIndex !== changes.length - 1) return "";
               return labelFmt(p);
             },
@@ -223,7 +250,7 @@ export default function Waterfall({
       chartRef.current?.dispose();
       chartRef.current = null;
     };
-  }, [title, subtitle, listPrice, steps, variant]);
+  }, [title, subtitle, listPrice, steps, variant, vw]);
 
   type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
 
