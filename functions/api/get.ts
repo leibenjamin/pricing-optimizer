@@ -40,3 +40,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     })
   }
 }
+
+// Fast health/prewarm endpoint: HEAD /api/get?s=ping  -> 204 No Content
+export const onRequestHead: PagesFunction = async ({ request }) => {
+  try {
+    const url = new URL(request.url);
+    const s = url.searchParams.get("s");
+    if (s === "ping") {
+      return new Response(null, { status: 204 });
+    }
+    // If they HEAD a real id, treat as "exists?"
+    return new Response(null, { status: 204 });
+  } catch {
+    return new Response(null, { status: 204 });
+  }
+};
