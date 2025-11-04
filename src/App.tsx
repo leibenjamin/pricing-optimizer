@@ -43,7 +43,6 @@ import { explainGaps, topDriver } from "./lib/explain";
 
 import ActionCluster from "./components/ActionCluster";
 
-
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -72,7 +71,7 @@ function Section({
   return (
     <section
       id={id}
-      className={`rounded-2xl shadow p-4 border border-gray-200 bg-white ${className}`}
+      className={`rounded-2xl shadow p-3 md:p-4 border border-gray-200 bg-white ${className}`}
     >
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="font-semibold text-lg">{title}</h2>
@@ -82,7 +81,6 @@ function Section({
     </section>
   );
 }
-
 
 // --- Segments: typed normalizer (no `any`) ---
 type SegmentNested = {
@@ -128,9 +126,7 @@ function isSegmentFlat(s: unknown): s is SegmentFlat {
   );
 }
 
-function normalizeSegmentsForSave(
-  segs: unknown
-): SegmentNormalized[] {
+function normalizeSegmentsForSave(segs: unknown): SegmentNormalized[] {
   if (!Array.isArray(segs)) return [];
   const out: SegmentNormalized[] = [];
   for (const s of segs) {
@@ -170,12 +166,16 @@ function normalizeSegmentsForSave(
   return out;
 }
 
-
 export default function App() {
   const [journal, setJournal] = useState<string[]>([]);
 
   // --- Toasts ---
-  type Toast = { id: number; kind: "error" | "success" | "info"; msg: string; ttl?: number };
+  type Toast = {
+    id: number;
+    kind: "error" | "success" | "info";
+    msg: string;
+    ttl?: number;
+  };
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toast = (kind: Toast["kind"], msg: string, ttl = 4000) => {
     const id = Date.now() + Math.random();
@@ -204,13 +204,19 @@ export default function App() {
             >
               <div className="flex items-start gap-2">
                 <div className="mt-0.5">
-                  {t.kind === "error" ? "⚠️" : t.kind === "success" ? "✅" : "ℹ️"}
+                  {t.kind === "error"
+                    ? "⚠️"
+                    : t.kind === "success"
+                    ? "✅"
+                    : "ℹ️"}
                 </div>
                 <div className="flex-1">{t.msg}</div>
                 <button
                   className="opacity-60 hover:opacity-100"
                   aria-label="Dismiss"
-                  onClick={() => setToasts((ts) => ts.filter((x) => x.id !== t.id))}
+                  onClick={() =>
+                    setToasts((ts) => ts.filter((x) => x.id !== t.id))
+                  }
                 >
                   ✕
                 </button>
@@ -236,12 +242,18 @@ export default function App() {
 
   function labelFor(id: string) {
     switch (id) {
-      case "profit-frontier": return "Profit Frontier";
-      case "pocket-price-waterfall": return "Pocket Price Waterfall";
-      case "cohort-rehearsal": return "Cohort Rehearsal";
-      case "tornado": return "Tornado";
-      case "global-optimizer": return "Global Optimizer";
-      default: return id;
+      case "profit-frontier":
+        return "Profit Frontier";
+      case "pocket-price-waterfall":
+        return "Pocket Price Waterfall";
+      case "cohort-rehearsal":
+        return "Cohort Rehearsal";
+      case "tornado":
+        return "Tornado";
+      case "global-optimizer":
+        return "Global Optimizer";
+      default:
+        return id;
     }
   }
 
@@ -253,8 +265,6 @@ export default function App() {
     const top = el.getBoundingClientRect().top + window.scrollY - stickyHeight;
     window.scrollTo({ top, behavior: "smooth" });
   }
-
-
 
   const pushJ = (msg: string) => setJournal((j) => [msg, ...j].slice(0, 200));
   // Draft value for Best while dragging, and the drag start (for the "from" price)
@@ -386,7 +396,6 @@ export default function App() {
 
         rememberId(sid);
         pushJ(`[${now()}] Loaded scenario ${sid}`);
-
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         pushJ(`[${now()}] Load error for id ${sid}: ${(e as Error).message}`);
@@ -461,7 +470,10 @@ export default function App() {
             e instanceof Error ? e.message : String(e)
           }`
         );
-        toast("error", `Optimizer error: ${e instanceof Error ? e.message : String(e)}`);
+        toast(
+          "error",
+          `Optimizer error: ${e instanceof Error ? e.message : String(e)}`
+        );
       })
       .finally(() => {
         if (runIdRef.current === runId) {
@@ -792,7 +804,9 @@ export default function App() {
       betaPrice: s.beta.price,
       betaFeatA: s.beta.featA,
       betaFeatB: s.beta.featB,
-      ...(s.beta.refAnchor !== undefined ? { betaRefAnchor: s.beta.refAnchor } : {}),
+      ...(s.beta.refAnchor !== undefined
+        ? { betaRefAnchor: s.beta.refAnchor }
+        : {}),
     }));
     return ui as unknown as typeof segments;
   }
@@ -834,9 +848,12 @@ export default function App() {
   function isScenarioImport(x: unknown): x is ScenarioImport {
     if (!x || typeof x !== "object") return false;
     const o = x as Record<string, unknown>;
-    return typeof o.prices === "object" && typeof o.costs === "object" && typeof o.features === "object";
+    return (
+      typeof o.prices === "object" &&
+      typeof o.costs === "object" &&
+      typeof o.features === "object"
+    );
   }
-
 
   async function saveScenarioShortLink() {
     try {
@@ -886,7 +903,10 @@ export default function App() {
           const bodyUnknown: unknown = await res.json();
           if (isSaveError(bodyUnknown)) {
             if (bodyUnknown.error) detail += ` — ${bodyUnknown.error}`;
-            if (Array.isArray(bodyUnknown.issues) && bodyUnknown.issues.length) {
+            if (
+              Array.isArray(bodyUnknown.issues) &&
+              bodyUnknown.issues.length
+            ) {
               const i0 = bodyUnknown.issues[0];
               const at = i0?.path ? ` at ${i0.path.join(".")}` : "";
               detail += `${at}: ${i0?.message ?? ""}`;
@@ -914,7 +934,13 @@ export default function App() {
   }
 
   useEffect(() => {
-    const ids = ["profit-frontier", "pocket-price-waterfall", "cohort-rehearsal", "tornado", "global-optimizer"];
+    const ids = [
+      "profit-frontier",
+      "pocket-price-waterfall",
+      "cohort-rehearsal",
+      "tornado",
+      "global-optimizer",
+    ];
     const observer = new IntersectionObserver(
       (entries) => {
         // Pick the most visible section
@@ -942,16 +968,16 @@ export default function App() {
     return () => observer.disconnect();
   }, []);
 
-
   return (
     <div className="min-h-screen bg-white text-gray-900">
       <header className="border-b border-gray-200 bg-white">
-       <div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
+        <div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
           <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-semibold">Pricing Optimizer</h1>
               <p className="text-sm text-slate-600">
-                Good/Better/Best ladder • pocket price waterfall • profit frontier • tornado sensitivity • cohorts
+                Good/Better/Best ladder • pocket price waterfall • profit
+                frontier • tornado sensitivity • cohorts
               </p>
             </div>
 
@@ -992,54 +1018,63 @@ export default function App() {
 
       {/* Sticky KPI bar (desktop & tablet) */}
       <div
-      className="sticky top-0 z-60 hidden md:block bg-white/80 backdrop-blur border-b"
-      role="region"
-      aria-label="Key metrics and quick navigation"
-    >
-      {/* KPIs */}
-      <div className="mx-auto max-w-7xl px-4 py-2 grid grid-cols-5 gap-4 text-sm">
-        <div className="truncate">
-          <div className="text-[11px] text-gray-500">Revenue (N=1000)</div>
-          <div className="font-medium">{fmtUSD(revenue)}</div>
+        className="sticky top-0 z-60 hidden md:block bg-white/80 backdrop-blur border-b"
+        role="region"
+        aria-label="Key metrics and quick navigation"
+      >
+        {/* KPIs */}
+        <div className="mx-auto max-w-7xl px-4 py-2 grid grid-cols-5 gap-4 text-sm">
+          <div className="truncate">
+            <div className="text-[11px] text-gray-500">Revenue (N=1000)</div>
+            <div className="font-medium">{fmtUSD(revenue)}</div>
+          </div>
+          <div className="truncate">
+            <div className="text-[11px] text-gray-500">Profit (N=1000)</div>
+            <div className="font-medium">{fmtUSD(profit)}</div>
+          </div>
+          <div className="truncate">
+            <div className="text-[11px] text-gray-500">Active customers</div>
+            <div className="font-medium">
+              {activeCustomers.toLocaleString()}
+            </div>
+          </div>
+          <div className="truncate">
+            <div className="text-[11px] text-gray-500">ARPU (active)</div>
+            <div className="font-medium">{fmtUSD(arpu)}</div>
+          </div>
+          <div className="truncate">
+            <div className="text-[11px] text-gray-500">Gross margin</div>
+            <div className="font-medium">{fmtPct(grossMarginPct)}</div>
+          </div>
         </div>
-        <div className="truncate">
-          <div className="text-[11px] text-gray-500">Profit (N=1000)</div>
-          <div className="font-medium">{fmtUSD(profit)}</div>
-        </div>
-        <div className="truncate">
-          <div className="text-[11px] text-gray-500">Active customers</div>
-          <div className="font-medium">{activeCustomers.toLocaleString()}</div>
-        </div>
-        <div className="truncate">
-          <div className="text-[11px] text-gray-500">ARPU (active)</div>
-          <div className="font-medium">{fmtUSD(arpu)}</div>
-        </div>
-        <div className="truncate">
-          <div className="text-[11px] text-gray-500">Gross margin</div>
-          <div className="font-medium">{fmtPct(grossMarginPct)}</div>
-        </div>
+
+        {/* Mini top-nav */}
+        <nav className="mx-auto max-w-7xl px-3 pb-2">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar text-sm">
+            {[
+              "profit-frontier",
+              "pocket-price-waterfall",
+              "cohort-rehearsal",
+              "tornado",
+              "global-optimizer",
+            ].map((id) => (
+              <button
+                key={id}
+                onClick={() => scrollToId(id)}
+                className={
+                  "px-3 py-1 rounded border bg-white hover:bg-gray-50 " +
+                  (activeSection === id
+                    ? "border-blue-500 text-blue-600"
+                    : "border-gray-200 text-gray-700")
+                }
+                aria-current={activeSection === id ? "page" : undefined}
+              >
+                {labelFor(id)}
+              </button>
+            ))}
+          </div>
+        </nav>
       </div>
-
-      {/* Mini top-nav */}
-      <nav className="mx-auto max-w-7xl px-3 pb-2">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar text-sm">
-          {["profit-frontier","pocket-price-waterfall","cohort-rehearsal","tornado","global-optimizer"].map((id) => (
-            <button
-              key={id}
-              onClick={() => scrollToId(id)}
-              className={
-                "px-3 py-1 rounded border bg-white hover:bg-gray-50 " +
-                (activeSection === id ? "border-blue-500 text-blue-600" : "border-gray-200 text-gray-700")
-              }
-              aria-current={activeSection === id ? "page" : undefined}
-            >
-              {labelFor(id)}
-            </button>
-          ))}
-        </div>
-      </nav>
-    </div>
-
 
       <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4">
         {/* Left: Scenario Panel */}
@@ -1199,7 +1234,10 @@ export default function App() {
                     await navigator.clipboard.writeText(window.location.href);
                     toast?.("success", "URL copied to clipboard");
                   } catch {
-                    toast?.("error", "Copy failed—select and copy the address bar");
+                    toast?.(
+                      "error",
+                      "Copy failed—select and copy the address bar"
+                    );
                   }
                 }}
               >
@@ -1252,7 +1290,10 @@ export default function App() {
 
                       if (!isScenarioImport(obj)) {
                         pushJ?.(`[${now()}] Import failed: missing core keys`);
-                        toast("error", "Import failed: invalid JSON (missing required fields)");
+                        toast(
+                          "error",
+                          "Import failed: invalid JSON (missing required fields)"
+                        );
                         alert("Invalid JSON: missing required fields.");
                         e.currentTarget.value = "";
                         return;
@@ -1265,7 +1306,12 @@ export default function App() {
                       if (sc.features) setFeatures(sc.features);
                       if (sc.refPrices) setRefPrices(sc.refPrices);
                       if (sc.leak) setLeak(sc.leak);
-                      if (sc.segments) setSegments(mapNormalizedToUI(normalizeSegmentsForSave(sc.segments)));
+                      if (sc.segments)
+                        setSegments(
+                          mapNormalizedToUI(
+                            normalizeSegmentsForSave(sc.segments)
+                          )
+                        );
                       if (sc.analysis) {
                         if (typeof sc.analysis.tornadoPocket === "boolean")
                           setTornadoPocket(sc.analysis.tornadoPocket);
@@ -1283,9 +1329,16 @@ export default function App() {
                       toast("success", "Imported scenario");
                     } catch (err) {
                       pushJ?.(
-                        `[${now()}] Import failed: ${err instanceof Error ? err.message : String(err)}`
+                        `[${now()}] Import failed: ${
+                          err instanceof Error ? err.message : String(err)
+                        }`
                       );
-                      toast("error", `Import failed: ${err instanceof Error ? err.message : String(err)}`);
+                      toast(
+                        "error",
+                        `Import failed: ${
+                          err instanceof Error ? err.message : String(err)
+                        }`
+                      );
                       alert("Failed to import JSON.");
                     }
                     e.currentTarget.value = ""; // allow re-upload same file
@@ -1310,7 +1363,9 @@ export default function App() {
                       features.featB.best,
                     ].join(","),
                   });
-                  const longUrl = `${location.origin}${location.pathname}?${q.toString()}`;
+                  const longUrl = `${location.origin}${
+                    location.pathname
+                  }?${q.toString()}`;
                   navigator.clipboard.writeText(longUrl).catch(() => {});
                   pushJ(`[${now()}] Copied long URL state`);
                 }}
@@ -1387,7 +1442,13 @@ export default function App() {
             className="overflow-hidden"
             actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
           >
-            <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading frontier…</div>}>
+            <Suspense
+              fallback={
+                <div className="text-xs text-gray-500 p-2">
+                  Loading frontier…
+                </div>
+              }
+            >
               <FrontierChartReal
                 chartId="frontier-main"
                 points={frontier.points}
@@ -1402,7 +1463,11 @@ export default function App() {
             className="overflow-hidden"
             actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
           >
-            <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading bars…</div>}>
+            <Suspense
+              fallback={
+                <div className="text-xs text-gray-500 p-2">Loading bars…</div>
+              }
+            >
               <TakeRateChart chartId="takerate-main" data={probs} />
             </Suspense>
           </Section>
@@ -1709,12 +1774,19 @@ export default function App() {
             })()}
           </Section>
 
-          <Section id="tornado-compare" title="Sensitivity shift: Current vs Optimized">
+          <Section
+            id="tornado-compare"
+            title="Sensitivity shift: Current vs Optimized"
+          >
             {quickOpt.best ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div>
                   <div className="text-xs font-medium mb-1">Current ladder</div>
-                  <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading…</div>}>
+                  <Suspense
+                    fallback={
+                      <div className="text-xs text-gray-500 p-2">Loading…</div>
+                    }
+                  >
                     <Tornado rows={tornadoRowsCurrent} />
                   </Suspense>
                 </div>
@@ -1722,7 +1794,11 @@ export default function App() {
                   <div className="text-xs font-medium mb-1">
                     Optimized ladder
                   </div>
-                  <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading…</div>}>
+                  <Suspense
+                    fallback={
+                      <div className="text-xs text-gray-500 p-2">Loading…</div>
+                    }
+                  >
                     <Tornado rows={tornadoRowsOptim} />
                   </Suspense>
                 </div>
@@ -1737,7 +1813,9 @@ export default function App() {
           <Section
             id="pocket-price-waterfall"
             title="Pocket Price Waterfall"
-            actions={<ActionCluster chart="waterfall" id="waterfall-main" csv={true} />}
+            actions={
+              <ActionCluster chart="waterfall" id="waterfall-main" csv={true} />
+            }
           >
             <div className="text-xs grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Controls */}
@@ -1923,7 +2001,13 @@ export default function App() {
 
               {/* Chart */}
               <div className="min-w-0">
-                <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading waterfall…</div>}>
+                <Suspense
+                  fallback={
+                    <div className="text-xs text-gray-500 p-2">
+                      Loading waterfall…
+                    </div>
+                  }
+                >
                   <Waterfall
                     chartId="waterfall-main"
                     title="Pocket Price Waterfall"
@@ -1952,7 +2036,13 @@ export default function App() {
                       <div key={t} className="min-w-0 h-56 overflow-hidden">
                         {" "}
                         {/* added overflow-hidden */}
-                        <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading…</div>}>
+                        <Suspense
+                          fallback={
+                            <div className="text-xs text-gray-500 p-2">
+                              Loading…
+                            </div>
+                          }
+                        >
                           <Waterfall
                             title={t}
                             subtitle={`list $${list.toFixed(2)}`}
@@ -2077,7 +2167,7 @@ export default function App() {
         </div>
 
         {/* Right: Journal */}
-        <div className="col-span-12 md:col-span-3 space-y-4 min-w-0 md:sticky md:top-4 self-start">
+        <div className="col-span-12 md:col-span-3 space-y-3 md:space-y-4 min-w-0 md:sticky md:top-4 self-start md:text-[13px]">
           <Section id="preset-scenarios" title="Preset scenarios">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <select
@@ -2123,10 +2213,15 @@ export default function App() {
                 Reset
               </button>
             </div>
-            <p className="text-[11px] text-gray-600 mt-1">
-              Applies prices, costs, reference prices, and leakage profile in
-              one click.
-            </p>
+            <details className="mt-1">
+              <summary className="cursor-pointer select-none text-[11px] text-gray-600">
+                What does this apply?
+              </summary>
+              <div className="text-[11px] text-gray-600 mt-1">
+                Prices, costs, reference prices, and the leakage profile
+                (promos, volume, payment, FX, refunds).
+              </div>
+            </details>
           </Section>
 
           <Section id="scenario-journal" title="Scenario Journal">
@@ -2203,20 +2298,25 @@ export default function App() {
                   {optResult.prices.best} • π≈${Math.round(optResult.profit)}
                 </div>
               )}
-              <div className="text-xs text-gray-500">
-                Frontier shows profit vs Best price with current Good/Better
-                fixed.
-              </div>
-              <div className="text-xs text-gray-700">
-                Pocket price ({waterTier}) ≈ ${water.pocket.toFixed(2)} from
-                list ${listForWater.toFixed(2)}
-              </div>
-
-              <div className="text-xs text-gray-600">
-                Anchoring on refs{" "}
-                {`$${refPrices.good}/$${refPrices.better}/$${refPrices.best}`};
-                loss aversion on increases.
-              </div>
+              <details className="mt-1">
+                <summary className="cursor-pointer select-none text-[11px] text-gray-600">
+                  Why these numbers?
+                </summary>
+                <div className="space-y-1 mt-1 text-[11px] text-gray-600">
+                  <div>
+                    Frontier shows profit vs Best price with current Good/Better
+                    fixed.
+                  </div>
+                  <div>
+                    Pocket price ({waterTier}) ≈ ${water.pocket.toFixed(2)} from
+                    list ${listForWater.toFixed(2)}.
+                  </div>
+                  <div>
+                    Anchoring on refs ${refPrices.good}/${refPrices.better}/$
+                    {refPrices.best}; loss aversion on increases.
+                  </div>
+                </div>
+              </details>
             </div>
           </Section>
 
@@ -2388,6 +2488,17 @@ export default function App() {
                   <span className="text-gray-500">No result yet</span>
                 )}
               </div>
+              <details className="text-[11px] text-gray-600">
+                <summary className="cursor-pointer select-none">
+                  How ranges & floors work
+                </summary>
+                <div className="mt-1">
+                  Optimizer searches the grid defined by ranges and step. Gap
+                  constraints keep ladder spacing consistent. Floors can be
+                  checked on list or <em>pocket</em> margin. Use Apply to write
+                  prices back to the Scenario Panel.
+                </div>
+              </details>
 
               {/* Advanced constraints (collapsible) */}
               <details className="rounded border border-gray-200 p-3 bg-gray-50/60">
@@ -2633,10 +2744,16 @@ export default function App() {
                         );
                       return (
                         <>
-                          <div className="text-[11px] text-gray-600 mb-1">
-                            Slice with Best fixed near lower feasible bound (≈ $
-                            {bestUsed}).
-                          </div>
+                          <details className="mb-1">
+                            <summary className="cursor-pointer select-none text-[11px] text-gray-600">
+                              What is this slice?
+                            </summary>
+                            <div className="text-[11px] text-gray-600 mt-1">
+                              Good × Better feasibility with Best fixed near the
+                              lower feasible bound (≈ ${bestUsed}).
+                            </div>
+                          </details>
+
                           <HeatmapMini
                             cells={cells}
                             gTicks={gTicks}
