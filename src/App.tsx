@@ -42,6 +42,7 @@ import { PRESETS } from "./lib/presets";
 import { explainGaps, topDriver } from "./lib/explain";
 
 import ActionCluster from "./components/ActionCluster";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
@@ -1442,18 +1443,14 @@ export default function App() {
             className="overflow-hidden"
             actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
           >
-            <Suspense
-              fallback={
-                <div className="text-xs text-gray-500 p-2">
-                  Loading frontier…
-                </div>
-              }
-            >
-              <FrontierChartReal
-                chartId="frontier-main"
-                points={frontier.points}
-                optimum={frontier.optimum}
-              />
+            <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontier… </div>}>
+              <ErrorBoundary title="Frontier chart failed">
+                <FrontierChartReal
+                  chartId="frontier-main"
+                  points={frontier.points}
+                  optimum={frontier.optimum}
+                />
+              </ErrorBoundary>
             </Suspense>
           </Section>
 
@@ -1468,7 +1465,9 @@ export default function App() {
                 <div className="text-xs text-gray-500 p-2">Loading bars…</div>
               }
             >
-              <TakeRateChart chartId="takerate-main" data={probs} />
+              <ErrorBoundary title="Take-Rate chart failed">
+                <TakeRateChart chartId="takerate-main" data={probs} />
+              </ErrorBoundary>
             </Suspense>
           </Section>
 
@@ -1602,7 +1601,9 @@ export default function App() {
                 </div>
               }
             >
-              <Tornado rows={tornadoRows} />
+              <ErrorBoundary title="Tornado chart failed">
+                <Tornado rows={tornadoRows} />
+              </ErrorBoundary>
             </Suspense>
 
             <p className="text-[11px] text-gray-600 mt-1">
@@ -1782,12 +1783,14 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div>
                   <div className="text-xs font-medium mb-1">Current ladder</div>
-                  <Suspense
+                  <Suspense                    
                     fallback={
                       <div className="text-xs text-gray-500 p-2">Loading…</div>
                     }
                   >
-                    <Tornado rows={tornadoRowsCurrent} />
+                    <ErrorBoundary title="Tornado chart failed">
+                      <Tornado rows={tornadoRowsCurrent} />
+                    </ErrorBoundary>
                   </Suspense>
                 </div>
                 <div>
@@ -1799,7 +1802,9 @@ export default function App() {
                       <div className="text-xs text-gray-500 p-2">Loading…</div>
                     }
                   >
-                    <Tornado rows={tornadoRowsOptim} />
+                    <ErrorBoundary title="Tornado chart failed">
+                      <Tornado rows={tornadoRowsOptim} />
+                    </ErrorBoundary>
                   </Suspense>
                 </div>
               </div>
@@ -2008,13 +2013,15 @@ export default function App() {
                     </div>
                   }
                 >
-                  <Waterfall
-                    chartId="waterfall-main"
-                    title="Pocket Price Waterfall"
-                    subtitle={`${waterTier} • list $${listForWater.toFixed(2)}`}
-                    listPrice={listForWater}
-                    steps={water.steps}
-                  />
+                  <ErrorBoundary title="Waterfall chart failed">
+                    <Waterfall
+                      chartId="waterfall-main"
+                      title="Pocket Price Waterfall"
+                      subtitle={`${waterTier} • list $${listForWater.toFixed(2)}`}
+                      listPrice={listForWater}
+                      steps={water.steps}
+                    />
+                  </ErrorBoundary>
                 </Suspense>
               </div>
 
@@ -2043,13 +2050,15 @@ export default function App() {
                             </div>
                           }
                         >
-                          <Waterfall
-                            title={t}
-                            subtitle={`list $${list.toFixed(2)}`}
-                            listPrice={list}
-                            steps={wf.steps}
-                            variant="mini"
-                          />
+                          <ErrorBoundary title="Waterfal mini chart failed">
+                            <Waterfall
+                              title={t}
+                              subtitle={`list $${list.toFixed(2)}`}
+                              listPrice={list}
+                              steps={wf.steps}
+                              variant="mini"
+                            />
+                          </ErrorBoundary>
                         </Suspense>
                       </div>
                     );
