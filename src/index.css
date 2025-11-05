@@ -1,1 +1,66 @@
 @import "tailwindcss";
+
+/* ---------- Print foundations ---------- */
+@page {
+  size: A4 portrait;           /* change to 'letter' if you prefer */
+  margin: 12mm;                /* generous white margin for print */
+}
+
+@media print {
+  html, body {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color: #111827; /* gray-900 for text contrast */
+  }
+
+  /* Utility helpers for sections/charts */
+  .print-page-break-before {
+    break-before: page;
+    page-break-before: always; /* older engines */
+  }
+  .print-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Remove shadows/borders that look muddy on print */
+  .print-flat {
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Expand grids to one column for readability */
+  .print-grid-1 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Make headings crisp and consistent */
+  .print-h1 {
+    font-size: 1.35rem !important;
+    line-height: 1.35 !important;
+    margin: 0 0 0.25rem 0 !important;
+  }
+  .print-h2 {
+    font-size: 1.1rem !important;
+    line-height: 1.3 !important;
+    margin: 0 0 0.25rem 0 !important;
+  }
+
+  /* Keep canvases/charts sharp */
+  canvas, svg, img {
+    max-width: 100% !important;
+    height: auto !important;
+    background: #ffffff !important;
+  }
+
+  /* Hide “screen-only” UI */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Show “print-only” elements if you add any later */
+  .only-print {
+    display: block !important;
+  }
+}

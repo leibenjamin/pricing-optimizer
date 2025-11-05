@@ -1157,6 +1157,17 @@ export default function App() {
                 Case study (soon)
               </button>
             </div>
+            <div className="mt-2 flex gap-2 no-print">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-3 py-1 rounded-md border text-sm hover:bg-gray-50"
+                aria-label="Print this analysis"
+                title="Print this analysis"
+              >
+                Print
+              </button>
+            </div>
           </header>
           <div className="text-sm text-gray-500">
             v0.3 • Latent-class choice model (3 segments)
