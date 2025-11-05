@@ -1236,7 +1236,7 @@ export default function App() {
         </nav>
       </div>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4">
+      <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4 print-grid-1 print:gap-2">
         {/* Left: Scenario Panel */}
         <div className="col-span-12 md:col-span-3 space-y-4 min-w-0">
           <Section id="scenario" title="Scenario Panel">
