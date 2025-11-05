@@ -323,6 +323,8 @@ export default function App() {
         return "Profit Frontier";
       case "pocket-price-waterfall":
         return "Pocket Price Waterfall";
+      case "compare-board":
+        return "Compare Board";
       case "cohort-rehearsal":
         return "Cohort Rehearsal";
       case "tornado":
