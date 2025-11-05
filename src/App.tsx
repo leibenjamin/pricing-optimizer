@@ -1394,6 +1394,24 @@ export default function App() {
               >
                 Copy long URL
               </button>
+
+              <button
+                className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                onClick={async () => {
+                  const ok = await preflight("/api/get?s=ping");
+                  if (ok) {
+                    toast("success", "Backend OK (204)");
+                    pushJ?.(`[${now()}] Backend OK (preflight 204)`);
+                  } else {
+                    toast("error", "Backend preflight failed");
+                    pushJ?.(`[${now()}] Backend preflight failed`);
+                  }
+                }}
+                aria-label="Test backend connectivity"
+                title="Quick health check (HEAD /api/get?s=ping)"
+              >
+                Test backend
+              </button>
             </div>
           </Section>
 
