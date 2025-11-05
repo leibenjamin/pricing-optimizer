@@ -1200,6 +1200,7 @@ export default function App() {
             {[
               "profit-frontier",
               "pocket-price-waterfall",
+              "compare-board",
               "cohort-rehearsal",
               "tornado",
               "global-optimizer",
