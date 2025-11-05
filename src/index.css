@@ -64,3 +64,53 @@
     display: block !important;
   }
 }
+
+/* --- Print utilities for Pricing Optimizer --- */
+/* Hide on print (also have .no-print inside @media print above) */
+@media print {
+  .no-print { display: none !important; }
+}
+
+/* One column layout on print (main uses .print-grid-1 already) */
+@media print {
+  .print-grid-1 { grid-template-columns: 1fr !important; }
+}
+
+/* Avoid ugly page breaks inside cards/sections */
+@media print {
+  .print-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+/* Force a new page when needed */
+@media print {
+  .print-page {
+    break-before: page;
+    page-break-before: always;
+  }
+}
+
+/* Softer card chrome on paper */
+@media print {
+  .print-card {
+    box-shadow: none !important;
+    background: #ffffff !important;
+    border: 1px solid rgba(0,0,0,0.12) !important;
+  }
+}
+
+/* Compact typography for paper */
+@media print {
+  .print-tight { line-height: 1.25 !important; letter-spacing: 0 !important; }
+  .print-text-xs { font-size: 12px !important; }
+  .print-text-sm { font-size: 14px !important; }
+}
+
+/* Compact paddings/margins for paper */
+@media print {
+  .print-pad { padding: 8px !important; }
+  .print-space > * + * { margin-top: 8px !important; }
+}
+
