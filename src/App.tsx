@@ -47,9 +47,82 @@ import { useStickyState } from "./lib/useStickyState";
 
 import { preflight, fetchWithRetry } from "./lib/net";
 
+import CompareBoard, { type CompareKPIs } from "./components/CompareBoard";
+
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
+
+// Compute headline KPIs from a scenario snapshot (uses same N as the app)
+// Reusable shapes (avoid `typeof` from locals)
+type Ladder = { good: number; better: number; best: number };
+type Feats = { featA: Ladder; featB: Ladder };
+
+// Compute headline KPIs from a scenario snapshot (uses same N as the app)
+// NOTE: we pass `segments` explicitly so this helper is pure.
+function kpisFromSnapshot(
+  snap: {
+    prices: Ladder;
+    costs: Ladder;
+    features: Feats;
+    refPrices: Ladder;
+    leak: Leakages;
+    segments: Segment[];       // <-- now explicit
+  },
+  N: number,
+  usePocketProfit: boolean
+): CompareKPIs {
+  const probs = choiceShares(
+    snap.prices,
+    snap.features,
+    snap.segments,             // <-- use the provided segments
+    snap.refPrices
+  );
+
+  const take = {
+    none: Math.round(N * probs.none),
+    good: Math.round(N * probs.good),
+    better: Math.round(N * probs.better),
+    best: Math.round(N * probs.best),
+  };
+
+  const revenue =
+    take.good * snap.prices.good +
+    take.better * snap.prices.better +
+    take.best * snap.prices.best;
+
+  const profit = usePocketProfit
+    ? (() => {
+        const pG = computePocketPrice(snap.prices.good, "good", snap.leak).pocket;
+        const pB = computePocketPrice(snap.prices.better, "better", snap.leak).pocket;
+        const pH = computePocketPrice(snap.prices.best, "best", snap.leak).pocket;
+        return (
+          take.good * (pG - snap.costs.good) +
+          take.better * (pB - snap.costs.better) +
+          take.best * (pH - snap.costs.best)
+        );
+      })()
+    : (() => {
+        return (
+          take.good * (snap.prices.good - snap.costs.good) +
+          take.better * (snap.prices.better - snap.costs.better) +
+          take.best * (snap.prices.best - snap.costs.best)
+        );
+      })();
+
+  const gm = revenue > 0 ? profit / revenue : 0;
+
+  return {
+    title: "Saved",
+    prices: { ...snap.prices },
+    revenue,
+    profit,
+    convPct: ((take.good + take.better + take.best) / N) * 100,
+    grossMarginPct: gm,
+  };
+}
+
+
 
 type SaveError = {
   error?: string;
@@ -320,6 +393,31 @@ export default function App() {
     const seen = readRecents().filter((r) => r.id !== id);
     writeRecents([{ id, t: now }, ...seen]);
   };
+
+  type SlotId = "A" | "B" | "C";
+  const SLOT_KEYS: Record<SlotId, string> = {
+    A: "po_compare_A_v1",
+    B: "po_compare_B_v1",
+    C: "po_compare_C_v1",
+  };
+
+  function readSlot(id: SlotId): ReturnType<typeof buildScenarioSnapshot> | null {
+    try {
+      const raw = localStorage.getItem(SLOT_KEYS[id]);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      return isScenarioImport(obj) ? obj : null;
+    } catch {
+      return null;
+    }
+  }
+  function writeSlot(id: SlotId, data: ReturnType<typeof buildScenarioSnapshot>) {
+    localStorage.setItem(SLOT_KEYS[id], JSON.stringify(data));
+  }
+  function clearSlot(id: SlotId) {
+    localStorage.removeItem(SLOT_KEYS[id]);
+  }
+
 
   // ADD: latent-class segments state
   const [segments, setSegments] = useState<Segment[]>(defaultSegments);
@@ -797,10 +895,6 @@ export default function App() {
   }, [retentionPct]);
 
   // --- UI adapter: nested -> your UI's flattened segment shape ---
-  type SegmentNested = {
-    weight: number;
-    beta: { price: number; featA: number; featB: number; refAnchor?: number };
-  };
   function mapNormalizedToUI(norm: SegmentNested[]): typeof segments {
     const ui = norm.map((s) => ({
       name: "" as string,
@@ -932,6 +1026,56 @@ export default function App() {
       pushJ(`[${now()}] Save failed: ${msg}`);
       toast("error", `Save failed: ${msg}`);
     }
+  }
+
+  function saveToSlot(id: SlotId) {
+    const snap = buildScenarioSnapshot({
+      prices,
+      costs,
+      features,
+      refPrices,
+      leak,
+      segments,
+      tornadoPocket,
+      tornadoPriceBump,
+      tornadoPctBump,
+      retentionPct,
+      kpiFloorAdj,
+    });
+    writeSlot(id, snap);
+    pushJ?.(`[${now()}] Saved current scenario to slot ${id}`);
+    toast("success", `Saved to ${id}`);
+  }
+
+  function loadFromSlot(id: SlotId) {
+    const sc = readSlot(id);
+    if (!sc) {
+      toast("error", `Slot ${id} is empty`);
+      return;
+    }
+    if (sc.prices) setPrices(sc.prices);
+    if (sc.costs) setCosts(sc.costs);
+    if (sc.features) setFeatures(sc.features);
+    if (sc.refPrices) setRefPrices(sc.refPrices);
+    if (sc.leak) setLeak(sc.leak);
+    if (sc.segments)
+      setSegments(
+        mapNormalizedToUI(normalizeSegmentsForSave(sc.segments))
+      );
+    if (sc.analysis) {
+      if (typeof sc.analysis.tornadoPocket === "boolean")
+        setTornadoPocket(sc.analysis.tornadoPocket);
+      if (typeof sc.analysis.tornadoPriceBump === "number")
+        setTornadoPriceBump(sc.analysis.tornadoPriceBump);
+      if (typeof sc.analysis.tornadoPctBump === "number")
+        setTornadoPctBump(sc.analysis.tornadoPctBump);
+      if (typeof sc.analysis.retentionPct === "number")
+        setRetentionPct(sc.analysis.retentionPct);
+      if (typeof sc.analysis.kpiFloorAdj === "number")
+        setKpiFloorAdj(sc.analysis.kpiFloorAdj);
+    }
+    pushJ?.(`[${now()}] Loaded scenario from slot ${id}`);
+    toast("success", `Loaded ${id}`);
   }
 
 
@@ -1813,6 +1957,105 @@ export default function App() {
               );
             })()}
           </Section>
+
+          <Section id="compare-board" title="Scenario Compare (A/B/C)">
+            <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
+              <span className="text-gray-600">Save current to:</span>
+              {(["A", "B", "C"] as const).map((id) => (
+                <button
+                  key={id}
+                  className="border rounded px-2 py-1 bg-white hover:bg-gray-50"
+                  onClick={() => saveToSlot(id)}
+                >
+                  Save to {id}
+                </button>
+              ))}
+            </div>
+
+            {(() => {
+              // derive KPIs for the board
+              const usePocket = !!optConstraints.usePocketProfit;
+              const curKPIs = kpisFromSnapshot(
+                { prices, costs, features, refPrices, leak, segments },
+                N,
+                usePocket
+              );
+
+              const objA = readSlot("A");
+              const objB = readSlot("B");
+              const objC = readSlot("C");
+
+              const slots: Record<"A" | "B" | "C", CompareKPIs | null> = {
+                A: objA
+                  ? {
+                      ...kpisFromSnapshot(
+                        {
+                          prices: objA.prices,
+                          costs: objA.costs,
+                          features: objA.features,
+                          refPrices: objA.refPrices ?? refPrices,
+                          leak: objA.leak ?? leak,
+                          segments, // reuse current mix
+                        },
+                        N,
+                        usePocket
+                      ),
+                      title: "Saved A",
+                    }
+                  : null,
+
+                B: objB
+                  ? {
+                      ...kpisFromSnapshot(
+                        {
+                          prices: objB.prices,
+                          costs: objB.costs,
+                          features: objB.features,
+                          refPrices: objB.refPrices ?? refPrices,
+                          leak: objB.leak ?? leak,
+                          segments,
+                        },
+                        N,
+                        usePocket
+                      ),
+                      title: "Saved B",
+                    }
+                  : null,
+                C: objC
+                  ? {
+                      ...kpisFromSnapshot(
+                        {
+                          prices: objC.prices,
+                          costs: objC.costs,
+                          features: objC.features,
+                          refPrices: objC.refPrices ?? refPrices,
+                          leak: objC.leak ?? leak,
+                          segments,
+                        },
+                        N,
+                        usePocket
+                      ),
+                      title: "Saved C",
+                    }
+                  : null,
+              };
+
+              return (
+                <CompareBoard
+                  slots={slots}
+                  current={curKPIs}
+                  onLoad={(id) => loadFromSlot(id)}
+                  onClear={(id) => {
+                    clearSlot(id);
+                    toast("info", `Cleared slot ${id}`);
+                    // trigger a rerender so the board refreshes:
+                    setJournal((j) => [...j]);
+                  }}
+                />
+              );
+            })()}
+          </Section>
+
 
           <Section
             id="tornado-compare"
