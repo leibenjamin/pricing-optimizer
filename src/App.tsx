@@ -45,6 +45,8 @@ import ActionCluster from "./components/ActionCluster";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { useStickyState } from "./lib/useStickyState";
 
+import { preflight, fetchWithRetry } from "./lib/net";
+
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -859,81 +861,79 @@ export default function App() {
 
   async function saveScenarioShortLink() {
     try {
-      const segs = normalizeSegmentsForSave(segments);
+      // 1) Cheap warmup — if it fails, we continue anyway
+      const ok = await preflight("/api/get?s=ping");
+      if (!ok) {
+        pushJ(`[${now()}] Preflight failed (continuing to save)`);
+      }
 
-      type Payload = {
-        prices: typeof prices;
-        costs: typeof costs;
-        features: typeof features;
-        refPrices: typeof refPrices;
-        leak: typeof leak;
-        analysis: {
-          tornadoPocket: boolean;
-          tornadoPriceBump: number;
-          tornadoPctBump: number;
-          retentionPct: number;
-          kpiFloorAdj: number;
-        };
-        segments?: SegmentNormalized[];
-      };
-
-      const payload: Payload = {
+      // 2) Build EXACT payload your /api/save expects (matches zod in save.ts)
+      const payload = buildScenarioSnapshot({
         prices,
         costs,
         features,
         refPrices,
         leak,
-        analysis: {
-          tornadoPocket,
-          tornadoPriceBump,
-          tornadoPctBump,
-          retentionPct,
-          kpiFloorAdj,
-        },
-        ...(segs.length ? { segments: segs } : {}),
-      };
-
-      const res = await fetch("/api/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        segments,
+        tornadoPocket,
+        tornadoPriceBump,
+        tornadoPctBump,
+        retentionPct,
+        kpiFloorAdj,
       });
 
-      if (!res.ok) {
-        let detail = "";
+      // 3) POST with retries/backoff for 5xx/429 + per-request timeout
+      const res = await fetchWithRetry(
+        "/api/save",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        { attempts: 3, baseDelayMs: 300, timeoutMs: 5000, jitter: true }
+      );
+
+      // 4) Handle server responses
+      if (res.ok) {
+        const { id } = (await res.json()) as { id: string };
+        const url = new URL(window.location.href);
+        url.searchParams.set("s", id);
+        window.history.replaceState({}, "", url.toString());
+        rememberId(id);
+        pushJ(`[${now()}] Saved scenario ${id}`);
+        toast("success", `Saved: ${id}`);
+        return;
+      }
+
+      // Show 4xx reasons (validation, etc.)
+      if (res.status >= 400 && res.status < 500) {
+        let detail = `HTTP ${res.status}`;
         try {
           const bodyUnknown: unknown = await res.json();
           if (isSaveError(bodyUnknown)) {
             if (bodyUnknown.error) detail += ` — ${bodyUnknown.error}`;
-            if (
-              Array.isArray(bodyUnknown.issues) &&
-              bodyUnknown.issues.length
-            ) {
+            if (Array.isArray(bodyUnknown.issues) && bodyUnknown.issues.length) {
               const i0 = bodyUnknown.issues[0];
               const at = i0?.path ? ` at ${i0.path.join(".")}` : "";
               detail += `${at}: ${i0?.message ?? ""}`;
             }
           }
-        } catch {
-          // ignore parse errors
-        }
-        pushJ(`[${now()}] Save failed: HTTP ${res.status}${detail}`);
-        toast("error", `Save failed (HTTP ${res.status}${detail})`);
+        } catch { /* ignore parse errors */ }
+        pushJ(`[${now()}] Save failed: ${detail}`);
+        toast("error", `Save failed: ${detail}`);
         return;
       }
 
-      const { id } = (await res.json()) as { id: string };
-      const url = new URL(window.location.href);
-      url.searchParams.set("s", id);
-      window.history.replaceState(null, "", url.toString());
-      rememberId(id);
-      pushJ(`[${now()}] Saved scenario ${id}`);
-      toast("success", `Saved: ${id}`);
+      // Rare: non-ok after retries
+      pushJ(`[${now()}] Save failed: HTTP ${res.status}`);
+      toast("error", `Save failed: HTTP ${res.status}`);
     } catch (e) {
-      pushJ(`[${now()}] Save failed: ${(e as Error).message}`);
-      toast("error", `Save failed: ${(e as Error).message}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      pushJ(`[${now()}] Save failed: ${msg}`);
+      toast("error", `Save failed: ${msg}`);
     }
   }
+
 
   useEffect(() => {
     const ids = [
