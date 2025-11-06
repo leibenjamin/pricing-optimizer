@@ -35,9 +35,11 @@ export type TornadoDatum = {
 export default function Tornado({
   title = "Tornado: Profit sensitivity",
   rows,
+  chartId,
 }: {
   title?: string;
   rows: TornadoDatum[];
+  chartId?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
@@ -116,6 +118,45 @@ export default function Tornado({
       chartRef.current = null;
     };
   }, [rows, title]);
+
+  type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
+
+  useEffect(() => {
+    if (!chartId) return;
+
+    const onExport = (ev: Event) => {
+      const e = ev as ExportEvent;
+      if (e.detail?.id && e.detail.id !== chartId) return;
+
+      if (e.detail.type === "png") {
+        const url = chartRef.current?.getDataURL({
+          pixelRatio: 2,
+          backgroundColor: "#ffffff",
+        });
+        if (!url) return;
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "tornado.png";
+        a.click();
+      } else if (e.detail.type === "csv") {
+        const rowsCsv = [
+          ["name", "base", "delta_low", "delta_high"],
+          ...rows.map((r) => [r.name, r.base, r.deltaLow, r.deltaHigh]),
+        ];
+        const csv = rowsCsv.map((r) => r.join(",")).join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "tornado.csv";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    };
+
+    window.addEventListener("export:tornado", onExport as EventListener);
+    return () => window.removeEventListener("export:tornado", onExport as EventListener);
+  }, [chartId, rows]);
 
   return <div ref={ref} className="w-full h-96" />;
 }
