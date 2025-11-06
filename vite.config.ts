@@ -4,7 +4,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
+const base = process.env.VITE_BASE || "/";
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     VitePWA({
@@ -20,11 +23,11 @@ export default defineConfig({
         name: "Pricing Optimizer",
         short_name: "PricingOpt",
         description: "Interactive Good/Better/Best pricing sandbox with pocket price waterfall, profit frontier, and optimizer.",
-        theme_color: "#ffffff",
+        theme_color: "#111827",
         background_color: "#ffffff",
         display: "standalone",
-        start_url: "/pricing-optimizer/",
-        scope: "/pricing-optimizer/",
+        start_url: base,
+        scope: base,
         icons: [
           { src: "icons/icon-192.png",   sizes: "192x192", type: "image/png" },
           { src: "icons/icon-512.png",   sizes: "512x512", type: "image/png" },
@@ -45,5 +48,4 @@ export default defineConfig({
   },
   // IMPORTANT for benlei.org subpath deploys:
   // If you serve under /pricing-optimizer/, uncomment the next line.
-  base: "/pricing-optimizer/",
 });
