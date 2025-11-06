@@ -148,13 +148,14 @@ function Section({
   return (
     <section
       id={id}
-      className={`rounded-2xl shadow p-3 md:p-4 border border-gray-200 bg-white ${className}`}
+      className={`rounded-2xl shadow p-3 md:p-4 border border-gray-200 bg-white print-avoid print-card print-pad ${className}`}
     >
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="font-semibold text-lg">{title}</h2>
-        {actions ? <div className="shrink-0">{actions}</div> : null}
+      <div className="mb-3 print:mb-2 flex items-center justify-between gap-3">
+        <h2 className="font-semibold text-lg print:text-base print-tight">{title}</h2>
+        {/* Hide the action toolbar on print */}
+        {actions ? <div className="shrink-0 no-print">{actions}</div> : null}
       </div>
-      <div className="space-y-3">{children}</div>
+      <div className="space-y-3 print-space">{children}</div>
     </section>
   );
 }
@@ -1177,7 +1178,7 @@ export default function App() {
 
       {/* Sticky KPI bar (desktop & tablet) */}
       <div
-        className="sticky top-0 z-60 hidden md:block bg-white/80 backdrop-blur border-b"
+        className="sticky top-0 z-60 hidden md:block bg-white/80 backdrop-blur border-b print:hidden"
         role="region"
         aria-label="Key metrics and quick navigation"
       >
@@ -1618,7 +1619,7 @@ export default function App() {
           </Section>
 
           <Section id="methods" title="Methods">
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-gray-700 print-tight">
               MNL: U = β₀(j) + βₚ·price + β_A·featA + β_B·featB; outside option
               intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
               ridge regularization.
@@ -1637,7 +1638,7 @@ export default function App() {
           <Section
             id="profit-frontier"
             title="Profit Frontier"
-            className="overflow-hidden"
+            className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
             actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
           >
             <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontier… </div>}>
@@ -1654,7 +1655,7 @@ export default function App() {
           <Section
             id="take-rate"
             title="Take-Rate Bars"
-            className="overflow-hidden"
+            className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
             actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
           >
             <Suspense
@@ -1803,7 +1804,7 @@ export default function App() {
               </ErrorBoundary>
             </Suspense>
 
-            <p className="text-[11px] text-gray-600 mt-1">
+            <p className="text-[11px] text-gray-600 mt-1 print-tight">
               One-way sensitivity on current scenario. Bars show change in
               profit when each driver is nudged down (left) or up (right).
               Toggle pocket to account for promos/fees/FX/refunds; adjust bump
@@ -1972,6 +1973,7 @@ export default function App() {
             })()}
           </Section>
 
+          <div className="print-page" aria-hidden="true" />
           <Section id="compare-board" title="Scenario Compare (A/B/C)">
             <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
               <span className="text-gray-600">Save current to:</span>
@@ -2111,9 +2113,11 @@ export default function App() {
             )}
           </Section>
 
+          <div className="print-page" aria-hidden="true" />
           <Section
             id="pocket-price-waterfall"
             title="Pocket Price Waterfall"
+            className="print:bg-white print:shadow-none print:h-auto"
             actions={
               <ActionCluster chart="waterfall" id="waterfall-main" csv={true} />
             }
@@ -2164,7 +2168,7 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-                <p className="text-[11px] text-gray-600">
+                <p className="text-[11px] text-gray-600 print-tight">
                   Tier discounts are per-tier (affect the selected tier’s
                   chart). Global leakages (payment, FX, refunds) apply to all
                   tiers.
@@ -2336,7 +2340,7 @@ export default function App() {
                         : prices.best;
                     const wf = computePocketPrice(list, t, leak);
                     return (
-                      <div key={t} className="min-w-0 h-56 overflow-hidden">
+                      <div key={t} className="min-w-0 h-56 overflow-hidden print:h-48">
                         {" "}
                         {/* added overflow-hidden */}
                         <Suspense
@@ -2802,7 +2806,7 @@ export default function App() {
                 <summary className="cursor-pointer select-none">
                   How ranges & floors work
                 </summary>
-                <div className="mt-1">
+                <div className="mt-1 print-tight">
                   Optimizer searches the grid defined by ranges and step. Gap
                   constraints keep ladder spacing consistent. Floors can be
                   checked on list or <em>pocket</em> margin. Use Apply to write
@@ -2897,7 +2901,7 @@ export default function App() {
                     </span>
                   </label>
 
-                  <p className="text-[11px] text-gray-500 sm:col-span-2">
+                  <p className="text-[11px] text-gray-500 sm:col-span-2 print-tight">
                     When enabled, margins are checked on pocket (after
                     promo/payment/FX/refunds) instead of list.
                   </p>
