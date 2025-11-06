@@ -2,6 +2,20 @@ name = "pricing-optimizer"
 pages_build_output_dir = "dist"
 compatibility_date = "2024-11-01"
 
+# Default (used if no env section matches)
+[vars]
+VITE_BASE = "/"
+
+# Cloudflare Pages "Preview" builds (PRs, branches)
+[env.preview]
+[env.preview.vars]
+VITE_BASE = "/"
+
+# Cloudflare Pages "Production" build (main branch)
+[env.production]
+[env.production.vars]
+VITE_BASE = "/pricing-optimizer/"
+
 [[kv_namespaces]]
 binding = "SCENARIOS"
 id = "8954bd41bfca46ceaf22712a375382c8"
