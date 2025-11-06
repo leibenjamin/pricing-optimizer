@@ -1756,7 +1756,12 @@ export default function App() {
             })()}
           </Section>
 
-          <Section id="tornado" title="Tornado — what moves profit?">
+          <Section
+            id="tornado"
+            title="Tornado — what moves profit?"
+            className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
+            actions={<ActionCluster chart="tornado" id="tornado-main" csv />}
+          >
             <div className="flex flex-wrap items-center gap-3 text-xs mb-2">
               <label className="flex items-center gap-2">
                 <input
@@ -1800,7 +1805,7 @@ export default function App() {
               }
             >
               <ErrorBoundary title="Tornado chart failed">
-                <Tornado rows={tornadoRows} />
+                <Tornado rows={tornadoRows} chartId="tornado-main" />
               </ErrorBoundary>
             </Suspense>
 
