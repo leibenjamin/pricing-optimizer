@@ -10,11 +10,14 @@ VITE_PWA_BASE = "/"
 [env.preview.vars]
 VITE_PWA_BASE = "/"
 
+[[env.preview.kv_namespaces]]
+binding = "SCENARIOS"
+id = "209b8cf92758482abf04e940f057a0e6"
+
 [env.production]
 [env.production.vars]
 VITE_PWA_BASE = "/pricing-optimizer/"
 
-[[kv_namespaces]]
+[[env.production.kv_namespaces]]
 binding = "SCENARIOS"
 id = "8954bd41bfca46ceaf22712a375382c8"
-preview_id = "209b8cf92758482abf04e940f057a0e6"
