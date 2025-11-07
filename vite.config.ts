@@ -4,7 +4,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
-const base = process.env.VITE_BASE || "/";
+// Use relative asset paths so the app works at any subpath (e.g., /pricing-optimizer/)
+const base = "./";
+
+// PWA start_url/scope can still be absolute and per-env if you want installability
+const pwaBase = process.env.VITE_PWA_BASE || "/";
 
 export default defineConfig({
   base,
@@ -26,8 +30,8 @@ export default defineConfig({
         theme_color: "#111827",
         background_color: "#ffffff",
         display: "standalone",
-        start_url: base,
-        scope: base,
+        start_url: pwaBase,
+        scope: pwaBase,
         icons: [
           { src: "icons/icon-192.png",   sizes: "192x192", type: "image/png" },
           { src: "icons/icon-512.png",   sizes: "512x512", type: "image/png" },
@@ -46,6 +50,4 @@ export default defineConfig({
     outDir: "dist",
     chunkSizeWarningLimit: 1400,
   },
-  // IMPORTANT for benlei.org subpath deploys:
-  // If you serve under /pricing-optimizer/, uncomment the next line.
 });
