@@ -42,6 +42,7 @@ import { PRESETS } from "./lib/presets";
 import { explainGaps, topDriver } from "./lib/explain";
 
 import ActionCluster from "./components/ActionCluster";
+import DataImport from "./components/DataImport";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { useStickyState } from "./lib/useStickyState";
 
@@ -956,6 +957,43 @@ export default function App() {
     );
   }
 
+  // Apply a (partial) scenario object into state
+  function applyScenarioPartial(obj: {
+    prices?: typeof prices;
+    costs?: typeof costs;
+    refPrices?: typeof refPrices;
+    leak?: typeof leak;
+    segments?: typeof segments | Array<{ weight:number; beta:{price:number; featA:number; featB:number; refAnchor?:number} }>;
+  }) {
+    if (obj.prices) setPrices(obj.prices);
+    if (obj.costs) setCosts(obj.costs);
+    if (obj.refPrices) setRefPrices(obj.refPrices);
+    if (obj.leak) setLeak(obj.leak);
+
+    // Accept both your UI-shape segments and the nested CSV shape
+    if (obj.segments) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anySegs = obj.segments as any[];
+      const looksNested = anySegs.length && anySegs[0]?.beta && typeof anySegs[0].beta === "object";
+      if (looksNested) {
+        const mapped = anySegs.map(s => ({
+          name: "",
+          weight: Number(s.weight) || 0,
+          betaPrice: Number(s.beta.price) || 0,
+          betaFeatA: Number(s.beta.featA) || 0,
+          betaFeatB: Number(s.beta.featB) || 0,
+          ...(s.beta.refAnchor !== undefined ? { betaRefAnchor: Number(s.beta.refAnchor) } : {}),
+        }));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setSegments(normalizeWeights(mapped as any));
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setSegments(normalizeWeights(obj.segments as any));
+      }
+    }
+  }
+
+
   async function saveScenarioShortLink() {
     try {
       // 1) Cheap warmup — if it fails, we continue anyway
@@ -1526,6 +1564,17 @@ export default function App() {
                   }}
                 />
               </label>
+
+              {/* CSV Import + Template */}
+              <DataImport
+                onPaste={(obj) => {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  applyScenarioPartial(obj as any);
+                  pushJ?.(`[${now()}] Imported scenario CSV`);
+                  toast("success", "Scenario CSV applied");
+                }}
+                onToast={(kind, msg) => toast(kind, msg)}
+              />
 
               <button
                 className="text-xs border px-2 py-1 rounded"
