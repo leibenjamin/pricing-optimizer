@@ -43,6 +43,7 @@ import { explainGaps, topDriver } from "./lib/explain";
 
 import ActionCluster from "./components/ActionCluster";
 import DataImport from "./components/DataImport";
+import SalesImport from "./components/SalesImport";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { useStickyState } from "./lib/useStickyState";
 
@@ -425,6 +426,31 @@ export default function App() {
 
   // ADD: latent-class segments state
   const [segments, setSegments] = useState<Segment[]>(defaultSegments);
+
+  // Apply segments estimated from SalesImport (kept inside the component so we can call setSegments)
+  const applyEstimatedSegments = (
+    segmentsFromFit: Array<{
+      name: string;
+      weight: number;
+      beta: { price: number; featA: number; featB: number };
+    }>
+  ) => {
+    const mapped = segmentsFromFit.map((s) => ({
+      name: s.name || "",
+      weight: Number.isFinite(s.weight) ? s.weight : 0,
+      betaPrice: Number.isFinite(s.beta.price) ? s.beta.price : 0,
+      betaFeatA: Number.isFinite(s.beta.featA) ? s.beta.featA : 0,
+      betaFeatB: Number.isFinite(s.beta.featB) ? s.beta.featB : 0,
+    }));
+
+    // normalize to sum 1
+    const sum = mapped.reduce((a, b) => a + (b.weight || 0), 0) || 1;
+    const normalized = mapped.map((s) => ({ ...s, weight: s.weight / sum }));
+
+    // normalizeWeights expects your Segment[] UI shape; assert type without `any`
+    setSegments(normalizeWeights(normalized as unknown as Segment[]));
+  };
+
 
   // Estimate model once from synthetic data
   useEffect(() => {
@@ -1575,6 +1601,21 @@ export default function App() {
                 }}
                 onToast={(kind, msg) => toast(kind, msg)}
               />
+
+              {/* Sales Logs → Estimate */}
+              <div className="mt-2">
+                <SalesImport
+                  onApply={({ segments, diagnostics }) => {
+                    applyEstimatedSegments(segments);
+                    pushJ?.(
+                      `[${now()}] Estimated from sales data (logLik=${Math.round(
+                        diagnostics.logLik
+                      )}, iters=${diagnostics.iters}, converged=${diagnostics.converged})`
+                    );
+                  }}
+                  onToast={(k, m) => toast(k, m)}
+                />
+              </div>
 
               <button
                 className="text-xs border px-2 py-1 rounded"
