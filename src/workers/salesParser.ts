@@ -1,143 +1,140 @@
-/// <reference lib="webworker" />
-// SALES PARSER WORKER (typed, no any)
+// src/workers/salesParser.ts
+// Typed CSV -> long-format converter for sales logs.
+// Uses Papa in the main thread (SalesImport) for header/sample preview; the worker
+// receives file text + mapping and emits normalized “long rows”.
 
-import Papa from "papaparse";
-import type { SalesMapping } from "../lib/salesSchema";
-
-/** Allowed tier keys in the app */
 export type Tier = "good" | "better" | "best";
+export type Choice = Tier | "none";
 
-/** Canonical long row used by the estimator */
+// values that may appear in parsed CSV cells
+export type Cell = string | number | boolean | null | undefined;
+
 export type LongRow = {
-  user?: string;              // <-- string | undefined (no null)
-  ts?: number;                // epoch ms (optional)
-  tier: Tier;                 // which alternative this row refers to
-  shown: boolean;             // whether this alt was shown
-  chosen: boolean;            // whether this alt was chosen
-  price: number;              // price displayed
-  featA?: number | null;      // optional feature value/flag
-  featB?: number | null;
+  user?: string;
+  timestamp?: string;
+  tier: Tier;
+  price?: number;
+  featA?: number;
+  featB?: number;
+  shown?: boolean;
+  choice: Choice;
 };
 
+// Mapping selected by the user in the wizard
+export type SalesMapping = Partial<{
+  choice: string;
+  price_good: string;
+  price_better: string;
+  price_best: string;
+  featA_good: string;
+  featA_better: string;
+  featA_best: string;
+  featB_good: string;
+  featB_better: string;
+  featB_best: string;
+  shown_good: string;
+  shown_better: string;
+  shown_best: string;
+  user: string;
+  timestamp: string;
+}>;
+
 export type ParseReq = { kind: "parse"; text: string; mapping: SalesMapping };
+
+// We export both response types to satisfy existing imports in SalesImport.tsx
 export type ParsedResp = { kind: "rows"; longRows: LongRow[] };
+export type SampleResp = {
+  kind: "sample";
+  header: string[];
+  sample: ReadonlyArray<Record<string, Cell>>;
+};
 
-type RawRow = Record<string, unknown>;
-const TIERS: Tier[] = ["good", "better", "best"];
-
-/* ---------- Strict coercion helpers (no any) ---------- */
-
-function fromRow(row: RawRow, column?: string): unknown | undefined {
-  if (!column) return undefined;
-  return Object.prototype.hasOwnProperty.call(row, column)
-    ? (row as Record<string, unknown>)[column]
-    : undefined;
-}
-
-function toStringU(v: unknown): string | undefined {
-  if (v === undefined || v === null) return undefined;  // <-- never return null
+function toStringOrUndef(v: Cell): string | undefined {
+  if (v === null || v === undefined) return undefined;
   return String(v);
 }
-
-function toBool(v: unknown, fallback = true): boolean {
-  if (typeof v === "boolean") return v;
-  if (v === undefined || v === null) return fallback;
-  const s = String(v).trim().toLowerCase();
-  if (s === "true" || s === "1" || s === "yes" || s === "y") return true;
-  if (s === "false" || s === "0" || s === "no" || s === "n") return false;
-  return fallback;
-}
-
-function toNum(v: unknown, fallback = 0): number {
-  if (typeof v === "number") return Number.isFinite(v) ? v : fallback;
+function toNumOrUndef(v: Cell): number | undefined {
+  if (v === null || v === undefined || v === "") return undefined;
   const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
+  return Number.isFinite(n) ? n : undefined;
+}
+function toBoolOrUndef(v: Cell): boolean | undefined {
+  if (v === null || v === undefined || v === "") return undefined;
+  if (typeof v === "boolean") return v;
+  const s = String(v).toLowerCase();
+  if (s === "1" || s === "true" || s === "yes") return true;
+  if (s === "0" || s === "false" || s === "no") return false;
+  return undefined;
 }
 
-function toEpoch(v: unknown): number | undefined {
-  if (v === undefined || v === null) return undefined;
-  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
-  const t = new Date(String(v)).getTime();
-  return Number.isFinite(t) ? t : undefined;
-}
+// normalize a single wide row into 3 long rows (good/better/best)
+function normalizeRow(
+  row: Record<string, Cell>,
+  m: SalesMapping
+): LongRow[] {
+  // 1) choice (required)
+  const choiceRaw = m.choice ? row[m.choice] : undefined;
+  const choiceStr = toStringOrUndef(choiceRaw)?.toLowerCase();
+  const choice: Choice =
+    choiceStr === "good" || choiceStr === "better" || choiceStr === "best"
+      ? (choiceStr as Choice)
+      : "none";
 
-/* Normalize a 'choice' value to a tier if possible */
-function normalizeChoice(v: unknown): Tier | null {
-  if (v === undefined || v === null) return null;
-  const s = String(v).trim().toLowerCase();
-  if (s === "good" || s === "g" || s === "1") return "good";
-  if (s === "better" || s === "b" || s === "2") return "better";
-  if (s === "best" || s === "bb" || s === "premium" || s === "3") return "best";
-  const n = Number(s);
-  if (n === 1) return "good";
-  if (n === 2) return "better";
-  if (n === 3) return "best";
-  return null;
+  // 2) optional user/timestamp
+  const user = m.user ? toStringOrUndef(row[m.user]) : undefined;
+  const timestamp = m.timestamp ? toStringOrUndef(row[m.timestamp]) : undefined;
+
+  const tiers: Tier[] = ["good", "better", "best"];
+
+  return tiers.map((tier) => {
+    const priceKey = m[`price_${tier}` as const];
+    const featAKey = m[`featA_${tier}` as const];
+    const featBKey = m[`featB_${tier}` as const];
+    const shownKey = m[`shown_${tier}` as const];
+
+    return {
+      user,
+      timestamp,
+      tier,
+      price: priceKey ? toNumOrUndef(row[priceKey]) : undefined,
+      featA: featAKey ? toNumOrUndef(row[featAKey]) : undefined,
+      featB: featBKey ? toNumOrUndef(row[featBKey]) : undefined,
+      shown: shownKey ? toBoolOrUndef(row[shownKey]) : undefined,
+      choice,
+    };
+  });
 }
 
 self.onmessage = (ev: MessageEvent<ParseReq>) => {
-  const req = ev.data;
-  if (req.kind !== "parse") return;
+  if (ev.data?.kind !== "parse") return;
+  const { text, mapping } = ev.data;
 
-  const { text, mapping } = req;
+  // Lightweight CSV parsing here so we don’t pull Papa into the worker.
+  // Supports basic CSV with first row = header and simple commas.
+  // (Main thread already used Papa for header/sample preview.)
+  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length === 0) {
+    const resp: ParsedResp = { kind: "rows", longRows: [] };
+    (self as unknown as Worker).postMessage(resp);
+    return;
+  }
+  const header = lines[0]
+    .split(",")
+    .map((h) => h.trim().replace(/^"|"$/g, ""));
 
-  const parsed = Papa.parse<RawRow>(text, {
-    header: true,
-    dynamicTyping: true,
-    skipEmptyLines: true,
-  });
-
-  const inputRows: RawRow[] = (parsed.data ?? []) as RawRow[];
-  const out: LongRow[] = [];
-
-  for (const r of inputRows) {
-    // --- user & timestamp (typed; user never null)
-    const who = toStringU(fromRow(r, mapping.user));
-    const when = toEpoch(fromRow(r, mapping.timestamp));
-
-    // declared choice once
-    const chosenTier = normalizeChoice(fromRow(r, mapping.choice));
-
-    for (const tier of TIERS) {
-      // price_* columns
-      const priceKey = (mapping as Record<string, string | undefined>)[`price_${tier}`];
-      const price = toNum(fromRow(r, priceKey), 0);
-
-      // shown_* columns (default true if unmapped)
-      const shownKey = (mapping as Record<string, string | undefined>)[`shown_${tier}`];
-      const shown = toBool(fromRow(r, shownKey), true);
-
-      // features (optional, allow null pass-through)
-      const featAKey = (mapping as Record<string, string | undefined>)[`featA_${tier}`];
-      const featBKey = (mapping as Record<string, string | undefined>)[`featB_${tier}`];
-      const featAVal = fromRow(r, featAKey);
-      const featBVal = fromRow(r, featBKey);
-      const featA = featAVal === undefined ? null : toNum(featAVal);
-      const featB = featBVal === undefined ? null : toNum(featBVal);
-
-      // chosen flag: use normalized tier if available; else direct string compare
-      const chosen =
-        chosenTier != null
-          ? chosenTier === tier
-          : String(fromRow(r, mapping.choice) ?? "").trim().toLowerCase() === tier;
-
-      // If not shown and no price provided, skip this alt row
-      if (!shown && !priceKey) continue;
-
-      out.push({
-        user: who,            // <-- string | undefined (never null)
-        ts: when,
-        tier,
-        shown,
-        chosen,
-        price,
-        featA,
-        featB,
-      });
-    }
+  const longRows: LongRow[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const raw = lines[i]
+      .split(",")
+      .map((c) => c.trim().replace(/^"|"$/g, ""));
+    const row: Record<string, Cell> = {};
+    header.forEach((h, j) => {
+      row[h] = raw[j] ?? "";
+    });
+    const triples = normalizeRow(row, mapping);
+    longRows.push(...triples);
   }
 
-  const resp: ParsedResp = { kind: "rows", longRows: out };
-  // No `any` in postMessage either
+  const resp: ParsedResp = { kind: "rows", longRows };
   (self as unknown as Worker).postMessage(resp);
 };
