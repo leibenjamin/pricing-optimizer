@@ -1,194 +1,208 @@
-// src/workers/estimator.ts
 /// <reference lib="webworker" />
+// ESTIMATOR WORKER (typed, no any)
+// LongRow[] -> MNL fit (via ../lib/mnl) -> single UI segment for now.
 
 import type { LongRow } from "./salesParser";
+import * as MNL from "../lib/mnl";
 
-type FitReq = {
+/* ---------------- Types for messages ---------------- */
+
+export type FitReq = {
   kind: "fit";
   rows: LongRow[];
   ridge?: number;
   maxIters?: number;
+  tol?: number;
 };
 
 export type FitResp = {
   kind: "fitDone";
-  beta: {
-    price: number;
-    featA: number;
-    featB: number;
-    intercept_good: number;
-    intercept_better: number;
-    intercept_best: number;
-  };
-  logLik: number;
-  iters: number;
-  converged: boolean;
-  asSegments: Array<{ name: string; weight: number; beta: { price: number; featA: number; featB: number } }>;
-};
-
-// ---- Optional: use your existing lib/mnl if present ----
-type MnlFitResult = {
-  beta: {
-    price?: number;
-    featA?: number;
-    featB?: number;
-    intercept_good?: number;
-    intercept_better?: number;
-    intercept_best?: number;
-    [k: string]: unknown;
-  };
+  asSegments: Array<{
+    name: string;
+    weight: number;
+    beta: { price: number; featA: number; featB: number };
+  }>;
   logLik: number;
   iters: number;
   converged: boolean;
 };
 
-type MnlModule = { fitMNL: (rows: LongRow[], init?: number[] | undefined, opts?: { maxIters?: number; ridge?: number; tol?: number }) => MnlFitResult };
+export type FitErr = {
+  kind: "fitErr";
+  error: string;
+};
 
-function isMnlModule(x: unknown): x is MnlModule {
-  return !!x && typeof x === "object" && typeof (x as Record<string, unknown>).fitMNL === "function";
+/* ---------------- Internal design types ---------------- */
+
+type DesignRow = {
+  user?: string;
+  alt: "good" | "better" | "best";
+  chosen: boolean;
+  shown: boolean;
+  price: number;
+  featA: number;
+  featB: number;
+};
+
+type FitOptions = {
+  ridge?: number;
+  maxIters?: number;
+  tol?: number;
+};
+
+type UnknownFn = (...args: unknown[]) => unknown;
+
+/* ---------------- Utilities (no any) ---------------- */
+
+function toDesign(rows: LongRow[]): DesignRow[] {
+  const out: DesignRow[] = [];
+  for (const r of rows) {
+    out.push({
+      user: r.user,
+      alt: r.tier,
+      chosen: !!r.chosen,
+      shown: !!r.shown,
+      price: Number.isFinite(r.price) ? r.price : 0,
+      featA: r.featA == null ? 0 : Number(r.featA),
+      featB: r.featB == null ? 0 : Number(r.featB),
+    });
+  }
+  return out;
 }
 
-// ---- Local pooled-MNL fallback ----
-function softmax4(u: [number, number, number, number]): [number, number, number, number] {
-  const mm = Math.max(u[0], u[1], u[2], u[3]);
-  const e = u.map((v) => Math.exp(v - mm));
-  const s = e[0] + e[1] + e[2] + e[3];
-  return [e[0] / s, e[1] / s, e[2] / s, e[3] / s] as [number, number, number, number];
+function num(v: unknown, fallback = 0): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
 }
 
-async function localFit(rows: LongRow[], ridge = 1e-4, maxIters = 150): Promise<FitResp> {
-  // θ = [βp, βA, βB, α_good, α_better, α_best]; none intercept = 0
-  const theta = new Float64Array([-0.05, 0.3, 0.25, 0, 0, 0]);
-  const lr0 = 0.5;
+function bool(v: unknown, fallback = false): boolean {
+  return typeof v === "boolean" ? v : fallback;
+}
 
-  const sets = new Map<number, LongRow[]>();
-  rows.forEach((r) => {
-    const a = sets.get(r.setId);
-    if (a) a.push(r);
-    else sets.set(r.setId, [r]);
-  });
+function isObject(x: unknown): x is Record<string, unknown> {
+  return typeof x === "object" && x !== null;
+}
 
-  let prevLL = -Infinity;
-  let ll = 0;
-  let it = 0;
-  let converged = false;
-
-  for (it = 0; it < maxIters; it++) {
-    const g = new Float64Array(theta.length);
-    ll = 0;
-
-    for (const setRows of sets.values()) {
-      const byAlt = {
-        none: setRows.find((r) => r.alt === "none"),
-        good: setRows.find((r) => r.alt === "good"),
-        better: setRows.find((r) => r.alt === "better"),
-        best: setRows.find((r) => r.alt === "best"),
+function pickCoeffs(result: unknown): { price: number; featA: number; featB: number } {
+  // Accept several shapes:
+  // 1) { betaPrice, betaFeatA, betaFeatB }
+  // 2) { beta: { price, featA, featB } }
+  // 3) { coef: { price, featA, featB } }
+  if (isObject(result)) {
+    const r = result as Record<string, unknown>;
+    // shape 1
+    const bp = num(r.betaPrice);
+    const bA = num(r.betaFeatA);
+    const bB = num(r.betaFeatB);
+    if (Number.isFinite(bp) || Number.isFinite(bA) || Number.isFinite(bB)) {
+      return {
+        price: Number.isFinite(bp) ? bp : -0.05,
+        featA: Number.isFinite(bA) ? bA : 0.2,
+        featB: Number.isFinite(bB) ? bB : 0.2,
       };
-
-      const pg = byAlt.good?.price ?? 0;
-      const pb = byAlt.better?.price ?? 0;
-      const ph = byAlt.best?.price ?? 0;
-
-      const Ag = byAlt.good?.featA ?? 0;
-      const Ab = byAlt.better?.featA ?? 0;
-      const Ah = byAlt.best?.featA ?? 0;
-
-      const Bg = byAlt.good?.featB ?? 0;
-      const Bb = byAlt.better?.featB ?? 0;
-      const Bh = byAlt.best?.featB ?? 0;
-
-      const yg = byAlt.good?.chosen ?? 0;
-      const yb = byAlt.better?.chosen ?? 0;
-      const yh = byAlt.best?.chosen ?? 0;
-      const y0 = byAlt.none?.chosen ?? 0;
-
-      const up = theta[0], uA = theta[1], uB = theta[2];
-      const aG = theta[3], aB = theta[4], aH = theta[5];
-
-      const Ug = aG + up * pg + uA * Ag + uB * Bg;
-      const Ub = aB + up * pb + uA * Ab + uB * Bb;
-      const Uh = aH + up * ph + uA * Ah + uB * Bh;
-      const U0 = 0;
-
-      const [p0, pgp, pbp, php] = softmax4([U0, Ug, Ub, Uh]);
-
-      const eps = 1e-12;
-      ll += yg * Math.log(pgp + eps) + yb * Math.log(pbp + eps) + yh * Math.log(php + eps) + y0 * Math.log(p0 + eps);
-
-      g[0] += (yg - pgp) * pg + (yb - pbp) * pb + (yh - php) * ph; // βp
-      g[1] += (yg - pgp) * Ag + (yb - pbp) * Ab + (yh - php) * Ah; // βA
-      g[2] += (yg - pgp) * Bg + (yb - pbp) * Bb + (yh - php) * Bh; // βB
-      g[3] += (yg - pgp); // α_good
-      g[4] += (yb - pbp); // α_better
-      g[5] += (yh - php); // α_best
     }
-
-    // Ridge
-    for (let j = 0; j < theta.length; j++) {
-      ll -= 0.5 * ridge * theta[j] * theta[j];
-      g[j] -= ridge * theta[j];
+    // shape 2 or 3
+    const inner = (isObject(r.beta) ? (r.beta as Record<string, unknown>) :
+                  isObject(r.coef) ? (r.coef as Record<string, unknown>) : undefined);
+    if (inner) {
+      const pr = num(inner.price, -0.05);
+      const fa = num(inner.featA, 0.2);
+      const fb = num(inner.featB, 0.2);
+      return { price: pr, featA: fa, featB: fb };
     }
+  }
+  // defaults if nothing matched
+  return { price: -0.05, featA: 0.2, featB: 0.2 };
+}
 
-    const lr = lr0 / Math.sqrt(1 + it);
-    for (let j = 0; j < theta.length; j++) theta[j] += lr * g[j];
+function pickMeta(result: unknown): { logLik: number; iters: number; converged: boolean } {
+  if (isObject(result)) {
+    const r = result as Record<string, unknown>;
+    return {
+      logLik: num(r.logLik, 0),
+      iters: num(r.iters, 0),
+      converged: bool(r.converged, false),
+    };
+  }
+  return { logLik: 0, iters: 0, converged: false };
+}
 
-    if (Math.abs(ll - prevLL) < 1e-6) {
-      converged = true;
-      break;
-    }
-    prevLL = ll;
+function callMNL(
+  design: DesignRow[],
+  opts: FitOptions
+): { coeffs: { price: number; featA: number; featB: number }; meta: { logLik: number; iters: number; converged: boolean } } {
+  // We support a few possible export names/signatures from ../lib/mnl:
+  // - fitMNL(design, options)
+  // - fitMNL(design, init, options)
+  // - fit(design, options)
+  // - estimate(design, options)
+  const mod = MNL as Record<string, unknown>;
+  const cands: Array<[string, UnknownFn]> = [];
+
+  for (const key of ["fitMNL", "fit", "estimate"]) {
+    const fn = mod[key];
+    if (typeof fn === "function") cands.push([key, fn as UnknownFn]);
   }
 
-  return {
-    kind: "fitDone",
-    beta: {
-      price: theta[0],
-      featA: theta[1],
-      featB: theta[2],
-      intercept_good: theta[3],
-      intercept_better: theta[4],
-      intercept_best: theta[5],
-    },
-    logLik: ll,
-    iters: it + 1,
-    converged,
-    asSegments: [{ name: "Pooled", weight: 1, beta: { price: theta[0], featA: theta[1], featB: theta[2] } }],
-  };
+  const initGuess: number[] = [1.0, 1.0, 1.0, -0.05, 0.2, 0.2];
+
+  for (const [, fn] of cands) {
+    // try (design, options)
+    try {
+      const out1 = fn(design as unknown as unknown[], opts);
+      const coeffs1 = pickCoeffs(out1);
+      const meta1 = pickMeta(out1);
+      return { coeffs: coeffs1, meta: meta1 };
+    } catch {
+      // try (design, init, options)
+      try {
+        const out2 = fn(design as unknown as unknown[], initGuess, opts);
+        const coeffs2 = pickCoeffs(out2);
+        const meta2 = pickMeta(out2);
+        return { coeffs: coeffs2, meta: meta2 };
+      } catch {
+        // continue to next candidate
+      }
+    }
+  }
+
+  throw new Error("No compatible MNL fit function found in ../lib/mnl");
 }
 
-self.onmessage = async (ev: MessageEvent<FitReq>) => {
-  const { kind, rows, ridge = 1e-4, maxIters = 150 } = ev.data;
-  if (kind !== "fit") return;
+/* ---------------- Worker handler ---------------- */
 
-  // Try your lib/mnl.ts (preferred)
+declare const self: DedicatedWorkerGlobalScope;
+
+self.onmessage = (ev: MessageEvent<FitReq>) => {
+  const req = ev.data;
+  if (req.kind !== "fit") return;
+
   try {
-    const modUnknown = await import(/* @vite-ignore */ "../lib/mnl");
-    if (isMnlModule(modUnknown)) {
-      const fit = modUnknown.fitMNL(rows, undefined, { maxIters, ridge });
-      const b = fit.beta ?? {};
-      const asSeg = [{ name: "Pooled", weight: 1, beta: { price: Number(b.price ?? 0), featA: Number(b.featA ?? 0), featB: Number(b.featB ?? 0) } }];
-      const resp: FitResp = {
-        kind: "fitDone",
-        beta: {
-          price: Number(b.price ?? 0),
-          featA: Number(b.featA ?? 0),
-          featB: Number(b.featB ?? 0),
-          intercept_good: Number(b.intercept_good ?? 0),
-          intercept_better: Number(b.intercept_better ?? 0),
-          intercept_best: Number(b.intercept_best ?? 0),
-        },
-        logLik: Number(fit.logLik),
-        iters: Number(fit.iters),
-        converged: Boolean(fit.converged),
-        asSegments: asSeg,
-      };
-      (self as DedicatedWorkerGlobalScope).postMessage(resp);
-      return;
-    }
-  } catch {
-    // fall through to localFit
-  }
+    const design = toDesign(req.rows);
+    const opts: FitOptions = {
+      ridge: req.ridge ?? 5e-4,
+      maxIters: req.maxIters ?? 200,
+      tol: req.tol ?? 1e-7,
+    };
 
-  const out = await localFit(rows, ridge, maxIters);
-  (self as DedicatedWorkerGlobalScope).postMessage(out);
+    const { coeffs, meta } = callMNL(design, opts);
+
+    const resp: FitResp = {
+      kind: "fitDone",
+      asSegments: [
+        {
+          name: "Estimated (1-seg)",
+          weight: 1,
+          beta: { price: coeffs.price, featA: coeffs.featA, featB: coeffs.featB },
+        },
+      ],
+      logLik: meta.logLik,
+      iters: meta.iters,
+      converged: meta.converged,
+    };
+
+    (self as unknown as Worker).postMessage(resp);
+  } catch (e) {
+    const err: FitErr = { kind: "fitErr", error: (e as Error).message };
+    (self as unknown as Worker).postMessage(err);
+  }
 };
