@@ -113,3 +113,11 @@
   .print-pad { padding: 8px !important; }
   .print-space > * + * { margin-top: 8px !important; }
 }
+
+@media screen {
+  .left-rail-scroll {
+    overflow-x: visible;
+    overflow-y: auto;
+    max-height: calc(100vh - 7rem); /* allow top/bottom padding */
+  }
+}

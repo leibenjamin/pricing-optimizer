@@ -11,8 +11,9 @@ type Diagnostics = { logLik: number; iters: number; converged: boolean };
 export default function SalesImport(props: {
   onApply: (fit: { segments: SegmentOut[]; diagnostics: Diagnostics }) => void;
   onToast?: (kind: "success" | "error" | "info", msg: string) => void;
+  onDone?: () => void;
 }) {
-  const { onApply, onToast } = props;
+  const { onApply, onToast, onDone } = props;
   const [fileName, setFileName] = useState<string>("");
   const [headers, setHeaders] = useState<string[]>([]);
   const [sample, setSample] = useState<ReadonlyArray<Record<string, string | number | boolean | null | undefined>>>([]);
@@ -86,6 +87,7 @@ export default function SalesImport(props: {
 
       onToast?.("success", "Estimated coefficients from sales data");
       onApply(fit);
+      onDone?.();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       onToast?.("error", msg);

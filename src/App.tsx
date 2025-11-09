@@ -44,6 +44,7 @@ import { explainGaps, topDriver } from "./lib/explain";
 import ActionCluster from "./components/ActionCluster";
 import DataImport from "./components/DataImport";
 import SalesImport from "./components/SalesImport";
+import Modal from "./components/Modal";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { useStickyState } from "./lib/useStickyState";
 
@@ -248,6 +249,7 @@ function normalizeSegmentsForSave(segs: unknown): SegmentNormalized[] {
 
 export default function App() {
   const [journal, setJournal] = useState<string[]>([]);
+  const [showSalesImport, setShowSalesImport] = useState(false);
 
   // --- Toasts ---
   type Toast = {
@@ -1301,11 +1303,13 @@ export default function App() {
         </nav>
       </div>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4 print-grid-1 print:gap-2">
+      <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4 min-h-screen print-grid-1 print:gap-2">
         {/* Left: Scenario Panel */}
-        <div className="col-span-12 md:col-span-3 space-y-4 min-w-0 overflow-x-visible">
-          <Section id="scenario" title="Scenario Panel">
-            <div className="space-y-4">
+        <div className="col-span-12 lg:col-span-4 xl:col-span-3 2xl:col-span-3 flex flex-col min-h-0 min-w-0 overflow-x-visible">
+          <Section id="scenario" title="Scenario Panel" className="left-rail-scroll overflow-x-auto">
+            <div className="shrink-0 space-y-4">
+            </div>
+            <div id="scenarioScroll" className="flex-1 min-h-0 overflow-y-auto pr-2">
               {/* GOOD & BETTER: keep current immediate-commit + log-on-change behavior */}
               {(["good", "better"] as const).map((tier) => (
                 <div key={tier} className="space-y-1">
@@ -1602,19 +1606,15 @@ export default function App() {
                 onToast={(kind, msg) => toast(kind, msg)}
               />
 
-              {/* Sales Logs → Estimate */}
+              {/* Sales data importer (opens modal) */}
               <div className="mt-2">
-                <SalesImport
-                  onApply={({ segments, diagnostics }) => {
-                    applyEstimatedSegments(segments);
-                    pushJ?.(
-                      `[${now()}] Estimated from sales data (logLik=${Math.round(
-                        diagnostics.logLik
-                      )}, iters=${diagnostics.iters}, converged=${diagnostics.converged})`
-                    );
-                  }}
-                  onToast={(k, m) => toast(k, m)}
-                />
+                <button
+                  className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                  onClick={() => setShowSalesImport(true)}
+                  title="Upload sales logs CSV and estimate latent-class segments"
+                >
+                  Import Sales CSV (estimate)
+                </button>
               </div>
 
               <button
@@ -1662,6 +1662,43 @@ export default function App() {
                 Test backend
               </button>
             </div>
+
+            <Modal
+              open={showSalesImport}
+              onClose={() => setShowSalesImport(false)}
+              title="Import Sales CSV & Estimate Segments"
+              size="xl"
+              footer={
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-600">
+                    The estimator runs in a Web Worker and won’t block the UI. Your CSV never leaves the browser.
+                  </p>
+                  <button
+                    className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
+                    onClick={() => setShowSalesImport(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              }
+            >
+              <div className="text-xs text-gray-700 mb-2">
+                1) Upload your sales CSV &nbsp;→&nbsp; 2) Map columns &nbsp;→&nbsp; 3) Estimate.  
+                Use compact column names if possible; unknowns can be left blank.
+              </div>
+              <SalesImport
+                onToast={(k, m) => toast(k, m)}
+                onApply={({ segments, diagnostics }) => {
+                  applyEstimatedSegments(segments);
+                  pushJ?.(
+                    `[${now()}] Estimated from sales data (logLik=${Math.round(
+                      diagnostics.logLik
+                    )}, iters=${diagnostics.iters}, converged=${diagnostics.converged})`
+                  );
+                }}
+                onDone={() => setShowSalesImport(false)}
+              />
+            </Modal>
           </Section>
 
           <Section id="reference-prices" title="Reference prices">
