@@ -1,140 +1,143 @@
-// src/workers/salesParser.ts
 /// <reference lib="webworker" />
+// SALES PARSER WORKER (typed, no any)
 
 import Papa from "papaparse";
 import type { SalesMapping } from "../lib/salesSchema";
 
-type Scalar = string | number | boolean | null | undefined;
-type WideRow = Record<string, Scalar>;
+/** Allowed tier keys in the app */
+export type Tier = "good" | "better" | "best";
 
+/** Canonical long row used by the estimator */
 export type LongRow = {
-  user?: string | number;
-  t?: number; // timestamp ms
-  setId: number; // sequential choice set id
-  alt: "good" | "better" | "best" | "none";
-  chosen: 0 | 1;
-  price?: number;
-  featA?: number;
-  featB?: number;
-  shown?: number;
+  user?: string;              // <-- string | undefined (no null)
+  ts?: number;                // epoch ms (optional)
+  tier: Tier;                 // which alternative this row refers to
+  shown: boolean;             // whether this alt was shown
+  chosen: boolean;            // whether this alt was chosen
+  price: number;              // price displayed
+  featA?: number | null;      // optional feature value/flag
+  featB?: number | null;
 };
 
-export type ParseReq =
-  | { kind: "parse"; text: string; mapping: SalesMapping; sampleOnly?: false }
-  | { kind: "parse"; text: string; mapping: SalesMapping; sampleOnly: true };
+export type ParseReq = { kind: "parse"; text: string; mapping: SalesMapping };
+export type ParsedResp = { kind: "rows"; longRows: LongRow[] };
 
-export type SampleResp = {
-  kind: "sample";
-  headers: string[];
-  rows: WideRow[];
-};
+type RawRow = Record<string, unknown>;
+const TIERS: Tier[] = ["good", "better", "best"];
 
-export type ParsedResp = {
-  kind: "rows";
-  longRows: LongRow[];
-  nSets: number;
-  nChosenNone: number;
-};
+/* ---------- Strict coercion helpers (no any) ---------- */
 
-function toNum(v: Scalar): number | undefined {
-  const x = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(x) ? x : undefined;
+function fromRow(row: RawRow, column?: string): unknown | undefined {
+  if (!column) return undefined;
+  return Object.prototype.hasOwnProperty.call(row, column)
+    ? (row as Record<string, unknown>)[column]
+    : undefined;
 }
-function to01(v: Scalar): number | undefined {
-  if (v === 1 || v === 0) return v;
-  if (typeof v === "string") {
-    const s = v.trim().toLowerCase();
-    if (s === "1" || s === "true" || s === "yes" || s === "y") return 1;
-    if (s === "0" || s === "false" || s === "no" || s === "n") return 0;
-  }
+
+function toStringU(v: unknown): string | undefined {
+  if (v === undefined || v === null) return undefined;  // <-- never return null
+  return String(v);
+}
+
+function toBool(v: unknown, fallback = true): boolean {
+  if (typeof v === "boolean") return v;
+  if (v === undefined || v === null) return fallback;
+  const s = String(v).trim().toLowerCase();
+  if (s === "true" || s === "1" || s === "yes" || s === "y") return true;
+  if (s === "false" || s === "0" || s === "no" || s === "n") return false;
+  return fallback;
+}
+
+function toNum(v: unknown, fallback = 0): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : fallback;
   const n = Number(v);
-  if (n === 0 || n === 1) return n;
-  return undefined;
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function toEpoch(v: unknown): number | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  const t = new Date(String(v)).getTime();
+  return Number.isFinite(t) ? t : undefined;
+}
+
+/* Normalize a 'choice' value to a tier if possible */
+function normalizeChoice(v: unknown): Tier | null {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim().toLowerCase();
+  if (s === "good" || s === "g" || s === "1") return "good";
+  if (s === "better" || s === "b" || s === "2") return "better";
+  if (s === "best" || s === "bb" || s === "premium" || s === "3") return "best";
+  const n = Number(s);
+  if (n === 1) return "good";
+  if (n === 2) return "better";
+  if (n === 3) return "best";
+  return null;
 }
 
 self.onmessage = (ev: MessageEvent<ParseReq>) => {
-  const msg = ev.data;
-  if (msg.kind !== "parse") return;
+  const req = ev.data;
+  if (req.kind !== "parse") return;
 
-  const parsed = Papa.parse<WideRow>(msg.text, {
+  const { text, mapping } = req;
+
+  const parsed = Papa.parse<RawRow>(text, {
     header: true,
-    skipEmptyLines: true,
     dynamicTyping: true,
+    skipEmptyLines: true,
   });
 
-  const headers = parsed.meta.fields ?? [];
-  const rows = (parsed.data ?? []).filter((r) => r && Object.keys(r).length);
-
-  if (msg.sampleOnly) {
-    const resp: SampleResp = { kind: "sample", headers, rows: rows.slice(0, 10) };
-    (self as DedicatedWorkerGlobalScope).postMessage(resp);
-    return;
-  }
-
-  const m = msg.mapping;
-  const altTriplet: Array<"good" | "better" | "best"> = ["good", "better", "best"];
-
-  let setCounter = 0;
-  let chosenNone = 0;
+  const inputRows: RawRow[] = (parsed.data ?? []) as RawRow[];
   const out: LongRow[] = [];
 
-  for (const row of rows) {
-    const setId = setCounter++;
+  for (const r of inputRows) {
+    // --- user & timestamp (typed; user never null)
+    const who = toStringU(fromRow(r, mapping.user));
+    const when = toEpoch(fromRow(r, mapping.timestamp));
 
-    const choiceRaw = String(row[m.choice ?? ""] ?? "").toLowerCase().trim();
-    const chosenAlt: "good" | "better" | "best" | "none" =
-      choiceRaw.includes("good")
-        ? "good"
-        : choiceRaw.includes("better")
-        ? "better"
-        : choiceRaw.includes("best")
-        ? "best"
-        : "none";
+    // declared choice once
+    const chosenTier = normalizeChoice(fromRow(r, mapping.choice));
 
-    const user = m.user ? (row[m.user] as string | number | undefined) : undefined;
-    const t = m.timestamp ? Date.parse(String(row[m.timestamp])) : undefined;
+    for (const tier of TIERS) {
+      // price_* columns
+      const priceKey = (mapping as Record<string, string | undefined>)[`price_${tier}`];
+      const price = toNum(fromRow(r, priceKey), 0);
 
-    for (const alt of altTriplet) {
-      const priceCol = m[`price_${alt}` as const];
-      const price = priceCol ? toNum(row[priceCol]) : undefined;
+      // shown_* columns (default true if unmapped)
+      const shownKey = (mapping as Record<string, string | undefined>)[`shown_${tier}`];
+      const shown = toBool(fromRow(r, shownKey), true);
 
-      const shownCol = m[`shown_${alt}` as const];
-      const shown = shownCol ? to01(row[shownCol]) : price !== undefined ? 1 : undefined;
+      // features (optional, allow null pass-through)
+      const featAKey = (mapping as Record<string, string | undefined>)[`featA_${tier}`];
+      const featBKey = (mapping as Record<string, string | undefined>)[`featB_${tier}`];
+      const featAVal = fromRow(r, featAKey);
+      const featBVal = fromRow(r, featBKey);
+      const featA = featAVal === undefined ? null : toNum(featAVal);
+      const featB = featBVal === undefined ? null : toNum(featBVal);
 
-      const faCol = m[`featA_${alt}` as const];
-      const fbCol = m[`featB_${alt}` as const];
-      const featA = faCol ? toNum(row[faCol]) : undefined;
-      const featB = fbCol ? toNum(row[fbCol]) : undefined;
+      // chosen flag: use normalized tier if available; else direct string compare
+      const chosen =
+        chosenTier != null
+          ? chosenTier === tier
+          : String(fromRow(r, mapping.choice) ?? "").trim().toLowerCase() === tier;
 
-      // If nothing indicates the alt existed in this set, skip
-      if (shown === undefined && price === undefined && featA === undefined && featB === undefined) {
-        continue;
-      }
+      // If not shown and no price provided, skip this alt row
+      if (!shown && !priceKey) continue;
 
       out.push({
-        user,
-        t,
-        setId,
-        alt,
-        chosen: chosenAlt === alt ? 1 : 0,
+        user: who,            // <-- string | undefined (never null)
+        ts: when,
+        tier,
+        shown,
+        chosen,
         price,
         featA,
         featB,
-        shown: shown ?? 1,
       });
     }
-
-    // Add outside option “none”
-    const noneChosen = chosenAlt === "none" ? 1 : 0;
-    if (noneChosen) chosenNone++;
-    out.push({ user, t, setId, alt: "none", chosen: noneChosen, shown: 1 });
   }
 
-  const resp: ParsedResp = {
-    kind: "rows",
-    longRows: out,
-    nSets: setCounter,
-    nChosenNone: chosenNone,
-  };
-  (self as DedicatedWorkerGlobalScope).postMessage(resp);
+  const resp: ParsedResp = { kind: "rows", longRows: out };
+  // No `any` in postMessage either
+  (self as unknown as Worker).postMessage(resp);
 };
