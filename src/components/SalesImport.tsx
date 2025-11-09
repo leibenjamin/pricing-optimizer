@@ -122,7 +122,8 @@ export default function SalesImport(props: {
 
       {/* Mapping UI */}
       {headers.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+        <div className="overflow-x-auto -mx-2 px-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs min-w-[440px]">
           {[
             "choice",
             "price_good",
@@ -161,6 +162,7 @@ export default function SalesImport(props: {
               </select>
             </div>
           ))}
+          </div>          
         </div>
       )}
 
@@ -200,9 +202,27 @@ export default function SalesImport(props: {
         </div>
       )}
 
-      <p className="text-[11px] text-gray-500">
-        Required: <code>choice</code> and at least one of <code>price_good</code>/<code>price_better</code>/<code>price_best</code>. Features and <code>shown_*</code> are optional. Processed on-device.
-      </p>
+      {/* Bottom actions (sticky inside card) */}
+      <div className="mt-3 border-t pt-2 sticky bottom-0 bg-white/90 backdrop-blur supports-backdrop-filter:bg-white/70">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            className="text-xs md:text-sm border px-3 py-1.5 rounded bg-white hover:bg-gray-50 disabled:opacity-50"
+            disabled={!mappingCheck.ok || !headers.length || busy}
+            onClick={runEstimate}
+          >
+            {busy ? "Estimating…" : "Estimate"}
+          </button>
+          <span className="text-[11px] text-gray-600">
+            {busy
+              ? "Fitting latent-class model…"
+              : !headers.length
+              ? "Choose a CSV first."
+              : mappingCheck.ok
+              ? "Ready to estimate."
+              : `Missing: ${mappingCheck.missing.join(", ")}`}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1303,7 +1303,7 @@ export default function App() {
 
       <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4 print-grid-1 print:gap-2">
         {/* Left: Scenario Panel */}
-        <div className="col-span-12 md:col-span-3 space-y-4 min-w-0">
+        <div className="col-span-12 md:col-span-3 space-y-4 min-w-0 overflow-x-visible">
           <Section id="scenario" title="Scenario Panel">
             <div className="space-y-4">
               {/* GOOD & BETTER: keep current immediate-commit + log-on-change behavior */}
