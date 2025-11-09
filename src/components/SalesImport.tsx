@@ -71,19 +71,50 @@ export default function SalesImport(props: {
 
       // Fit
       const estimator = new Worker(new URL("../workers/estimator.ts", import.meta.url), { type: "module" });
+
       const fit = await new Promise<{ segments: SegmentOut[]; diagnostics: Diagnostics }>((resolve, reject) => {
+        // Start a watchdog and make sure we CLEAR it in every exit path
+        const watchdog = window.setTimeout(() => {
+          // terminate rarely throws; no try/catch block to avoid no-empty lint
+          estimator.terminate();
+          reject(new Error("Estimator timed out (45s). Try a smaller CSV or check column mapping."));
+        }, 45_000);
+
+        const finishOk = (segments: SegmentOut[], diagnostics: Diagnostics) => {
+          window.clearTimeout(watchdog);
+          estimator.terminate();
+          resolve({ segments, diagnostics });
+        };
+
+        const finishErr = (err: unknown) => {
+          window.clearTimeout(watchdog);
+          estimator.terminate();
+          reject(err instanceof Error ? err : new Error(String(err)));
+        };
+
         estimator.onmessage = (ev: MessageEvent<import("../workers/estimator").FitResp>) => {
-          if (ev.data.kind === "fitDone") {
-            resolve({
-              segments: ev.data.asSegments,
-              diagnostics: { logLik: ev.data.logLik, iters: ev.data.iters, converged: ev.data.converged },
-            });
+          const msg = ev.data;
+          if (msg.kind === "fitProgress") {
+            // optional — comment this out if it’s too chatty
+            onToast?.("info", `Fitting… iter ${msg.iter} (ll≈${Math.round(msg.logLik)})`);
+            return;
+          }
+          if (msg.kind === "fitError") {
+            finishErr(new Error(msg.error));
+            return;
+          }
+          if (msg.kind === "fitDone") {
+            finishOk(
+              msg.asSegments,
+              { logLik: msg.logLik, iters: msg.iters, converged: msg.converged }
+            );
           }
         };
-        estimator.onerror = (e) => reject(e);
+
+        estimator.onerror = (e) => finishErr(e);
         estimator.postMessage({ kind: "fit", rows: longRows, ridge: 1e-4, maxIters: 200 });
       });
-      estimator.terminate();
+
 
       onToast?.("success", "Estimated coefficients from sales data");
       onApply(fit);
