@@ -1,5 +1,5 @@
 name = "pricing-optimizer"
-pages_build_output_dir = "dist"
+pages_build_output_dir = "app/dist"
 compatibility_date = "2024-11-01"
 
 # PWA manifest URLs:
