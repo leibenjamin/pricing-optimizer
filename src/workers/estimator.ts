@@ -133,6 +133,17 @@ function toUISegments(weights: number[], betas: Array<Record<string, unknown>>):
 self.onmessage = async (ev: MessageEvent<FitReq>) => {
   if (!ev.data || ev.data.kind !== "fit") return;
 
+  {
+    const rows = ev.data.rows ?? [];
+    const anyChosen = rows.some((r) => Number((r as { chosen?: unknown }).chosen) === 1);
+    if (!anyChosen) {
+      (self as unknown as Worker).postMessage(
+        { kind: "fitError", error: "No chosen alternatives in the dataset." } as { kind: "fitError"; error: string }
+      );
+      return;
+    }
+  }
+
   try {
     const ridge = ev.data.ridge ?? 1e-4;
     const maxIters = ev.data.maxIters ?? 200;

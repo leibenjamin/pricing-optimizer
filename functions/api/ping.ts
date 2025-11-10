@@ -1,5 +1,5 @@
 /// <reference types="@cloudflare/workers-types" />
-// app/functions/api/ping.ts
+// functions/api/ping.ts
 
 export const onRequestOptions: PagesFunction = async () =>
   new Response(null, {

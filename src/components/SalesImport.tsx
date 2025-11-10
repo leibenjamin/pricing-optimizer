@@ -61,6 +61,12 @@ export default function SalesImport(props: {
         const req: ParseReq = { kind: "parse", text: fileTextRef.current, mapping };
         parser.postMessage(req);
       });
+      const chosenCount = longRows.reduce((s, r) => s + (r.chosen ? 1 : 0), 0);
+      if (chosenCount === 0) {
+        onToast?.("error", "No chosen alternatives in the dataset. Check the 'choice' mapping and values (expect good/better/best or 1/2/3). Rows with choice='none' are ignored.");
+        setBusy(false);
+        return;
+      }
       parser.terminate();
 
       if (!longRows.length) {
