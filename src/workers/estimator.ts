@@ -72,7 +72,7 @@ function resolveFitter() {
     const wrapper = async (rows: AltRow[], opts: FitOpts): Promise<FitReturn> => {
       // map FitOpts → FitMnlOpts
       const ret = fitMNL(rows, undefined, { maxIters: opts.maxIters, ridge: opts.ridge });
-      const [bG, bBt, bB, bPrice, bFeatA, bFeatB] = ret.beta;
+      const [,,, bPrice, bFeatA, bFeatB] = ret.beta;
       return {
         weights: [1],
         betas: [{ price: bPrice, featA: bFeatA, featB: bFeatB }],
