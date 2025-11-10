@@ -48,8 +48,10 @@ export type SampleResp = {
   sample: ReadonlyArray<Record<string, Cell>>;
 };
 function as01(x: unknown): 0 | 1 {
-  // treat "", null, undefined as 0; "0", 0 => 0; everything truthy => 1
-  if (x === 0 || x === "0" || x === false || x === "" || x == null) return 0;
+  // If the column is blank/missing, assume the option WAS shown (1).
+  // Only explicit 0/false/"0" should become 0.
+  if (x === 0 || x === "0" || x === false) return 0;
+  if (x == null || x === "") return 1;  // <-- changed
   const n = Number(x);
   if (Number.isFinite(n)) return n > 0 ? 1 : 0;
   return 1;

@@ -1,3 +1,5 @@
+// src/lib/optWorker.ts
+
 import type { Constraints, SearchRanges } from "./optimize"
 import type { Prices, Features, Segment } from "./segments"
 import type { OptimizeIn, OptimizeOut } from "../workers/optimizer"

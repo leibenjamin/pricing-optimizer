@@ -214,6 +214,12 @@ self.onmessage = async (ev: MessageEvent<FitReq>) => {
       return;
     }
 
+    const blocksOk = alts.length % 4 === 0;
+    if (!blocksOk) {
+      (self as unknown as Worker).postMessage({ kind: "fitError", error: "Parsed data isn’t 4-rows-per-choice set. Check mapping." });
+      return;
+    }
+
     const onProgress = (iter: number, logLik: number) => {
       const p: FitProgress = { kind: "fitProgress", iter, logLik };
       (self as unknown as Worker).postMessage(p);
