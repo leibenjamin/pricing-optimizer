@@ -1,3 +1,4 @@
+// src/lib/mnl.ts
 import type { AltRow, Alt } from "./simulate"
 
 export type ParamVec = [number, number, number, number, number, number] // bGood, bBetter, bBest, bPrice, bFeatA, bFeatB

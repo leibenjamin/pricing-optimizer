@@ -1,3 +1,5 @@
+// src/lib/simulate.ts
+
 export type Alt = "none" | "good" | "better" | "best"
 
 export interface AltRow {

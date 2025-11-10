@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+// src/workers/optimizer.ts
 
 import { gridSearch, type Constraints, type SearchRanges } from "../lib/optimize"
 import type { Prices, Features, Segment } from "../lib/segments"

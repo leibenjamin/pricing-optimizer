@@ -1,3 +1,5 @@
+// src/App.tsx
+
 import { Suspense, lazy } from "react";
 // replace direct imports:
 const FrontierChartReal = lazy(() => import("./components/FrontierChart"));

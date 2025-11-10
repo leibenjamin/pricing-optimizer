@@ -1,4 +1,5 @@
 // src/lib/choice.ts
+
 import type { Prices, Features, Segment } from "./segments"
 
 export type Shares = { none: number; good: number; better: number; best: number }

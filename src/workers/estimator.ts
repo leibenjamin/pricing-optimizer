@@ -51,13 +51,40 @@ type FitReturn = {
 
 // Try to locate a fitter function in ../lib/mnl with a compatible signature.
 function resolveFitter() {
-  // Preferred: fitLatentClass(alts, opts)
-  if (typeof (MNL as any).fitLatentClass === "function") return (MNL as any).fitLatentClass as (a: AltRow[], o: FitOpts) => Promise<FitReturn> | FitReturn;
-  // Fallbacks you might have named differently:
-  if (typeof (MNL as any).fitLC === "function") return (MNL as any).fitLC as (a: AltRow[], o: FitOpts) => Promise<FitReturn> | FitReturn;
-  if (typeof (MNL as any).emFit === "function") return (MNL as any).emFit as (a: AltRow[], o: FitOpts) => Promise<FitReturn> | FitReturn;
+  // Preferred latent-class names
+  if (typeof (MNL as any).fitLatentClass === "function") {
+    return (MNL as any).fitLatentClass as (a: AltRow[], o: FitOpts) => Promise<FitReturn> | FitReturn;
+  }
+  if (typeof (MNL as any).fitLC === "function") {
+    return (MNL as any).fitLC as (a: AltRow[], o: FitOpts) => Promise<FitReturn> | FitReturn;
+  }
+  if (typeof (MNL as any).emFit === "function") {
+    return (MNL as any).emFit as (a: AltRow[], o: FitOpts) => Promise<FitReturn> | FitReturn;
+  }
 
-  throw new Error("No latent-class fitter found in lib/mnl. Expected fitLatentClass(), fitLC(), or emFit().");
+  // ✅ SINGLE-CLASS ADAPTER: accept fitMNL(rows, init?, opts?) and wrap as 1-class result
+  if (typeof (MNL as any).fitMNL === "function") {
+    type ParamVec = [number, number, number, number, number, number]; // bGood, bBetter, bBest, bPrice, bFeatA, bFeatB
+    type FitMnlOpts = { maxIters?: number; tol?: number; ridge?: number };
+    type FitMnlRet = { beta: ParamVec; logLik: number; iters: number; converged: boolean };
+    const fitMNL = (MNL as any).fitMNL as (rows: AltRow[], init?: ParamVec, opts?: FitMnlOpts) => FitMnlRet;
+
+    const wrapper = async (rows: AltRow[], opts: FitOpts): Promise<FitReturn> => {
+      // map FitOpts → FitMnlOpts
+      const ret = fitMNL(rows, undefined, { maxIters: opts.maxIters, ridge: opts.ridge });
+      const [bG, bBt, bB, bPrice, bFeatA, bFeatB] = ret.beta;
+      return {
+        weights: [1],
+        betas: [{ price: bPrice, featA: bFeatA, featB: bFeatB }],
+        logLik: ret.logLik,
+        iters: ret.iters,
+        converged: ret.converged,
+      };
+    };
+    return wrapper as (a: AltRow[], o: FitOpts) => Promise<FitReturn>;
+  }
+
+  throw new Error("No latent-class fitter found in lib/mnl. Expected fitLatentClass(), fitLC(), emFit(), or fitMNL().");
 }
 
 // ---- Convert whatever LongRow the parser gives us into AltRow[] ----
@@ -81,41 +108,65 @@ function asNumber(v: unknown, def = 0): number {
  *      { obsId, alts: [{alt, price, ...}, ...], ... }
  */
 function toAltRows(rows: LongRow[]): AltRow[] {
-  const out: AltRow[] = [];
+  // Group incoming rows by obsId and collect product alts
+  const byObs = new Map<number, { good?: AltRow; better?: AltRow; best?: AltRow }>();
 
   for (const r of rows as unknown as Array<Record<string, unknown>>) {
     const obsId = asNumber(r["obsId"], 0);
-
-    if (Array.isArray((r as any).alts)) {
-      // Variant B: has alts array
-      const alts = (r as any).alts as Array<Record<string, unknown>>;
-      for (const a of alts) {
-        out.push({
-          obsId,
-          alt: String(a["alt"] ?? "good"),
-          price: asNumber(a["price"], 0),
-          featA: asNumber(a["featA"], 0),
-          featB: asNumber(a["featB"], 0),
-          chosen: coerceBool01(a["chosen"] ?? 0),
-          shown: coerceBool01(a["shown"] ?? 1),
-        });
-      }
-    } else {
-      // Variant A: row per alternative
-      out.push({
-        obsId,
-        alt: String(r["alt"] ?? "good"),
-        price: asNumber(r["price"], 0),
-        featA: asNumber(r["featA"], 0),
-        featB: asNumber(r["featB"], 0),
-        chosen: coerceBool01(r["chosen"] ?? 0),
-        shown: coerceBool01(r["shown"] ?? 1),
-      });
-    }
+    const alt = String(r["alt"] ?? "good").toLowerCase();
+    const entry = byObs.get(obsId) ?? {};
+    const ar: AltRow = {
+      obsId,
+      alt,
+      price: asNumber(r["price"], 0),
+      featA: asNumber(r["featA"], 0),
+      featB: asNumber(r["featB"], 0),
+      chosen: coerceBool01(r["chosen"] ?? 0),
+      shown: coerceBool01(r["shown"] ?? 1),
+    };
+    if (alt === "good") entry.good = ar;
+    else if (alt === "better") entry.better = ar;
+    else if (alt === "best") entry.best = ar;
+    // ignore anything else (parser only emits these three)
+    byObs.set(obsId, entry);
   }
 
+  // For each observation, synthesize the 4th alt ("none") and order: none, good, better, best
+  const out: AltRow[] = [];
+  for (const [obsId, alts] of byObs) {
+    const g = alts.good ?? { obsId, alt: "good", price: 0, featA: 0, featB: 0, chosen: 0, shown: 1 };
+    const bt = alts.better ?? { obsId, alt: "better", price: 0, featA: 0, featB: 0, chosen: 0, shown: 1 };
+    const b = alts.best ?? { obsId, alt: "best", price: 0, featA: 0, featB: 0, chosen: 0, shown: 1 };
+    const hasChoice = (g.chosen === 1) || (bt.chosen === 1) || (b.chosen === 1);
+
+    // Synthetic "none": chosen=1 only if none of the three was chosen.
+    const none: AltRow = {
+      obsId,
+      alt: "none",
+      price: 0,
+      featA: 0,
+      featB: 0,
+      chosen: hasChoice ? 0 : 1,
+      shown: 1,
+    };
+
+    // Push in the exact order expected by fitMNL (4 consecutive rows per obs)
+    out.push(none, g, bt, b);
+  }
+
+  // IMPORTANT: ensure blocks are contiguous by sorting by obsId and then by our desired order within each block
+  out.sort((a, b) => (a.obsId - b.obsId) || orderIndex(a.alt) - orderIndex(b.alt));
   return out;
 }
+
+function orderIndex(alt: unknown): number {
+  const s = String(alt);
+  if (s === "none") return 0;
+  if (s === "good") return 1;
+  if (s === "better") return 2;
+  return 3; // best
+}
+
 
 function toUISegments(weights: number[], betas: Array<Record<string, unknown>>): FitDone["asSegments"] {
   const names = ["Price-sensitive", "Value", "Premium"];
@@ -147,7 +198,9 @@ self.onmessage = async (ev: MessageEvent<FitReq>) => {
   try {
     const ridge = ev.data.ridge ?? 1e-4;
     const maxIters = ev.data.maxIters ?? 200;
-    const K = ev.data.classes ?? 2;
+    // If we only have fitMNL, we still call it — wrapper returns 1-class.
+    // So K can be ignored by the wrapper; leave it available for future LC.
+    const K = 1; // ev.data.classes ?? 1;
 
     const alts = toAltRows(ev.data.rows);
     if (!alts.length) {

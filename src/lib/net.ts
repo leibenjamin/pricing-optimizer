@@ -1,4 +1,5 @@
 // src/lib/net.ts
+
 export type RetryConfig = {
   attempts?: number;     // total tries (incl. first)
   baseDelayMs?: number;  // initial backoff
