@@ -13,6 +13,7 @@ import {
   type TooltipComponentOption,
 } from "echarts/components"
 import { CanvasRenderer } from "echarts/renderers"
+import { downloadBlob, csvFromRows } from "../lib/download";
 
 // Register only what we need
 echartsUse([BarChart, GridComponent, TooltipComponent, CanvasRenderer])
@@ -29,13 +30,13 @@ export interface TakeRateData {
   best: number
 }
 
-export default function TakeRateChart({
-  data,
-  chartId,
-}: {
-  data: TakeRateData;
+export default function TakeRateChart(props: {
   chartId?: string;
+  className?: string;
+  data: TakeRateData;
+  [key: string]: unknown;
 }) {
+  const { chartId = "takerate", className, data } = props;
   const divRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<ECharts | null>(null)
 
@@ -84,51 +85,51 @@ export default function TakeRateChart({
 
     chartRef.current.setOption(option, true);
     chartRef.current.resize();
-  }, [data, vw]);
+  }, [data.none, data.good, data.better, data.best, vw]);
 
-  type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
-
+  // Unified export listener: PNG via ECharts, CSV via our data
   useEffect(() => {
-    if (!chartId) return;
-    const onExport = (ev: Event) => {
-      const e = ev as ExportEvent;
-      if (!e.detail || e.detail.id !== chartId) return;
+    type ExportDetail = { id?: string; type?: "png" | "csv" };
+    const handler = (ev: Event) => {
+      const ce = ev as CustomEvent<ExportDetail>;
+      if (ce.detail?.id && ce.detail.id !== chartId) return;
 
-      if (e.detail.type === "png") {
+      const type = ce.detail?.type ?? "png";
+
+      if (type === "png") {
         if (!chartRef.current) return;
         const url = chartRef.current.getDataURL({
           type: "png",
           pixelRatio: 2,
           backgroundColor: "#ffffff",
         });
+        // Trigger a download from the data URL
         const a = document.createElement("a");
         a.href = url;
-        a.download = "take_rate.png";
+        a.download = `take_rate_${chartId}.png`;
         a.click();
-      } else if (e.detail.type === "csv") {
-        const rows = [
-          ["tier", "take_rate_pct"],
-          ["None",  (data.none   * 100).toFixed(2)],
-          ["Good",  (data.good   * 100).toFixed(2)],
-          ["Better",(data.better * 100).toFixed(2)],
-          ["Best",  (data.best   * 100).toFixed(2)],
-        ];
-        const csv = rows.map(r => r.join(",")).join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "take_rate.csv";
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return;
       }
+
+      // CSV branch — use the typed TakeRateData
+      const rows: (string | number)[][] = [
+        ["tier", "take_rate_pct"],
+        ["None",   (data.none   * 100).toFixed(2)],
+        ["Good",   (data.good   * 100).toFixed(2)],
+        ["Better", (data.better * 100).toFixed(2)],
+        ["Best",   (data.best   * 100).toFixed(2)],
+      ];
+      const csv = csvFromRows(rows);
+      downloadBlob(csv, `take_rate_${chartId}.csv`, "text/csv;charset=utf-8");
     };
-    window.addEventListener("export:takerate", onExport as EventListener);
-    return () => window.removeEventListener("export:takerate", onExport as EventListener);
-  }, [chartId, data]);
+
+    window.addEventListener("export:takerate", handler as EventListener);
+    return () => window.removeEventListener("export:takerate", handler as EventListener);
+  // depend on primitives to satisfy exhaustive-deps without object identity noise
+  }, [chartId, data.none, data.good, data.better, data.best]);
 
   return (
-    <div className="w-full">
+    <div className={`w-full ${className ?? ""}`}>
       {/* tiny toolbar */}
       <div className="flex items-center justify-between mb-1">
         <div className="text-xs text-gray-600">Take-rate by tier</div>
@@ -136,21 +137,15 @@ export default function TakeRateChart({
           className="text-[11px] border rounded px-2 py-1 bg-white hover:bg-gray-50"
           aria-label="Download take-rate CSV"
           onClick={() => {
-            const rows = [
+            const rows: (string | number)[][] = [
               ["tier", "take_rate_pct"],
-              ["None",  (data.none   * 100).toFixed(2)],
-              ["Good",  (data.good   * 100).toFixed(2)],
-              ["Better",(data.better * 100).toFixed(2)],
-              ["Best",  (data.best   * 100).toFixed(2)],
+              ["None",   (data.none   * 100).toFixed(2)],
+              ["Good",   (data.good   * 100).toFixed(2)],
+              ["Better", (data.better * 100).toFixed(2)],
+              ["Best",   (data.best   * 100).toFixed(2)],
             ];
-            const csv = rows.map(r => r.join(",")).join("\n");
-            const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "take_rate.csv";
-            a.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            const csv = csvFromRows(rows);
+            downloadBlob(csv, "take_rate.csv", "text/csv;charset=utf-8");
           }}
         >
           CSV
