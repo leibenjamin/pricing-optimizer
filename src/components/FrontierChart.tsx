@@ -1,3 +1,5 @@
+// src/components/FrontierChart.tsx
+
 import { useEffect, useRef, useState } from "react";
 import {
   init,
@@ -21,6 +23,7 @@ import {
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { CallbackDataParams } from "echarts/types/dist/shared";
+import { downloadBlob, csvFromRows } from "../lib/download";
 
 echartsUse([
   LineChart,
@@ -179,20 +182,24 @@ export default function FrontierChartReal({
           pixelRatio: 2,
           backgroundColor: "#ffffff",
         });
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "profit_frontier.png";
-        a.click();
+        // Fetch the data URL and funnel through downloadBlob for consistency
+        fetch(url)
+          .then(r => r.blob())
+          .then(b => downloadBlob(b, "profit_frontier.png", "image/png"))
+          .catch(() => {
+            // Fallback to direct-link click if fetch fails
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "profit_frontier.png";
+            a.click();
+          });
       } else if (e.detail.type === "csv") {
-        const rows = [["best_price", "profit"], ...points.map(p => [p.bestPrice, p.profit])];
-        const csv = rows.map(r => r.join(",")).join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "profit_frontier.csv";
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        const rows: (string | number)[][] = [
+          ["best_price", "profit"],
+          ...points.map(p => [p.bestPrice, p.profit]),
+        ];
+        const csv = csvFromRows(rows);
+        downloadBlob(csv, "profit_frontier.csv", "text/csv;charset=utf-8");
       }
     };
     window.addEventListener("export:frontier", onExport as EventListener);

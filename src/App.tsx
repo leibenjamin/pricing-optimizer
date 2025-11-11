@@ -328,6 +328,101 @@ export default function App() {
     );
   }
 
+  // --- Tiny sticky toolbelt (bottom-right) ---
+  function StickyToolbelt() {
+    function fire(kind: "frontier" | "takerate" | "waterfall" | "tornado", id: string, type: "png" | "csv") {
+      const ev = new CustomEvent(`export:${kind}`, { detail: { id, type } });
+      window.dispatchEvent(ev);
+    }
+
+    // IDs correspond to chartId props you used
+    const FRONTIER_ID = "frontier-main";
+    const TAKerate_ID = "takerate-main";
+    const WATERFALL_ID = "waterfall-main"; // works once Waterfall listens like others
+    const TORNADO_ID = "tornado-main";     // works once Tornado listens like others
+
+    return (
+      <div
+        className="no-print fixed bottom-4 right-4 z-70 rounded-lg border bg-white/95 backdrop-blur shadow px-2 py-1"
+        role="region"
+        aria-label="Quick export toolbar"
+      >
+        <div className="flex items-center gap-1">
+          {/* Frontier */}
+          <button
+            className="text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
+            title="Export Profit Frontier (PNG)"
+            onClick={() => fire("frontier", FRONTIER_ID, "png")}
+          >
+            Frontier PNG
+          </button>
+          <button
+            className="text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
+            title="Export Profit Frontier (CSV)"
+            onClick={() => fire("frontier", FRONTIER_ID, "csv")}
+          >
+            CSV
+          </button>
+
+          {/* Waterfall */}
+          <span className="text-xs text-slate-500 w-16">Waterfall</span>
+          <button
+            className="px-2 py-1 text-xs bg-slate-800 text-white rounded hover:bg-slate-700"
+            onClick={() => fire("waterfall", WATERFALL_ID, "png")}
+          >
+            PNG
+          </button>
+          <button
+            className="px-2 py-1 text-xs border border-slate-300 rounded hover:bg-slate-50"
+            onClick={() => fire("waterfall", WATERFALL_ID, "csv")}
+          >
+            CSV
+          </button>
+
+          {/* Tornado */}
+          <span className="text-xs text-slate-500 w-16">Tornado</span>
+          <button
+            className="px-2 py-1 text-xs bg-slate-800 text-white rounded hover:bg-slate-700"
+            onClick={() => fire("tornado", TORNADO_ID, "png")}
+          >
+            PNG
+          </button>
+          <button
+            className="px-2 py-1 text-xs border border-slate-300 rounded hover:bg-slate-50"
+            onClick={() => fire("tornado", TORNADO_ID, "csv")}
+          >
+            CSV
+          </button>
+
+          {/* Take-Rate */}
+          <button
+            className="text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
+            title="Export Take-Rate (PNG)"
+            onClick={() => fire("takerate", TAKerate_ID, "png")}
+          >
+            Take-Rate PNG
+          </button>
+          <button
+            className="text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
+            title="Export Take-Rate (CSV)"
+            onClick={() => fire("takerate", TAKerate_ID, "csv")}
+          >
+            CSV
+          </button>
+
+          {/* Print */}
+          <button
+            className="ml-1 text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
+            title="Print this analysis"
+            onClick={() => window.print()}
+          >
+            Print
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // auto-dismiss after ttl
   useEffect(() => {
     const timers = toasts.map((t) =>
@@ -1923,7 +2018,7 @@ export default function App() {
               }
             >
               <ErrorBoundary title="Tornado chart failed">
-                <Tornado rows={tornadoRows} chartId="tornado-main" />
+                <Tornado chartId="tornado-main" title="Tornado: Profit Sensitivity" rows={tornadoRows} />
               </ErrorBoundary>
             </Suspense>
 
@@ -3302,6 +3397,7 @@ export default function App() {
           </Section>
         </div>
       </main>
+      <StickyToolbelt />
       <Toasts />
     </div>
   );
