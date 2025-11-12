@@ -1,3 +1,5 @@
+// src/lib/useStickyState.ts
+
 import { useEffect, useState } from "react";
 
 export function useStickyState<T>(key: string, initial: T) {

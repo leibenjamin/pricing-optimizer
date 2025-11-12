@@ -1,3 +1,5 @@
+// src/components/TakeRateChart.tsx
+
 import { useEffect, useRef, useState } from "react"
 import {
   init,

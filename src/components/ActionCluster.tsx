@@ -1,3 +1,5 @@
+// src/components/ActionCluster.tsx
+
 export default function ActionCluster({
   chart,
   id,
