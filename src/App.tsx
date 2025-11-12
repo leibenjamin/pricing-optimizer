@@ -328,63 +328,105 @@ export default function App() {
     );
   }
 
-  // --- Tiny sticky toolbelt (bottom-right) ---
+  // --- Sticky Toolbelt (bottom-right): consistent PNG/CSV + print, a11y, shortcuts ---
   function StickyToolbelt() {
-    // One place to edit labels/ids later
+    // One place to define section + chart ids (keeps labels & dispatch consistent)
     const GROUPS: Array<{
-      kind: "frontier" | "takerate" | "waterfall" | "tornado";
-      id: string;
-      label: string;           // short label on the chip
-      aria: string;            // full, descriptive label for a11y
+      kind: "frontier" | "waterfall" | "tornado" | "takerate";
+      sectionId: string;
+      chartId: string;
+      label: string; // short chip label
+      aria: string;  // descriptive label
     }> = [
-      { kind: "frontier",  id: "frontier-main",  label: "Frontier",  aria: "Export Profit Frontier" },
-      { kind: "waterfall", id: "waterfall-main", label: "Waterfall", aria: "Export Pocket Price Waterfall" },
-      { kind: "tornado",   id: "tornado-main",   label: "Tornado",   aria: "Export Tornado Sensitivity" },
-      { kind: "takerate",  id: "takerate-main",  label: "Take-Rate", aria: "Export Take-Rate Bars" },
+      { kind: "frontier",  sectionId: "profit-frontier",        chartId: "frontier-main",  label: "Frontier",  aria: "Export Profit Frontier" },
+      { kind: "waterfall", sectionId: "pocket-price-waterfall", chartId: "waterfall-main", label: "Waterfall", aria: "Export Pocket Price Waterfall" },
+      { kind: "tornado",   sectionId: "tornado",                chartId: "tornado-main",   label: "Tornado",   aria: "Export Tornado Sensitivity" },
+      { kind: "takerate",  sectionId: "take-rate",              chartId: "takerate-main",  label: "Take-Rate", aria: "Export Take-Rate Bars" },
     ];
 
-    function fire(kind: "frontier" | "takerate" | "waterfall" | "tornado", id: string, type: "png" | "csv") {
+    // Dispatch helper (used by buttons and keyboard shortcuts)
+    function dispatchExport(
+      kind: "frontier" | "waterfall" | "tornado" | "takerate",
+      id: string,
+      type: "png" | "csv"
+    ) {
       const ev = new CustomEvent(`export:${kind}`, { detail: { id, type } });
       window.dispatchEvent(ev);
     }
 
+    // Keyboard shortcuts (Alt+1..4 = PNG, Shift+Alt+1..4 = CSV, Ctrl/Cmd+P = print)
+    useEffect(() => {
+      const onKey = (e: KeyboardEvent) => {
+        // Respect native print with Ctrl/Cmd+P (don’t intercept)
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") return;
+
+        const idx = Number(e.key) - 1; // '1' -> 0
+        const inRange = idx >= 0 && idx < GROUPS.length;
+        if (e.altKey && inRange) {
+          e.preventDefault();
+          const g = GROUPS[idx];
+          const csv = e.shiftKey;
+          dispatchExport(g.kind, g.chartId, csv ? "csv" : "png");
+        }
+      };
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     return (
       <div
-        className="no-print fixed bottom-4 right-4 z-70 rounded-lg border bg-white/95 backdrop-blur shadow px-2 py-1"
+        className="no-print fixed bottom-4 right-4 z-50 rounded-lg border bg-white/95 backdrop-blur shadow px-2 py-1"
         role="toolbar"
         aria-label="Quick export toolbar"
       >
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[80vw]">
-          {GROUPS.map(g => (
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[90vw]">
+          {GROUPS.map((g, i) => (
             <div
-              key={g.id}
+              key={g.chartId}
               className="flex items-center gap-1 border rounded-md px-1 py-0.5"
               aria-label={g.aria}
+              title={`${g.label} • Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
             >
-              <span className="px-1 text-[11px] text-slate-600">{g.label}</span>
+              {/* Chip label scrolls to the section */}
+              <button
+                type="button"
+                className="px-1 text-[11px] text-slate-700 hover:underline"
+                onClick={() => scrollToId(g.sectionId)}
+                aria-label={`Scroll to ${g.label} section`}
+              >
+                {g.label}
+              </button>
+
+              {/* Export PNG */}
               <button
                 type="button"
                 className="text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
                 aria-label={`${g.aria} as PNG`}
-                onClick={() => fire(g.kind, g.id, "png")}
+                onClick={() => dispatchExport(g.kind, g.chartId, "png")}
               >
                 PNG
               </button>
+
+              {/* Export CSV */}
               <button
                 type="button"
                 className="text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
                 aria-label={`${g.aria} as CSV`}
-                onClick={() => fire(g.kind, g.id, "csv")}
+                onClick={() => dispatchExport(g.kind, g.chartId, "csv")}
               >
                 CSV
               </button>
             </div>
           ))}
+
+          {/* Separator + Print */}
           <div className="ml-1 pl-1 border-l">
             <button
               type="button"
               className="text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
               aria-label="Print this analysis"
+              title="Print this analysis"
               onClick={() => window.print()}
             >
               Print
@@ -394,6 +436,7 @@ export default function App() {
       </div>
     );
   }
+
 
 
   // auto-dismiss after ttl
