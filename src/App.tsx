@@ -2603,8 +2603,9 @@ export default function App() {
                 >
                   <ErrorBoundary title="Waterfall chart failed">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm font-semibold text-slate-700">Pocket price waterfall</h3>
+                      <h3 className="text-sm font-semibold text-slate-700">Pocket Price Waterfall</h3>
                       <InfoTip html={explain("chart.waterfall")} />
+                      <InfoTip html={explain("presets.waterfall")} ariaLabel="About leak presets" />
                     </div>
                     <Waterfall
                       chartId="waterfall-main"
