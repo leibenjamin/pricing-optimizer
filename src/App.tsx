@@ -1357,25 +1357,40 @@ export default function App() {
         {/* KPIs */}
         <div className="mx-auto max-w-7xl px-4 py-2 grid grid-cols-5 gap-4 text-sm">
           <div className="truncate">
-            <div className="text-[11px] text-gray-500">Revenue (N=1000)</div>
+            <div className="text-[11px] text-gray-500 flex items-center">
+              Revenue (N=1000)
+              <InfoTip className="ml-1" html={explain("kpi.revenue")} ariaLabel="Why is Revenue computed this way?" />
+            </div>
             <div className="font-medium">{fmtUSD(revenue)}</div>
           </div>
           <div className="truncate">
-            <div className="text-[11px] text-gray-500">Profit (N=1000)</div>
+            <div className="text-[11px] text-gray-500 flex items-center">
+              Profit (N=1000)
+              <InfoTip className="ml-1" html={explain("kpi.profit")} ariaLabel="How is Profit calculated here?" />
+            </div>
             <div className="font-medium">{fmtUSD(profit)}</div>
           </div>
           <div className="truncate">
-            <div className="text-[11px] text-gray-500">Active customers</div>
+            <div className="text-[11px] text-gray-500 flex items-center">
+              Active customers
+              <InfoTip className="ml-1" html={explain("kpi.active")} ariaLabel="What does Active customers mean?" />
+            </div>
             <div className="font-medium">
               {activeCustomers.toLocaleString()}
             </div>
           </div>
           <div className="truncate">
-            <div className="text-[11px] text-gray-500">ARPU (active)</div>
+            <div className="text-[11px] text-gray-500 flex items-center">
+              ARPU (active)
+              <InfoTip className="ml-1" html={explain("kpi.arpu")} ariaLabel="What is ARPU (active)?" />
+            </div>
             <div className="font-medium">{fmtUSD(arpu)}</div>
           </div>
           <div className="truncate">
-            <div className="text-[11px] text-gray-500">Gross margin</div>
+            <div className="text-[11px] text-gray-500 flex items-center">
+              Gross margin
+              <InfoTip className="ml-1" html={explain("kpi.gm")} ariaLabel="How is Gross margin computed?" />
+            </div>
             <div className="font-medium">{fmtPct(grossMarginPct)}</div>
           </div>
         </div>
@@ -2043,6 +2058,10 @@ export default function App() {
               }
             >
               <ErrorBoundary title="Tornado chart failed">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-slate-700">Tornado sensitivity</h3>
+                  <InfoTip html={explain("chart.tornado")} />
+                </div>
                 <Tornado chartId="tornado-main" title="Tornado: Profit Sensitivity" rows={tornadoRows} />
               </ErrorBoundary>
             </Suspense>
@@ -2557,6 +2576,10 @@ export default function App() {
                   }
                 >
                   <ErrorBoundary title="Waterfall chart failed">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-semibold text-slate-700">Pocket price waterfall</h3>
+                      <InfoTip html={explain("chart.waterfall")} />
+                    </div>
                     <Waterfall
                       chartId="waterfall-main"
                       title="Pocket Price Waterfall"
