@@ -51,6 +51,19 @@ export const EXPLAIN: Record<string, string> = {
     <b>Tornado sensitivity</b> varies one factor at a time around a base case and
     shows profit deltas (low/high). Use it to spot which inputs matter most; validate
     ranges with business owners before decisions.`,
+
+  // --- Presets ---
+  "presets.scenario": `
+    <b>Scenario presets</b> apply a coherent bundle: list prices, costs,
+    reference prices (for anchoring), and typical leakages. Use these to
+    start from a realistic baseline that matches a business model.<br>
+    <i>Tip:</i> after applying a scenario, you can still adjust any field.`,
+  "presets.waterfall": `
+    <b>Leak presets</b> only change downstream leakages (promo, payment,
+    FX, refunds). They do <i>not</i> modify prices, costs, or reference
+    prices. Use these to test how platform fees or discounts shift pocket
+    price and margin floors.`,
+
 };
 
 /** Small helper to avoid undefined keys and to keep JSX tidy. */
