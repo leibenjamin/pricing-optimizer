@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* ----- InfoTip tweaks (above toolbelt) ----- */
+.InfoTip-pop {
+  z-index: 60; /* stays above sticky toolbelt and charts */
+}
+
 /* ---------- Print foundations ---------- */
 @page {
   size: A4 portrait;           /* change to 'letter' if you prefer */
