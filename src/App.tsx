@@ -7,7 +7,7 @@ const Tornado = lazy(() => import("./components/Tornado"));
 const Waterfall = lazy(() => import("./components/Waterfall"));
 const TakeRateChart = lazy(() => import("./components/TakeRateChart"));
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { defaultSim } from "./lib/simulate";
 import { fitMNL } from "./lib/mnl";
 import {
@@ -39,7 +39,8 @@ import { pocketCoverage } from "./lib/coverage";
 import HeatmapMini from "./components/HeatmapMini";
 import { feasibilitySliceGB } from "./lib/coverage";
 
-import { PRESETS } from "./lib/presets";
+import { PRESETS, type Preset } from "./lib/presets";
+import PresetPicker from "./components/PresetPicker";
 
 import { explainGaps, topDriver, explain } from "./lib/explain";
 import InfoTip from "./components/InfoTip";
@@ -480,12 +481,46 @@ export default function App() {
     window.scrollTo({ top, behavior: "smooth" });
   }
 
-  const pushJ = (msg: string) => setJournal((j) => [msg, ...j].slice(0, 200));
-  // Draft value for Best while dragging, and the drag start (for the "from" price)
+  // Stable, optional journal logger
+  const pushJ = useCallback((msg: string) => {
+    try {
+      setJournal((j) => [msg, ...j].slice(0, 200))
+      // No-op fallback to keep ESLint happy:
+      void msg;
+    } catch { /* no-op */ }
+  }, []);
 
+  // Draft value for Best while dragging, and the drag start (for the "from" price)
   const [prices, setPrices] = useStickyState("po:prices", { good: 9, better: 15, best: 25 });
 
   const [refPrices, setRefPrices] = useStickyState("po:refs", { good: 10, better: 18, best: 30 });
+
+  // Track which scenario preset is currently active (purely UI-affordance)
+  const [scenarioPresetId, setScenarioPresetId] = useState<string | null>(null);
+
+  const [costs, setCosts] = useStickyState("po:costs", { good: 3, better: 5, best: 8 });
+
+  const [leak, setLeak] = useStickyState("po:leak", {
+    promo: { good: 0.05, better: 0.05, best: 0.05 }, // 5% promo
+    volume: { good: 0.03, better: 0.03, best: 0.03 }, // 3% volume
+    paymentPct: 0.029, // 2.9% processor
+    paymentFixed: 0.1, // $0.10
+    fxPct: 0.01, // 1%
+    refundsPct: 0.02, // 2%
+  });
+
+  // Apply a scenario preset: sets prices, costs, refPrices, and leak
+  // NOTE: Preset type is from src/lib/presets
+  const applyScenarioPreset = useCallback((p: Preset) => {
+    setPrices(p.prices);
+    setCosts(p.costs);
+    setRefPrices(p.refPrices);
+    setLeak(p.leak);
+    setScenarioPresetId(p.id);
+    pushJ(`Loaded preset: ${p.name}`);
+  }, [setPrices, setCosts, setRefPrices, setLeak, pushJ]);
+
+
   // (optional) a quick helper to set refs from current sliders
   const setRefsFromCurrent = () =>
     setRefPrices({
@@ -500,7 +535,7 @@ export default function App() {
     featA: { good: 1, better: 1, best: 1 },
     featB: { good: 0, better: 1, best: 1 },
   });
-  const [costs, setCosts] = useStickyState("po:costs", { good: 3, better: 5, best: 8 });
+  
   const [fitInfo, setFitInfo] = useState<{
     logLik: number;
     iters: number;
@@ -755,15 +790,6 @@ export default function App() {
       if (cancelRef.current) cancelRef.current();
     };
   }, []);
-
-  const [leak, setLeak] = useStickyState("po:leak", {
-    promo: { good: 0.05, better: 0.05, best: 0.05 }, // 5% promo
-    volume: { good: 0.03, better: 0.03, best: 0.03 }, // 3% volume
-    paymentPct: 0.029, // 2.9% processor
-    paymentFixed: 0.1, // $0.10
-    fxPct: 0.01, // 1%
-    refundsPct: 0.02, // 2%
-  });
 
   const [waterTier, setWaterTier] = useState<Tier>("good");
 
@@ -2749,59 +2775,13 @@ export default function App() {
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           <Section id="preset-scenarios" title="Preset scenarios">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <select
-                className="border rounded px-2 h-8"
-                onChange={(e) => {
-                  const p = PRESETS.find((x) => x.id === e.target.value);
-                  if (!p) return;
-                  setPrices(p.prices);
-                  setCosts(p.costs);
-                  setRefPrices(p.refPrices);
-                  setLeak(p.leak);
-                  pushJ?.(`Loaded preset: ${p.name}`);
-                }}
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  Choose a preset…
-                </option>
-                {PRESETS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="border rounded px-2 h-8 bg-white hover:bg-gray-50"
-                onClick={() => {
-                  // quick reset back to your repo defaults (adjust if your defaults changed)
-                  setPrices({ good: 10, better: 20, best: 40 });
-                  setCosts({ good: 3, better: 5, best: 8 });
-                  setRefPrices({ good: 12, better: 24, best: 45 });
-                  setLeak({
-                    promo: { good: 0.05, better: 0.05, best: 0.05 },
-                    volume: { good: 0.0, better: 0.0, best: 0.0 },
-                    paymentPct: 0.029,
-                    paymentFixed: 0.3,
-                    fxPct: 0.0,
-                    refundsPct: 0.02,
-                  });
-                  pushJ?.("Reset to defaults");
-                }}
-              >
-                Reset
-              </button>
-            </div>
-            <details className="mt-1">
-              <summary className="cursor-pointer select-none text-[11px] text-gray-600">
-                What does this apply?
-              </summary>
-              <div className="text-[11px] text-gray-600 mt-1">
-                Prices, costs, reference prices, and the leakage profile
-                (promos, volume, payment, FX, refunds).
-              </div>
-            </details>
+            <PresetPicker
+              presets={PRESETS}
+              activeId={scenarioPresetId}
+              onApply={applyScenarioPreset}
+              infoHtml={explain("presets.scenario")}
+              className="mt-1"
+            />
           </Section>
 
           <Section id="scenario-journal" title="Scenario Journal">
