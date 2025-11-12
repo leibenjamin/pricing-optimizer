@@ -2416,7 +2416,8 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <label className="w-28 text-xs text-gray-700">
                     Choose preset
-                  </label>
+                  </label>                  
+                  <InfoTip html={explain("presets.waterfall")} ariaLabel="About leak presets" />
                   <select
                     className="border rounded px-2 h-9 w-full md:w-64 bg-white"
                     value={presetSel}
@@ -2605,7 +2606,6 @@ export default function App() {
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-sm font-semibold text-slate-700">Pocket Price Waterfall</h3>
                       <InfoTip html={explain("chart.waterfall")} />
-                      <InfoTip html={explain("presets.waterfall")} ariaLabel="About leak presets" />
                     </div>
                     <Waterfall
                       chartId="waterfall-main"
