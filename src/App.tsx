@@ -41,7 +41,8 @@ import { feasibilitySliceGB } from "./lib/coverage";
 
 import { PRESETS } from "./lib/presets";
 
-import { explainGaps, topDriver } from "./lib/explain";
+import { explainGaps, topDriver, explain } from "./lib/explain";
+import InfoTip from "./components/InfoTip";
 
 import ActionCluster from "./components/ActionCluster";
 import DataImport from "./components/DataImport";
@@ -1872,6 +1873,10 @@ export default function App() {
           >
             <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontier… </div>}>
               <ErrorBoundary title="Frontier chart failed">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-slate-700">Profit frontier</h3>
+                  <InfoTip html={explain("chart.frontier")} />
+                </div>
                 <FrontierChartReal
                   chartId="frontier-main"
                   points={frontier.points}
@@ -1893,6 +1898,10 @@ export default function App() {
               }
             >
               <ErrorBoundary title="Take-Rate chart failed">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-slate-700">Take-rate mix</h3>
+                  <InfoTip html={explain("chart.takeRate")} />
+                </div>                
                 <TakeRateChart chartId="takerate-main" data={probs} />
               </ErrorBoundary>
             </Suspense>
