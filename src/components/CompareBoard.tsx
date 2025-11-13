@@ -6,7 +6,6 @@ import { useStickyState } from "../lib/useStickyState";
 import { makeSnapshot, snapshotsToCSV, type Snapshot } from "../lib/snapshots";
 import { downloadBlob } from "../lib/download";
 import MiniLine from "./MiniLine";
-import HeatmapMini from "./HeatmapMini";
 
 export type CompareBoardHandle = {
   exportCSV: () => void;
@@ -61,6 +60,35 @@ export default forwardRef(function CompareBoard(
     exportCSV,
     clearAll,
   }));
+
+  function TinyBars({
+    labels,
+    values,
+    height = 42,
+  }: {
+    labels: string[];
+    values: number[]; // assumes values are 0..1 for percents (ok if >1; we scale)
+    height?: number;
+  }) {
+    const max = Math.max(0.0001, ...values.map((v) => Math.abs(v)));
+    return (
+      <div className="flex items-end gap-2" style={{ height }}>
+        {values.map((v, i) => {
+          const h = Math.max(2, (Math.abs(v) / max) * (height - 12)); // leave 12px for labels
+          return (
+            <div key={i} className="flex flex-col items-center min-w-3">
+              <div
+                className="w-2 rounded-sm bg-slate-300"
+                style={{ height: h }}
+                title={`${labels[i]}: ${v.toFixed(2)}`}
+              />
+              <div className="mt-1 text-[10px] leading-none text-slate-500">{labels[i]}</div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -127,7 +155,7 @@ export default forwardRef(function CompareBoard(
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <div className="border rounded p-2">
                   <div className="text-[11px] text-gray-500 mb-1">Tier mix</div>
-                  <HeatmapMini
+                  <TinyBars
                     labels={["None","Good","Better","Best"]}
                     values={[s.shares.none, s.shares.good, s.shares.better, s.shares.best]}
                   />
