@@ -1,9 +1,10 @@
 // src/components/SalesImport.tsx
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
 import type { SalesMapping } from "../lib/salesSchema";
 import { inferMapping, validateMapping } from "../lib/salesSchema";
 import type { LongRow, ParsedResp, SampleResp, ParseReq } from "../workers/salesParser";
+import { csvTemplate } from "../lib/csv";
 
 type SegmentOut = { name: string; weight: number; beta: { price: number; featA: number; featB: number } };
 type Diagnostics = { logLik: number; iters: number; converged: boolean };
@@ -20,6 +21,21 @@ export default function SalesImport(props: {
   const [mapping, setMapping] = useState<SalesMapping>({});
   const [busy, setBusy] = useState(false);
   const fileTextRef = useRef<string>("");
+  const choiceSelectRef = useRef<HTMLSelectElement | null>(null);
+
+  type PriceKey = "price_good" | "price_better" | "price_best";
+  type Offenders = { bad: number; total: number; first3: number[] };
+
+  const [preflight, setPreflight] = useState<{
+    rows: number;
+    approxChoices: number;
+    priceQuality: Partial<Record<PriceKey, Offenders>>;
+  } | null>(null);
+
+  const shownUnmapped = useMemo(
+    () => !mapping.shown_good && !mapping.shown_better && !mapping.shown_best,
+    [mapping.shown_good, mapping.shown_better, mapping.shown_best]
+  );
 
   function handleFile(f: File) {
     setFileName(f.name);
@@ -133,6 +149,87 @@ export default function SalesImport(props: {
     }
   }
 
+  useEffect(() => {
+    if (!headers.length || !fileTextRef.current) {
+      setPreflight(null);
+      return;
+    }
+
+    // Build quick index lookup
+    const H = new Map(headers.map((h, i) => [h.trim().toLowerCase(), i]));
+    const idx = (name?: string) =>
+      name ? H.get(name.trim().toLowerCase()) ?? -1 : -1;
+
+    const I = {
+      choice: idx(mapping.choice),
+      price: {
+        price_good: idx(mapping.price_good),
+        price_better: idx(mapping.price_better),
+        price_best: idx(mapping.price_best),
+      } as Record<PriceKey, number>,
+    };
+
+    // Parse just enough for diagnostics (no dynamic typing; we want to inspect raw cells)
+    const text = fileTextRef.current;
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length < 2) {
+      setPreflight({ rows: 0, approxChoices: 0, priceQuality: {} });
+      return;
+    }
+
+    // Lightweight CSV: we already used Papa for header; reuse it here for body
+    const parsed = Papa.parse<string[]>(text, {
+      header: false,
+      dynamicTyping: false,
+      skipEmptyLines: true,
+    });
+
+    const rows = (parsed.data as string[][]).slice(1); // drop header row
+    const approxChoiceOK = (v: unknown) => {
+      if (v == null) return false;
+      const s = String(v).trim().toLowerCase();
+      return s === "good" || s === "better" || s === "best" || s === "1" || s === "2" || s === "3";
+    };
+
+    const priceQuality: Partial<Record<PriceKey, Offenders>> = {};
+    (Object.keys(I.price) as PriceKey[]).forEach((k) => {
+      const col = I.price[k];
+      if (col < 0) return;
+      let bad = 0, total = 0;
+      const first3: number[] = [];
+      for (let r = 0; r < rows.length; r++) {
+        const cell = rows[r][col];
+        if (cell == null || String(cell).trim() === "") continue; // blank doesn't count against quality
+        total++;
+        const num = Number(cell);
+        if (!Number.isFinite(num)) {
+          bad++;
+          if (first3.length < 3) first3.push(r + 2); // +2 => 1 for header, 1 for 1-indexed rows
+        }
+      }
+      priceQuality[k] = { bad, total, first3 };
+    });
+
+    let approxChoices = 0;
+    if (I.choice >= 0) {
+      for (let r = 0; r < rows.length; r++) {
+        const cell = rows[r][I.choice];
+        if (approxChoiceOK(cell)) approxChoices++;
+      }
+    }
+
+    setPreflight({
+      rows: rows.length,
+      approxChoices,
+      priceQuality,
+    });
+  }, [headers, mapping]);
+
+  function pct(bad: number, total: number) {
+    if (!total) return 0;
+    return Math.round((100 * bad) / total);
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -159,6 +256,10 @@ export default function SalesImport(props: {
         </button>
       </div>
 
+      <p className="text-[11px] text-gray-600">
+        Map columns, then click <b>Estimate</b>. We’ll show row counts and basic data quality before fitting.
+      </p>
+
       {/* Mapping UI */}
       {headers.length > 0 && (
         <div className="overflow-x-auto -mx-2 px-2">
@@ -183,6 +284,7 @@ export default function SalesImport(props: {
             <div key={k} className="flex items-center gap-1">
               <label className="w-36 text-right text-gray-600">{k}</label>
               <select
+                ref={k === "choice" ? choiceSelectRef : undefined}
                 className="flex-1 border rounded px-1 py-0.5"
                 value={(mapping as Record<string, string | undefined>)[k] ?? ""}
                 onChange={(e) =>
@@ -238,6 +340,11 @@ export default function SalesImport(props: {
               ))}
             </div>
           )}
+          {shownUnmapped && (
+            <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+              Assuming <b>shown=1</b> (all options visible) because no <code>shown_*</code> columns are mapped.
+            </div>
+          )}
         </div>
       )}
 
@@ -249,18 +356,68 @@ export default function SalesImport(props: {
             disabled={!mappingCheck.ok || !headers.length || busy}
             onClick={runEstimate}
           >
-            {busy ? "Estimating…" : "Estimate"}
+            {busy
+              ? "Estimating…"
+              : preflight && mappingCheck.ok
+              ? `Estimate (${preflight.rows.toLocaleString()} rows, ~${preflight.approxChoices.toLocaleString()} with choice)`
+              : "Estimate"}
           </button>
+
+          {/* Friendly live status */}
           <span className="text-[11px] text-gray-600">
             {busy
               ? "Fitting latent-class model…"
               : !headers.length
               ? "Choose a CSV first."
-              : mappingCheck.ok
+              : !mappingCheck.ok
+              ? `Missing: ${mappingCheck.missing.join(", ")}`
+              : preflight
               ? "Ready to estimate."
-              : `Missing: ${mappingCheck.missing.join(", ")}`}
+              : "Mapping looks OK."}
           </span>
+
+          {/* Quick helpers */}
+          <button
+            type="button"
+            className="ml-2 text-[11px] underline text-blue-600"
+            onClick={() => choiceSelectRef.current?.focus()}
+          >
+            Check “choice” column mapping
+          </button>
+          <button
+            type="button"
+            className="text-[11px] underline text-blue-600"
+            onClick={() => {
+              const blob = new Blob([csvTemplate()], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "scenario_template.csv";
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 500);
+            }}
+          >
+            Open sample CSV
+          </button>
         </div>
+
+        {/* Guard rails: price column quality */}
+        {preflight && (
+          <div className="mt-2 text-[11px] space-y-1">
+            {(["price_good","price_better","price_best"] as const).map((k) => {
+              const q = preflight.priceQuality[k];
+              if (!q || q.total === 0) return null;
+              const p = pct(q.bad, q.total);
+              if (p <= 10) return null; // warn only if >10% non-numeric
+              return (
+                <div key={k} className="text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                  <b>{k}</b>: {p}% non-numeric across {q.total} filled cells
+                  {q.first3.length ? ` (e.g., row ${q.first3.join(", ")})` : ""}.
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
