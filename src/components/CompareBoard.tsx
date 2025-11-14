@@ -1,8 +1,6 @@
 // src/components/CompareBoard.tsx
-import React from "react";
 import type { SnapshotKPIs } from "../lib/snapshots";
 import SharesMini from "./SharesMini";
-import MiniLine from "./MiniLine";
 
 type SlotId = "A" | "B" | "C";
 
@@ -17,116 +15,122 @@ export default function CompareBoard({
   onLoad: (id: SlotId) => void;
   onClear: (id: SlotId) => void;
 }) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-      {/* Current */}
-      <SnapshotCard
-        title="Current"
-        kpi={current}
-        actions={null}
-      />
+  const order: Array<{ key: "current" | SlotId; label: string }> = [
+    { key: "current", label: "Current" },
+    { key: "A", label: "Saved A" },
+    { key: "B", label: "Saved B" },
+    { key: "C", label: "Saved C" },
+  ];
 
-      {/* Saved A/B/C */}
-      {(["A", "B", "C"] as const).map((id) => {
-        const kpi = slots[id];
-        return (
-          <SnapshotCard
-            key={id}
-            title={`Saved ${id}`}
-            kpi={kpi ?? null}
-            actions={
-              <div className="flex gap-2">
-                <button
-                  className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50 disabled:opacity-50"
-                  disabled={!kpi}
-                  onClick={() => onLoad(id)}
-                >
-                  Set current
-                </button>
-                <button
-                  className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50 disabled:opacity-50"
-                  disabled={!kpi}
-                  onClick={() => onClear(id)}
-                >
-                  Delete
-                </button>
+  // Horizontal scroll container on small viewports; cards won’t get squished.
+  return (
+    <div className="overflow-x-auto">
+      <div className="flex gap-3 md:grid md:grid-cols-[repeat(4,minmax(280px,1fr))]">
+        {order.map((col) => {
+          const data =
+            col.key === "current" ? current : (slots[col.key as SlotId] ?? null);
+          const isEmpty = !data;
+
+          return (
+            <div
+              key={col.key}
+              className={[
+                "shrink-0",                 // don’t let flex squeeze below min width
+                "min-w-[280px] max-w-[360px] md:max-w-none", // sane card width
+                "w-[300px] md:w-auto",      // pleasant default width in scroll view
+                "rounded-xl border bg-white shadow-sm",
+                "p-3 flex flex-col gap-2",
+              ].join(" ")}
+            >
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold">{col.label}</div>
+                {col.key !== "current" && (
+                  <div className="flex gap-2">
+                    <button
+                      className="text-xs px-2 py-1 rounded border bg-white hover:bg-gray-50"
+                      onClick={() => onLoad(col.key as SlotId)}
+                    >
+                      Set current
+                    </button>
+                    <button
+                      className="text-xs px-2 py-1 rounded border bg-white hover:bg-gray-50"
+                      onClick={() => onClear(col.key as SlotId)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
               </div>
-            }
-          />
-        );
-      })}
+
+              {isEmpty ? (
+                <p className="text-xs text-gray-500 italic">
+                  Empty. Save the current ladder to this slot.
+                </p>
+              ) : (
+                <SnapshotCard kpis={data!} />
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function SnapshotCard({
-  title,
-  kpi,
-  actions,
-}: {
-  title: string;
-  kpi: SnapshotKPIs | null;
-  actions: React.ReactNode;
-}) {
+function money(n: number) {
+  return `$${Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"}`;
+}
+function pct(n: number) {
+  // n is already a percent 0..100 (2dp in KPIs). Show with one decimal if needed.
+  if (!Number.isFinite(n)) return "—";
+  return `${n.toFixed(n % 1 ? 1 : 0)}%`;
+}
+
+function SnapshotCard({ kpis }: { kpis: SnapshotKPIs }) {
   return (
-    <div className="border rounded-lg p-3 bg-white">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-semibold">{title}</div>
-        {actions}
+    <>
+      {/* KPIs */}
+      <div className="grid grid-cols-2 gap-2">
+        <Kpi label="Revenue" value={money(kpis.revenue)} />
+        <Kpi label="Profit" value={money(kpis.profit)} />
+        <Kpi label="ARPU (active)" value={money(kpis.arpuActive)} />
+        <Kpi label="Gross margin" value={pct(kpis.grossMarginPct)} />
       </div>
 
-      {kpi ? (
-        <>
-          {/* Top numbers */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <Kpi label="Revenue" value={`$${fmt(kpi.revenue)}`} />
-            <Kpi label="Profit" value={`$${fmt(kpi.profit)}`} />
-            <Kpi label="ARPU (active)" value={`$${fmt(kpi.arpuActive)}`} />
-            <Kpi label="Gross margin" value={`${kpi.grossMarginPct.toFixed(1)}%`} />
-          </div>
+      {/* Tier shares mini bars */}
+      <div className="pt-1">
+        <SharesMini
+          title="Tier shares"
+          labels={["None", "Good", "Better", "Best"]}
+          values={[kpis.shares.none, kpis.shares.good, kpis.shares.better, kpis.shares.best]}
+          height={120}
+        />
+      </div>
 
-          {/* Tiny charts */}
-          <div className="mt-3 space-y-2">
-            <SharesMini
-              title="Tier shares"
-              labels={["None", "Good", "Better", "Best"]}
-              values={[
-                kpi.shares.none,
-                kpi.shares.good,
-                kpi.shares.better,
-                kpi.shares.best,
-              ]}
-              height={110}
-            />
-            <MiniLine
-              title="Segment mix (weights)"
-              x={[1, 2, 3]}
-              y={kpi.segShares.map((w) => w * 100)} // MiniLine expects numeric series; we show as 0..100
-              height={110}
-            />
-          </div>
+      {/* Segment mix line as simple text to avoid chart prop mismatch */}
+      <div className="text-xs text-gray-600">
+        <div className="font-medium mb-1">Segment mix (weights)</div>
+        <div className="rounded border px-2 py-1">
+          {kpis.segShares.length
+            ? kpis.segShares.map((w, i) => `${i + 1}: ${(w * 100).toFixed(0)}%`).join("  •  ")
+            : "—"}
+        </div>
+      </div>
 
-          {/* Prices */}
-          <div className="mt-3 text-[11px] text-gray-600">
-            Prices: ${kpi.prices.good.toFixed(2)} / ${kpi.prices.better.toFixed(2)} / ${kpi.prices.best.toFixed(2)}
-          </div>
-        </>
-      ) : (
-        <div className="text-xs text-gray-500 italic">Empty. Save the current ladder to this slot.</div>
-      )}
-    </div>
+      {/* Prices line */}
+      <div className="mt-1 text-[11px] text-gray-500">
+        Prices: ${kpis.prices.good.toFixed(2)} / ${kpis.prices.better.toFixed(2)} / $
+        {kpis.prices.best.toFixed(2)}
+      </div>
+    </>
   );
 }
 
 function Kpi({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border rounded p-2 bg-gray-50">
-      <div className="text-[11px] text-gray-600">{label}</div>
+    <div className="rounded border p-2">
+      <div className="text-[11px] text-gray-500">{label}</div>
       <div className="text-sm font-semibold">{value}</div>
     </div>
   );
-}
-
-function fmt(v: number) {
-  return v.toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
