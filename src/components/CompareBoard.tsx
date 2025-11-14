@@ -1,168 +1,132 @@
 // src/components/CompareBoard.tsx
-import React, { forwardRef, useImperativeHandle } from "react";
-import type { Prices, Features, Segment } from "../lib/segments";
-import type { Leakages } from "../lib/waterfall";
-import { useStickyState } from "../lib/useStickyState";
-import { makeSnapshot, snapshotsToCSV, type Snapshot } from "../lib/snapshots";
-import { downloadBlob } from "../lib/download";
-import MiniLine from "./MiniLine";
+import React from "react";
+import type { SnapshotKPIs } from "../lib/snapshots";
 import SharesMini from "./SharesMini";
+import MiniLine from "./MiniLine";
 
-export type CompareBoardHandle = {
-  exportCSV: () => void;
-  clearAll: () => void;
-};
+type SlotId = "A" | "B" | "C";
 
-export default forwardRef(function CompareBoard(
-  props: {
-    prices: Prices;
-    costs: Prices;
-    feats: Features;
-    segments: Segment[];
-    refPrices?: Prices;
-    leak: Leakages;
-    N: number;
-    usePocketProfit?: boolean;
-    usePocketMargins?: boolean;
-    onSetPrices: (p: Prices) => void;
-  },
-  ref: React.Ref<CompareBoardHandle>
-) {
-  const {
-    prices, costs, feats, segments, refPrices, leak, N,
-    usePocketProfit = false, usePocketMargins = false,
-    onSetPrices,
-  } = props;
-
-  const [snaps, setSnaps] = useStickyState<Snapshot[]>("cmp.snaps", []);
-
-  function addSnapshot() {
-    const s = makeSnapshot({
-      prices, costs, feats, segments, refPrices, N, leak,
-      usePocketProfit, usePocketMargins
-    });
-    setSnaps(prev => [s, ...prev].slice(0, 24)); // cap to 24
-  }
-
-  function deleteSnapshot(id: string) {
-    setSnaps(prev => prev.filter(x => x.id !== id));
-  }
-
-  function exportCSV() {
-    const text = snapshotsToCSV(snaps);
-    downloadBlob(text, "snapshots.csv", "text/csv;charset=utf-8");
-  }
-
-  function clearAll() {
-    setSnaps([]);
-  }
-
-  useImperativeHandle(ref, () => ({
-    exportCSV,
-    clearAll,
-  }));
-
+export default function CompareBoard({
+  slots,
+  current,
+  onLoad,
+  onClear,
+}: {
+  slots: Record<SlotId, SnapshotKPIs | null>;
+  current: SnapshotKPIs;
+  onLoad: (id: SlotId) => void;
+  onClear: (id: SlotId) => void;
+}) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <button
-          className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-          onClick={addSnapshot}
-          title="Save current ladder & KPIs as a card"
-        >
-          Save snapshot
-        </button>
-        <button
-          className="px-3 py-1 rounded border bg-white hover:bg-gray-50 disabled:opacity-50"
-          onClick={exportCSV}
-          disabled={snaps.length === 0}
-          title="Download all snapshot rows as CSV"
-        >
-          Export CSV
-        </button>
-        <button
-          className="px-3 py-1 rounded border bg-white hover:bg-gray-50 disabled:opacity-50"
-          onClick={clearAll}
-          disabled={snaps.length === 0}
-          title="Remove all snapshots"
-        >
-          Clear
-        </button>
-        <div className="text-[11px] text-gray-500 ml-2">
-          {snaps.length} saved
-        </div>
-      </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      {/* Current */}
+      <SnapshotCard
+        title="Current"
+        kpi={current}
+        actions={null}
+      />
 
-      {snaps.length === 0 ? (
-        <div className="text-sm text-gray-600">
-          No snapshots yet. Click <b>Save snapshot</b> after adjusting prices to compare variants here.
-        </div>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {snaps.map(s => (
-            <article key={s.id} className="border rounded-lg bg-white p-3 shadow-sm print-card print-avoid">
-              <header className="flex items-center justify-between gap-2">
-                <div className="text-sm font-medium truncate">
-                  {s.name} <span className="text-xs text-gray-500">{new Date(s.at).toLocaleTimeString()}</span>
-                </div>
-                <div className="text-[11px] text-gray-500">ID {s.id}</div>
-              </header>
-
-              <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-                <div>
-                  <div className="text-gray-500">Prices</div>
-                  <div>${s.prices.good} / ${s.prices.better} / ${s.prices.best}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Rev / Profit</div>
-                  <div>${s.revenue.toLocaleString()} / ${s.profit.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">ARPU / GM%</div>
-                  <div>${s.arpuActive} / {s.grossMarginPct}%</div>
-                </div>
-              </div>
-
-              {/* tiny visual row */}
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <div className="border rounded p-2">
-                  <div className="text-[11px] text-gray-500 mb-1">Tier mix</div>
-                  <SharesMini
-                    title="Take-rates"
-                    labels={["None", "Good", "Better", "Best"]}
-                    values={[s.shares.none, s.shares.good, s.shares.better, s.shares.best]}
-                  />
-                </div>
-                <div className="border rounded p-2">
-                  <div className="text-[11px] text-gray-500 mb-1">Segment weights</div>
-                  <MiniLine
-                    title="Segments"
-                    x={s.segShares.map((_, i) => i + 1)}
-                    y={s.segShares.map((x) => x * 100)}
-                    // MiniLine expects x, y
-                  />
-                </div>
-              </div>
-
-              <footer className="mt-3 flex items-center justify-between gap-2">
+      {/* Saved A/B/C */}
+      {(["A", "B", "C"] as const).map((id) => {
+        const kpi = slots[id];
+        return (
+          <SnapshotCard
+            key={id}
+            title={`Saved ${id}`}
+            kpi={kpi ?? null}
+            actions={
+              <div className="flex gap-2">
                 <button
-                  className="px-2 py-1 rounded border bg-white hover:bg-gray-50"
-                  onClick={() => onSetPrices(s.prices)}
-                  title="Apply these prices to the current ladder"
+                  className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50 disabled:opacity-50"
+                  disabled={!kpi}
+                  onClick={() => onLoad(id)}
                 >
                   Set current
                 </button>
                 <button
-                  className="px-2 py-1 rounded border bg-white hover:bg-gray-50"
-                  onClick={() => deleteSnapshot(s.id)}
+                  className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50 disabled:opacity-50"
+                  disabled={!kpi}
+                  onClick={() => onClear(id)}
                 >
                   Delete
                 </button>
-              </footer>
-            </article>
-          ))}
-        </div>
+              </div>
+            }
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function SnapshotCard({
+  title,
+  kpi,
+  actions,
+}: {
+  title: string;
+  kpi: SnapshotKPIs | null;
+  actions: React.ReactNode;
+}) {
+  return (
+    <div className="border rounded-lg p-3 bg-white">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-semibold">{title}</div>
+        {actions}
+      </div>
+
+      {kpi ? (
+        <>
+          {/* Top numbers */}
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <Kpi label="Revenue" value={`$${fmt(kpi.revenue)}`} />
+            <Kpi label="Profit" value={`$${fmt(kpi.profit)}`} />
+            <Kpi label="ARPU (active)" value={`$${fmt(kpi.arpuActive)}`} />
+            <Kpi label="Gross margin" value={`${kpi.grossMarginPct.toFixed(1)}%`} />
+          </div>
+
+          {/* Tiny charts */}
+          <div className="mt-3 space-y-2">
+            <SharesMini
+              title="Tier shares"
+              labels={["None", "Good", "Better", "Best"]}
+              values={[
+                kpi.shares.none,
+                kpi.shares.good,
+                kpi.shares.better,
+                kpi.shares.best,
+              ]}
+              height={110}
+            />
+            <MiniLine
+              title="Segment mix (weights)"
+              x={[1, 2, 3]}
+              y={kpi.segShares.map((w) => w * 100)} // MiniLine expects numeric series; we show as 0..100
+              height={110}
+            />
+          </div>
+
+          {/* Prices */}
+          <div className="mt-3 text-[11px] text-gray-600">
+            Prices: ${kpi.prices.good.toFixed(2)} / ${kpi.prices.better.toFixed(2)} / ${kpi.prices.best.toFixed(2)}
+          </div>
+        </>
+      ) : (
+        <div className="text-xs text-gray-500 italic">Empty. Save the current ladder to this slot.</div>
       )}
     </div>
   );
-});
+}
+
+function Kpi({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border rounded p-2 bg-gray-50">
+      <div className="text-[11px] text-gray-600">{label}</div>
+      <div className="text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function fmt(v: number) {
+  return v.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
