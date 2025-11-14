@@ -42,7 +42,7 @@ import { feasibilitySliceGB } from "./lib/coverage";
 import { PRESETS, type Preset } from "./lib/presets";
 import PresetPicker from "./components/PresetPicker";
 
-import { explainGaps, topDriver, explain } from "./lib/explain";
+import { explainGaps, topDriver } from "./lib/explain";
 import InfoTip from "./components/InfoTip";
 
 import ActionCluster from "./components/ActionCluster";
@@ -1315,21 +1315,21 @@ export default function App() {
           <div className="truncate">
             <div className="text-[11px] text-gray-500 flex items-center">
               Revenue (N=1000)
-              <InfoTip className="ml-1" html={explain("kpi.revenue")} ariaLabel="Why is Revenue computed this way?" />
+              <InfoTip className="ml-1" align="right" id="kpi.revenue" ariaLabel="Why is Revenue computed this way?" />
             </div>
             <div className="font-medium">{fmtUSD(revenue)}</div>
           </div>
           <div className="truncate">
             <div className="text-[11px] text-gray-500 flex items-center">
               Profit (N=1000)
-              <InfoTip className="ml-1" html={explain("kpi.profit")} ariaLabel="How is Profit calculated here?" />
+              <InfoTip className="ml-1" align="right" id="kpi.profit" ariaLabel="How is Profit calculated here?" />
             </div>
             <div className="font-medium">{fmtUSD(profit)}</div>
           </div>
           <div className="truncate">
             <div className="text-[11px] text-gray-500 flex items-center">
               Active customers
-              <InfoTip className="ml-1" html={explain("kpi.active")} ariaLabel="What does Active customers mean?" />
+              <InfoTip className="ml-1" align="right" id="kpi.active" ariaLabel="What does Active customers mean?" />
             </div>
             <div className="font-medium">
               {activeCustomers.toLocaleString()}
@@ -1338,14 +1338,14 @@ export default function App() {
           <div className="truncate">
             <div className="text-[11px] text-gray-500 flex items-center">
               ARPU (active)
-              <InfoTip className="ml-1" html={explain("kpi.arpu")} ariaLabel="What is ARPU (active)?" />
+              <InfoTip className="ml-1" align="right" id="kpi.arpu" ariaLabel="What is ARPU (active)?" />
             </div>
             <div className="font-medium">{fmtUSD(arpu)}</div>
           </div>
           <div className="truncate">
             <div className="text-[11px] text-gray-500 flex items-center">
               Gross margin
-              <InfoTip className="ml-1" html={explain("kpi.gm")} ariaLabel="How is Gross margin computed?" />
+              <InfoTip className="ml-1" align="right" id="kpi.gm" ariaLabel="How is Gross margin computed?" />
             </div>
             <div className="font-medium">{fmtPct(grossMarginPct)}</div>
           </div>
@@ -1846,7 +1846,7 @@ export default function App() {
               <ErrorBoundary title="Frontier chart failed">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-slate-700">Profit frontier</h3>
-                  <InfoTip html={explain("chart.frontier")} />
+                  <InfoTip className="ml-1" align="right" id="chart.frontier" />
                 </div>
                 <FrontierChartReal
                   chartId="frontier-main"
@@ -1871,7 +1871,7 @@ export default function App() {
               <ErrorBoundary title="Take-Rate chart failed">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-slate-700">Take-rate mix</h3>
-                  <InfoTip html={explain("chart.takeRate")} />
+                  <InfoTip className="ml-1" align="right" id="chart.takeRate" />
                 </div>                
                 <TakeRateChart chartId="takerate-main" data={probs} />
               </ErrorBoundary>
@@ -2016,7 +2016,7 @@ export default function App() {
               <ErrorBoundary title="Tornado chart failed">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-slate-700">Tornado sensitivity</h3>
-                  <InfoTip html={explain("chart.tornado")} />
+                  <InfoTip className="ml-1" align="right" id="chart.tornado" />
                 </div>
                 <Tornado chartId="tornado-main" title="Tornado: Profit Sensitivity" rows={tornadoRows} />
               </ErrorBoundary>
@@ -2345,7 +2345,7 @@ export default function App() {
                   <label className="w-28 text-xs text-gray-700">
                     Choose preset
                   </label>                  
-                  <InfoTip html={explain("presets.waterfall")} ariaLabel="About leak presets" />
+                  <InfoTip className="ml-1" align="right" id="presets.waterfall" ariaLabel="About leak presets" />
                   <select
                     className="border rounded px-2 h-9 w-full md:w-64 bg-white"
                     value={presetSel}
@@ -2533,7 +2533,7 @@ export default function App() {
                   <ErrorBoundary title="Waterfall chart failed">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-sm font-semibold text-slate-700">Pocket Price Waterfall</h3>
-                      <InfoTip html={explain("chart.waterfall")} />
+                      <InfoTip className="ml-1" align="right" id="chart.waterfall" />
                     </div>
                     <Waterfall
                       chartId="waterfall-main"
@@ -2708,7 +2708,7 @@ export default function App() {
               presets={PRESETS}
               activeId={scenarioPresetId}
               onApply={applyScenarioPreset}
-              infoHtml={explain("presets.scenario")}
+              infoId="presets.scenario"
               className="mt-1"
             />
           </Section>

@@ -1,9 +1,19 @@
 @import "tailwindcss";
 
-/* ----- InfoTip tweaks (above toolbelt) ----- */
-.InfoTip-pop {
-  z-index: 60; /* stays above sticky toolbelt and charts */
+/* --- InfoTip popover tweaks --- */
+
+.infotip-popover {
+  /* Ensure popovers are above sticky header, charts, etc. */
+  z-index: 999;
 }
+
+/* Don’t show open tooltips in print mode */
+@media print {
+  .infotip-popover {
+    display: none !important;
+  }
+}
+
 
 /* ---------- Print foundations ---------- */
 @page {

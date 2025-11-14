@@ -29,13 +29,13 @@ export default function PresetPicker({
   activeId,
   onApply,
   className = "",
-  infoHtml,
+  infoId,
 }: {
   presets: Preset[];
   activeId?: string | null;
   onApply: (p: Preset) => void;
   className?: string;
-  infoHtml?: string; // from explain("presets.scenario")
+  infoId?: string; // from explain("presets.scenario")
 }) {
   return (
     <section className={className} aria-label="Preset scenarios">
@@ -43,7 +43,7 @@ export default function PresetPicker({
         <h3 className="text-sm font-semibold text-slate-800">
           Preset scenarios
         </h3>
-        {infoHtml ? <InfoTip html={infoHtml} ariaLabel="About scenario presets" /> : null}
+        {infoId ? <InfoTip id={infoId} className="ml-1" ariaLabel="About scenario presets" /> : null}
       </div>
 
       <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
