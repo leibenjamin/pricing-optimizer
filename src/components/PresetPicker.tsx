@@ -46,27 +46,27 @@ export default function PresetPicker({
         {infoHtml ? <InfoTip html={infoHtml} ariaLabel="About scenario presets" /> : null}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
         {presets.map((p) => {
           const isActive = p.id === activeId;
           return (
             <div
               key={p.id}
               className={
-                "rounded-lg border p-2 bg-white " +
+                "min-w-0 rounded-xl border bg-white shadow-sm p-3 flex flex-col gap-2 h-auto" +
                 (isActive ? "border-blue-500 ring-1 ring-blue-200" : "border-slate-200")
               }
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="text-sm font-medium text-slate-900">{p.name}</div>
+                  <div className="text-sm font-semibold leading-tight wrap-break-word">{p.name}</div>
                   {p.note ? (
-                    <div className="text-[11px] text-slate-600 mt-0.5">{p.note}</div>
+                    <div className="text-xs text-slate-600 whitespace-normal wrap-break-word leading-tight">{p.note}</div>
                   ) : null}
                 </div>
                 <button
                   className={
-                    "text-[11px] px-2 py-1 rounded border " +
+                    "text-xs px-2 py-1 rounded border " +
                     (isActive
                       ? "border-blue-500 text-blue-600 bg-blue-50 cursor-default"
                       : "border-slate-300 text-slate-700 bg-white hover:bg-slate-50")
