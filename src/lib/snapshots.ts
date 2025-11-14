@@ -123,6 +123,8 @@ export type SnapshotKPIs = {
   arpuActive: number;
   grossMarginPct: number;
   segShares: number[];
+  // optional UI label (used by Compare Board cards)
+  title?: string;
 };
 
 // --- ADD: compute KPIs without creating a full Snapshot record ---

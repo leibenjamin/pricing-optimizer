@@ -54,82 +54,12 @@ import { useStickyState } from "./lib/useStickyState";
 
 import { preflight, fetchWithRetry } from "./lib/net";
 
-import CompareBoard, { type CompareKPIs } from "./components/CompareBoard";
+import CompareBoard from "./components/CompareBoard";
+import { kpisFromSnapshot, type SnapshotKPIs } from "./lib/snapshots";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
-
-// Compute headline KPIs from a scenario snapshot (uses same N as the app)
-// Reusable shapes (avoid `typeof` from locals)
-type Ladder = { good: number; better: number; best: number };
-type Feats = { featA: Ladder; featB: Ladder };
-
-// Compute headline KPIs from a scenario snapshot (uses same N as the app)
-// NOTE: we pass `segments` explicitly so this helper is pure.
-function kpisFromSnapshot(
-  snap: {
-    prices: Ladder;
-    costs: Ladder;
-    features: Feats;
-    refPrices: Ladder;
-    leak: Leakages;
-    segments: Segment[];       // <-- now explicit
-  },
-  N: number,
-  usePocketProfit: boolean
-): CompareKPIs {
-  const probs = choiceShares(
-    snap.prices,
-    snap.features,
-    snap.segments,             // <-- use the provided segments
-    snap.refPrices
-  );
-
-  const take = {
-    none: Math.round(N * probs.none),
-    good: Math.round(N * probs.good),
-    better: Math.round(N * probs.better),
-    best: Math.round(N * probs.best),
-  };
-
-  const revenue =
-    take.good * snap.prices.good +
-    take.better * snap.prices.better +
-    take.best * snap.prices.best;
-
-  const profit = usePocketProfit
-    ? (() => {
-        const pG = computePocketPrice(snap.prices.good, "good", snap.leak).pocket;
-        const pB = computePocketPrice(snap.prices.better, "better", snap.leak).pocket;
-        const pH = computePocketPrice(snap.prices.best, "best", snap.leak).pocket;
-        return (
-          take.good * (pG - snap.costs.good) +
-          take.better * (pB - snap.costs.better) +
-          take.best * (pH - snap.costs.best)
-        );
-      })()
-    : (() => {
-        return (
-          take.good * (snap.prices.good - snap.costs.good) +
-          take.better * (snap.prices.better - snap.costs.better) +
-          take.best * (snap.prices.best - snap.costs.best)
-        );
-      })();
-
-  const gm = revenue > 0 ? profit / revenue : 0;
-
-  return {
-    title: "Saved",
-    prices: { ...snap.prices },
-    revenue,
-    profit,
-    convPct: ((take.good + take.better + take.best) / N) * 100,
-    grossMarginPct: gm,
-  };
-}
-
-
 
 type SaveError = {
   error?: string;
@@ -2289,7 +2219,7 @@ export default function App() {
               const objB = readSlot("B");
               const objC = readSlot("C");
 
-              const slots: Record<"A" | "B" | "C", CompareKPIs | null> = {
+              const slots: Record<"A" | "B" | "C", SnapshotKPIs | null> = {
                 A: objA
                   ? {
                       ...kpisFromSnapshot(
@@ -2348,18 +2278,16 @@ export default function App() {
                 <CompareBoard
                   slots={slots}
                   current={curKPIs}
-                  onLoad={(id) => loadFromSlot(id)}
-                  onClear={(id) => {
+                  onLoad={(id: "A" | "B" | "C") => loadFromSlot(id)}
+                  onClear={(id: "A" | "B" | "C") => {
                     clearSlot(id);
                     toast("info", `Cleared slot ${id}`);
-                    // trigger a rerender so the board refreshes:
                     setJournal((j) => [...j]);
                   }}
                 />
               );
             })()}
           </Section>
-
 
           <Section
             id="tornado-compare"
