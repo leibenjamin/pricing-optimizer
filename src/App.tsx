@@ -1360,198 +1360,236 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white text-gray-900">
       <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
-          <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 className="text-xl font-semibold">Pricing Optimizer</h1>
-              <p className="text-sm text-slate-600">
-                Good/Better/Best ladder • pocket price waterfall • profit
-                frontier • tornado sensitivity • cohorts
+        <div className="mx-auto max-w-7xl px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            {/* Left: title + tagline + version */}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h1 className="text-xl font-semibold">Pricing Optimizer</h1>
+                <span className="text-xs text-gray-500">
+                  v0.3 • Latent-class choice model (3 segments)
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-slate-600">
+                Good/Better/Best ladder • pocket price waterfall • profit frontier •
+                tornado sensitivity • cohorts
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <a
-                className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
-                href="https://github.com/leibenjamin/pricing-optimizer"
-                target="_blank"
-                rel="noreferrer"
-              >
-                View source
-              </a>
+            {/* Right: actions */}
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
+                <a
+                  className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
+                  href="https://github.com/leibenjamin/pricing-optimizer"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View source
+                </a>
 
-              <a
-                className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
-                href="mailto:contact@benlei.org"
-              >
-                Contact
-              </a>
+                <a
+                  className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
+                  href="mailto:contact@benlei.org"
+                >
+                  Contact
+                </a>
 
-              {/* Case study (future) */}
-              <button
-                type="button"
-                aria-disabled="true"
-                disabled
-                title="Coming soon"
-                className="border rounded px-3 py-1 text-sm bg-gray-100 text-gray-400 cursor-not-allowed"
-              >
-                Case study (soon)
-              </button>
+                {/* Case study (future) */}
+                <button
+                  type="button"
+                  aria-disabled="true"
+                  disabled
+                  title="Coming soon"
+                  className="border rounded px-3 py-1 text-sm bg-gray-100 text-gray-400 cursor-not-allowed"
+                >
+                  Case study (soon)
+                </button>
+              </div>
+
+              <div className="no-print">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3 py-1 rounded-md border text-sm hover:bg-gray-50"
+                  aria-label="Print this analysis"
+                  title="Print this analysis"
+                >
+                  Print
+                </button>
+              </div>
             </div>
-            <div className="mt-2 flex gap-2 no-print">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="px-3 py-1 rounded-md border text-sm hover:bg-gray-50"
-                aria-label="Print this analysis"
-                title="Print this analysis"
-              >
-                Print
-              </button>
-            </div>
-          </header>
-          <div className="text-sm text-gray-500">
-            v0.3 • Latent-class choice model (3 segments)
           </div>
         </div>
       </header>
 
       {/* Sticky KPI bar (desktop & tablet) */}
       <div
-        className="sticky top-0 z-60 hidden md:block bg-white/80 backdrop-blur border-b print:hidden"
+        className="sticky top-0 z-40 hidden md:block bg-white/80 backdrop-blur border-b print:hidden"
         role="region"
         aria-label="Key metrics and quick navigation"
       >
-        {/* KPIs */}
-        <div className="mx-auto max-w-7xl px-4 py-2 grid grid-cols-5 gap-4 text-sm">
-          <div className="truncate">
-            <div className="text-[11px] text-gray-500 flex items-center">
-              Revenue (N=1000)
-              <InfoTip className="ml-1" align="right" id="kpi.revenue" ariaLabel="Why is Revenue computed this way?" />
+        <div className="mx-auto max-w-7xl px-4">
+          {/* KPIs */}
+          <div className="grid grid-cols-5 gap-4 py-2 text-sm">
+            <div className="truncate">
+              <div className="text-[11px] text-gray-500 flex items-center">
+                Revenue (N=1000)
+                <InfoTip
+                  className="ml-1"
+                  align="right"
+                  id="kpi.revenue"
+                  ariaLabel="Why is Revenue computed this way?"
+                />
+              </div>
+              <div className="font-medium">{fmtUSD(revenue)}</div>
             </div>
-            <div className="font-medium">{fmtUSD(revenue)}</div>
-          </div>
-          <div className="truncate">
-            <div className="text-[11px] text-gray-500 flex items-center">
-              Profit (N=1000)
-              <InfoTip className="ml-1" align="right" id="kpi.profit" ariaLabel="How is Profit calculated here?" />
-            </div>
-            <div className="font-medium">{fmtUSD(profit)}</div>
-          </div>
-          <div className="truncate">
-            <div className="text-[11px] text-gray-500 flex items-center">
-              Active customers
-              <InfoTip className="ml-1" align="right" id="kpi.active" ariaLabel="What does Active customers mean?" />
-            </div>
-            <div className="font-medium">
-              {activeCustomers.toLocaleString()}
-            </div>
-          </div>
-          <div className="truncate">
-            <div className="text-[11px] text-gray-500 flex items-center">
-              ARPU (active)
-              <InfoTip className="ml-1" align="right" id="kpi.arpu" ariaLabel="What is ARPU (active)?" />
-            </div>
-            <div className="font-medium">{fmtUSD(arpu)}</div>
-          </div>
-          <div className="truncate">
-            <div className="text-[11px] text-gray-500 flex items-center">
-              Gross margin
-              <InfoTip className="ml-1" align="right" id="kpi.gm" ariaLabel="How is Gross margin computed?" />
-            </div>
-            <div className="font-medium">{fmtPct(grossMarginPct)}</div>
-          </div>
-        </div>
 
-        {/* Mini top-nav */}
-        <nav className="mx-auto max-w-7xl px-3 pb-2">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar text-sm">
-            {[
-              "profit-frontier",
-              "pocket-price-waterfall",
-              "compare-board",
-              "cohort-rehearsal",
-              "tornado",
-              "global-optimizer",
-            ].map((id) => (
-              <button
-                key={id}
-                onClick={() => scrollToId(id)}
-                className={
-                  "px-3 py-1 rounded border bg-white hover:bg-gray-50 " +
-                  (activeSection === id
-                    ? "border-blue-500 text-blue-600"
-                    : "border-gray-200 text-gray-700")
-                }
-                aria-current={activeSection === id ? "page" : undefined}
-              >
-                {labelFor(id)}
-              </button>
-            ))}
+            <div className="truncate">
+              <div className="text-[11px] text-gray-500 flex items-center">
+                Profit (N=1000)
+                <InfoTip
+                  className="ml-1"
+                  align="right"
+                  id="kpi.profit"
+                  ariaLabel="How is Profit calculated here?"
+                />
+              </div>
+              <div className="font-medium">{fmtUSD(profit)}</div>
+            </div>
+
+            <div className="truncate">
+              <div className="text-[11px] text-gray-500 flex items-center">
+                Active customers
+                <InfoTip
+                  className="ml-1"
+                  align="right"
+                  id="kpi.active"
+                  ariaLabel="What does Active customers mean?"
+                />
+              </div>
+              <div className="font-medium">
+                {activeCustomers.toLocaleString()}
+              </div>
+            </div>
+
+            <div className="truncate">
+              <div className="text-[11px] text-gray-500 flex items-center">
+                ARPU (active)
+                <InfoTip
+                  className="ml-1"
+                  align="right"
+                  id="kpi.arpu"
+                  ariaLabel="What is ARPU (active)?"
+                />
+              </div>
+              <div className="font-medium">{fmtUSD(arpu)}</div>
+            </div>
+
+            <div className="truncate">
+              <div className="text-[11px] text-gray-500 flex items-center">
+                Gross margin
+                <InfoTip
+                  className="ml-1"
+                  align="right"
+                  id="kpi.gm"
+                  ariaLabel="How is Gross margin computed?"
+                />
+              </div>
+              <div className="font-medium">{fmtPct(grossMarginPct)}</div>
+            </div>
           </div>
-        </nav>
-        {explainDelta && (
-          <div className="mt-1 border-t border-dashed border-slate-200 pt-1 text-[11px] text-slate-700">
-            <details className="group">
-              <summary className="flex cursor-pointer items-center justify-between gap-2 text-[11px] font-medium text-slate-800">
-                <span>
-                  <span className="inline-flex items-center gap-1">
+
+          {/* Mini top-nav */}
+          <nav className="pb-2">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar text-sm">
+              {[
+                "profit-frontier",
+                "pocket-price-waterfall",
+                "compare-board",
+                "cohort-rehearsal",
+                "tornado",
+                "global-optimizer",
+              ].map((id) => (
+                <button
+                  key={id}
+                  onClick={() => scrollToId(id)}
+                  className={
+                    "px-3 py-1 rounded border bg-white hover:bg-gray-50 " +
+                    (activeSection === id
+                      ? "border-blue-500 text-blue-600"
+                      : "border-gray-200 text-gray-700")
+                  }
+                  aria-current={activeSection === id ? "page" : undefined}
+                >
+                  {labelFor(id)}
+                </button>
+              ))}
+            </div>
+          </nav>
+
+          {explainDelta && (
+            <div className="border-t border-dashed border-slate-200 pt-1 pb-2 text-[11px] text-slate-700">
+              <details className="group">
+                <summary className="flex cursor-pointer items-center justify-between gap-2 text-[11px] font-medium text-slate-800">
+                  <span className="flex flex-wrap items-baseline gap-1">
                     <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[9px] font-semibold">
                       ?
                     </span>
                     <span>Tell me what changed</span>
-                  </span>
-                  <span className="ml-2 text-[10px] font-normal text-slate-500">
-                    vs. your pinned baseline
-                  </span>
-                </span>
-                <span className="text-[10px] text-slate-500 group-open:hidden">
-                  Profit Δ {explainDelta.deltaProfit >= 0 ? "+" : "−"}$
-                  {Math.abs(explainDelta.deltaProfit).toFixed(0)}
-                </span>
-              </summary>
-
-              <div className="mt-1 grid gap-1 sm:grid-cols-2">
-                <div>
-                  <div className="text-[11px]">
-                    <span className="font-medium">Profit</span>{" "}
-                    <span>
-                      {explainDelta.deltaProfit >= 0 ? "▲" : "▼"} $
-                      {Math.abs(explainDelta.deltaProfit).toFixed(0)} vs. baseline
+                    <span className="ml-1 text-[10px] font-normal text-slate-500">
+                      vs. your pinned baseline
                     </span>
+                  </span>
+                  {/* Keep the quick Profit delta visible in both open/closed states */}
+                  <span className="text-[10px] text-slate-500">
+                    Profit Δ {explainDelta.deltaProfit >= 0 ? "+" : "−"}$
+                    {Math.abs(explainDelta.deltaProfit).toFixed(0)}
+                  </span>
+                </summary>
+
+                <div className="mt-1 grid gap-1 sm:grid-cols-2">
+                  <div>
+                    <div className="text-[11px]">
+                      <span className="font-medium">Profit</span>{" "}
+                      <span>
+                        {explainDelta.deltaProfit >= 0 ? "▲" : "▼"} $
+                        {Math.abs(explainDelta.deltaProfit).toFixed(0)} vs. baseline
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-600">
+                      Revenue Δ ${explainDelta.deltaRevenue.toFixed(0)} · Active
+                      customers Δ {explainDelta.deltaActive.toFixed(0)} · ARPU Δ $
+                      {explainDelta.deltaARPU.toFixed(2)}
+                    </div>
                   </div>
                   <div className="text-[11px] text-slate-600">
-                    Revenue Δ ${explainDelta.deltaRevenue.toFixed(0)} · Active
-                    customers Δ {explainDelta.deltaActive.toFixed(0)} · ARPU Δ $
-                    {explainDelta.deltaARPU.toFixed(2)}
+                    {explainDelta.mainDriver}
                   </div>
                 </div>
-                <div className="text-[11px] text-slate-600">
-                  {explainDelta.mainDriver}
+
+                <div className="mt-1 text-[11px] text-slate-600">
+                  <div>{explainDelta.segmentLine}</div>
+                  <div className="mt-0.5">{explainDelta.suggestion}</div>
                 </div>
-              </div>
 
-              <div className="mt-1 text-[11px] text-slate-600">
-                <div>{explainDelta.segmentLine}</div>
-                <div className="mt-0.5">{explainDelta.suggestion}</div>
-              </div>
-
-              <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
-                <span>
-                  Baseline stays fixed until you reset it. Handy when you’re exploring
-                  multiple what-if scenarios.
-                </span>
-                <button
-                  type="button"
-                  className="rounded border border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-slate-50"
-                  onClick={() => setBaselineKPIs(currentKPIs)}
-                >
-                  Set baseline to now
-                </button>
-              </div>
-            </details>
-          </div>
-        )}
+                <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500">
+                  <span className="max-w-xl">
+                    Baseline stays fixed until you reset it. Handy when you’re
+                    exploring multiple what-if scenarios.
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded border border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => setBaselineKPIs(currentKPIs)}
+                  >
+                    Set baseline to now
+                  </button>
+                </div>
+              </details>
+            </div>
+          )}
+        </div>
       </div>
 
       <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4 min-h-screen print-grid-1 print:gap-2">
