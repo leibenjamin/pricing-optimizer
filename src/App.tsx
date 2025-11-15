@@ -111,6 +111,16 @@ type SegmentFlat = {
 };
 type SegmentNormalized = SegmentNested;
 
+type ExplainDelta = {
+  deltaProfit: number;
+  deltaRevenue: number;
+  deltaARPU: number;
+  deltaActive: number;
+  mainDriver: string;
+  segmentLine: string;
+  suggestion: string;
+};
+
 function toFinite(n: unknown): number | null {
   const v = typeof n === "number" ? n : Number(n);
   return Number.isFinite(v) ? v : null;
@@ -200,6 +210,9 @@ function mapFitToSegments(
 export default function App() {
   const [journal, setJournal] = useState<string[]>([]);
   const [showSalesImport, setShowSalesImport] = useState(false);
+
+  // Baseline KPIs for the “Tell me what changed” panel
+  const [baselineKPIs, setBaselineKPIs] = useState<SnapshotKPIs | null>(null);
 
   // --- Toasts ---
   type Toast = {
@@ -843,6 +856,105 @@ export default function App() {
   const profitPerCustomer = profit / N;
   const grossMarginPct = revenue > 0 ? profit / revenue : 0;
 
+  // Light-weight KPI bundle used by Compare Board and the “What changed” panel
+  const currentKPIs = useMemo(
+    () =>
+      kpisFromSnapshot(
+        { prices, costs, features, segments, refPrices, leak },
+        N,
+        false // use list prices for this explainer to match the top KPI strip
+      ),
+    [prices, costs, features, segments, refPrices, leak, N]
+  );
+
+  // Initialize baseline once on first render
+  useEffect(() => {
+    if (!baselineKPIs) {
+      setBaselineKPIs(currentKPIs);
+    }
+  }, [baselineKPIs, currentKPIs]);
+
+  const explainDelta = useMemo<ExplainDelta | null>(() => {
+    if (!baselineKPIs || !segments.length) return null;
+
+    const deltaProfit = currentKPIs.profit - baselineKPIs.profit;
+    const deltaRevenue = currentKPIs.revenue - baselineKPIs.revenue;
+
+    const currentActive = N * (1 - currentKPIs.shares.none);
+    const baselineActive = N * (1 - baselineKPIs.shares.none);
+    const deltaActive = currentActive - baselineActive;
+
+    const deltaARPU = currentKPIs.arpuActive - baselineKPIs.arpuActive;
+
+    // --- Main driver by tier (Good / Better / Best) ---
+    const tiers: Array<"good" | "better" | "best"> = ["good", "better", "best"];
+    const perTier = tiers.map((tier) => {
+      const shareBase = baselineKPIs.shares[tier];
+      const shareCur = currentKPIs.shares[tier];
+      const qBase = N * shareBase;
+      const qCur = N * shareCur;
+
+      // Approximate unit margin from baseline list prices
+      const marginBase = baselineKPIs.prices[tier] - costs[tier];
+
+      const mixEffect = (qCur - qBase) * marginBase;
+      const priceEffect =
+        qBase * (currentKPIs.prices[tier] - baselineKPIs.prices[tier]);
+      const total = mixEffect + priceEffect;
+
+      return { tier, mixEffect, priceEffect, total };
+    });
+
+    const main = perTier.reduce((best, cand) =>
+      Math.abs(cand.total) > Math.abs(best.total) ? cand : best
+    , perTier[0]);
+
+    let mainDriver: string;
+    if (Math.abs(deltaProfit) < 1e-2) {
+      mainDriver =
+        "Profit is essentially unchanged vs. your baseline scenario.";
+    } else {
+      const dir = deltaProfit > 0 ? "up" : "down";
+      const absDelta = Math.abs(deltaProfit).toFixed(0);
+      const driverKind =
+        Math.abs(main.mixEffect) >= Math.abs(main.priceEffect)
+          ? "mix shift across tiers"
+          : "unit margin change from price moves";
+
+      mainDriver = `Profit is ${dir} about $${absDelta} vs. baseline, mainly driven by a ${driverKind} in the ${main.tier} tier.`;
+    }
+
+    // --- Most price-sensitive segment (by |betaPrice|) ---
+    const mostPriceSensitive = segments.reduce((best, seg) =>
+      Math.abs(seg.betaPrice) > Math.abs(best.betaPrice) ? seg : best
+    , segments[0]);
+
+    const segmentLine = `Most price-sensitive segment right now: “${mostPriceSensitive.name}” (β_price = ${mostPriceSensitive.betaPrice.toFixed(
+      2
+    )}). Price moves that help or hurt them will have outsized impact.`;
+
+    // --- Simple suggestion sentence ---
+    let suggestion: string;
+    if (Math.abs(deltaProfit) < 1e-2) {
+      suggestion =
+        "You’re right on top of your baseline. Try a small $1–$2 nudge to the Better tier to explore profit vs. conversion trade-offs.";
+    } else if (deltaProfit > 0) {
+      suggestion = `You’re ahead of baseline. If you’re comfortable with the current active-customer level, consider testing a slightly higher price for the ${main.tier} tier to see if profit can rise further without losing too many buyers.`;
+    } else {
+      suggestion = `Profit is below baseline. Consider nudging the ${main.tier} tier back toward the baseline price, or improving its features, to regain mix from “None” or lower tiers.`;
+    }
+
+    return {
+      deltaProfit,
+      deltaRevenue,
+      deltaARPU,
+      deltaActive,
+      mainDriver,
+      segmentLine,
+      suggestion,
+    };
+  }, [baselineKPIs, currentKPIs, costs, N, segments]);
+
   // ---- Tornado sensitivity data ----
   const [tornadoPocket, setTornadoPocket] = useState(true);
   const [tornadoPriceBump, setTornadoPriceBump] = useState(5); // $
@@ -1378,6 +1490,68 @@ export default function App() {
             ))}
           </div>
         </nav>
+        {explainDelta && (
+          <div className="mt-1 border-t border-dashed border-slate-200 pt-1 text-[11px] text-slate-700">
+            <details className="group">
+              <summary className="flex cursor-pointer items-center justify-between gap-2 text-[11px] font-medium text-slate-800">
+                <span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[9px] font-semibold">
+                      ?
+                    </span>
+                    <span>Tell me what changed</span>
+                  </span>
+                  <span className="ml-2 text-[10px] font-normal text-slate-500">
+                    vs. your pinned baseline
+                  </span>
+                </span>
+                <span className="text-[10px] text-slate-500 group-open:hidden">
+                  Profit Δ {explainDelta.deltaProfit >= 0 ? "+" : "−"}$
+                  {Math.abs(explainDelta.deltaProfit).toFixed(0)}
+                </span>
+              </summary>
+
+              <div className="mt-1 grid gap-1 sm:grid-cols-2">
+                <div>
+                  <div className="text-[11px]">
+                    <span className="font-medium">Profit</span>{" "}
+                    <span>
+                      {explainDelta.deltaProfit >= 0 ? "▲" : "▼"} $
+                      {Math.abs(explainDelta.deltaProfit).toFixed(0)} vs. baseline
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-600">
+                    Revenue Δ ${explainDelta.deltaRevenue.toFixed(0)} · Active
+                    customers Δ {explainDelta.deltaActive.toFixed(0)} · ARPU Δ $
+                    {explainDelta.deltaARPU.toFixed(2)}
+                  </div>
+                </div>
+                <div className="text-[11px] text-slate-600">
+                  {explainDelta.mainDriver}
+                </div>
+              </div>
+
+              <div className="mt-1 text-[11px] text-slate-600">
+                <div>{explainDelta.segmentLine}</div>
+                <div className="mt-0.5">{explainDelta.suggestion}</div>
+              </div>
+
+              <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+                <span>
+                  Baseline stays fixed until you reset it. Handy when you’re exploring
+                  multiple what-if scenarios.
+                </span>
+                <button
+                  type="button"
+                  className="rounded border border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-slate-50"
+                  onClick={() => setBaselineKPIs(currentKPIs)}
+                >
+                  Set baseline to now
+                </button>
+              </div>
+            </details>
+          </div>
+        )}
       </div>
 
       <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4 min-h-screen print-grid-1 print:gap-2">
