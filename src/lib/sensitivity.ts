@@ -1,7 +1,7 @@
-// src/lib/sensitivity.ts
+﻿// src/lib/sensitivity.ts
 import { choiceShares } from "./choice";
 import { computePocketPrice, type Leakages } from "./waterfall";
-import type { Segment } from "./segments";
+import type { Segment, Tier } from "./segments";
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
@@ -57,19 +57,21 @@ export type TornadoRow = {
 
 export type TornadoOpts = {
   usePocket?: boolean;  // default false (list). true => pocket
-  priceBump?: number;   // ±$ on ladder
-  costBump?: number;    // ±$ on unit cost
-  pctSmall?: number;    // ±pp for FX/refunds (0.02 = 2pp)
-  payPct?: number;      // ±pp for processor %
-  payFixed?: number;    // ±$ for processor fixed
-  refBump?: number;     // ±$ shift in ref price
-  segTilt?: number;     // ± share tilt between first two segments
+  priceBump?: number;   // delta$ on ladder
+  priceBumps?: Partial<Record<Tier, number>>;
+  costBump?: number;    // delta$ on unit cost
+  pctSmall?: number;    // deltapp for FX/refunds (0.02 = 2pp)
+  payPct?: number;      // deltapp for processor %
+  payFixed?: number;    // delta$ for processor fixed
+  refBump?: number;     // delta$ shift in ref price
+  segTilt?: number;     // delta share tilt between first two segments
 };
 
 export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
   const {
     usePocket = false,
     priceBump = 5,
+    priceBumps,
     costBump  = 2,
     pctSmall  = 0.02,
     payPct    = 0.005,
@@ -79,6 +81,16 @@ export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
   } = o;
 
   const evalProfit = usePocket ? evalProfitPocket : evalProfitList;
+
+  const bumpFor = (tier: Tier) => {
+    const raw = priceBumps?.[tier];
+    const fallback = Math.max(0.01, priceBump);
+    if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+      return raw;
+    }
+    return fallback;
+  };
+
   const base = evalProfit(s0);
 
   const rows: TornadoRow[] = [];
@@ -93,9 +105,9 @@ export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
   }
 
   // Prices
-  vary((s, sign) => { s.prices.good   += sign * priceBump; }, "Good price");
-  vary((s, sign) => { s.prices.better += sign * priceBump; }, "Better price");
-  vary((s, sign) => { s.prices.best   += sign * priceBump; }, "Best price");
+  vary((s, sign) => { s.prices.good   += sign * bumpFor("good"); }, "Good price");
+  vary((s, sign) => { s.prices.better += sign * bumpFor("better"); }, "Better price");
+  vary((s, sign) => { s.prices.best   += sign * bumpFor("best"); }, "Best price");
 
   // Costs
   vary((s, sign) => { s.costs.good   = Math.max(0, s.costs.good   + sign * costBump); }, "Good cost");
@@ -136,3 +148,7 @@ export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
   );
   return rows;
 }
+
+
+
+

@@ -34,6 +34,7 @@ import { tornadoProfit } from "./lib/sensitivity";
 
 import { simulateCohort } from "./lib/simCohort";
 import MiniLine from "./components/MiniLine";
+import SegmentCards from "./components/SegmentCards";
 
 import { pocketCoverage } from "./lib/coverage";
 
@@ -51,6 +52,7 @@ import DataImport from "./components/DataImport";
 import SalesImport from "./components/SalesImport";
 import Modal from "./components/Modal";
 import ErrorBoundary from "./components/ErrorBoundary";
+import OnboardingOverlay from "./components/OnboardingOverlay";
 import { useStickyState } from "./lib/useStickyState";
 
 import { preflight, fetchWithRetry } from "./lib/net";
@@ -71,6 +73,39 @@ const WATERFALL_LEGEND = [
   { key: "fx", label: "FX", infoId: "waterfall.step.fx", aria: "What does the FX step represent?" },
   { key: "refunds", label: "Refunds", infoId: "waterfall.step.refunds", aria: "How are refunds handled?" },
   { key: "pocket", label: "Pocket", infoId: "waterfall.step.pocket", aria: "What is pocket price?" },
+] as const;
+
+const TIER_ORDER: readonly Tier[] = ["good", "better", "best"] as const;
+
+const ONBOARDING_STEPS = [
+  {
+    id: "start-ladder",
+    title: "Tune your Good/Better/Best ladder",
+    body: "Use the Scenario panel to set list prices, feature levels, and leakages. KPIs update instantly so you can narrate what changes.",
+    targetId: "scenario",
+    helper: "Each slider change is logged inside the Scenario Journal.",
+  },
+  {
+    id: "import",
+    title: "Import sales logs & estimate segments",
+    body: "Click the Import Sales CSV button to upload historical choice logs and fit latent-class segments without leaving the browser.",
+    targetId: "sales-import-trigger",
+    helper: "Need a dataset? Download the sample CSV inside the modal.",
+  },
+  {
+    id: "optimize",
+    title: "Run the Global Optimizer",
+    body: "Set your margin floors and run the optimizer to see a recomputed ladder plus a micro-explainer for why those prices make sense.",
+    targetId: "global-optimizer",
+    helper: "Pocket vs list margin plus charm-price toggles live here.",
+  },
+  {
+    id: "compare",
+    title: "Compare ladders & export",
+    body: "Pin scenarios on the compare board, generate short links, and use Print for a PDF-ready narrative.",
+    targetId: "compare-board",
+    helper: "Charts and KPIs are print friendly, so exports look polished.",
+  },
 ] as const;
 
 type SaveError = {
@@ -478,6 +513,24 @@ export default function App() {
     } catch { /* no-op */ }
   }, []);
 
+  const [onboardingSeen, setOnboardingSeen] = useStickyState("po:onboarding-v1", false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+
+  useEffect(() => {
+    if (!onboardingSeen) setShowOnboarding(true);
+  }, [onboardingSeen]);
+
+  const handleTourStart = useCallback(() => {
+    setOnboardingStep(0);
+    setShowOnboarding(true);
+  }, []);
+
+  const handleTourDismiss = useCallback(() => {
+    setShowOnboarding(false);
+    setOnboardingSeen(true);
+  }, [setOnboardingSeen]);
+
   // Draft value for Best while dragging, and the drag start (for the "from" price)
   const [prices, setPrices] = useStickyState("po:prices", { good: 9, better: 15, best: 25 });
 
@@ -640,6 +693,9 @@ export default function App() {
 
   // ADD: latent-class segments state
   const [segments, setSegments] = useState<Segment[]>(defaultSegments);
+  const [importerRanges, setImporterRanges] = useState<
+    Partial<Record<Tier, { min: number; max: number }>> | null
+  >(null);
 
 
   // Estimate model once from synthetic data
@@ -681,6 +737,7 @@ export default function App() {
               tornadoPocket?: boolean;
               tornadoPriceBump?: number;
               tornadoPctBump?: number;
+              tornadoRangeMode?: "symmetric" | "data";
               retentionPct?: number;
               kpiFloorAdj?: number;
             };
@@ -703,6 +760,12 @@ export default function App() {
           }
           if (typeof scenario.analysis.tornadoPctBump === "number") {
             setTornadoPctBump(scenario.analysis.tornadoPctBump);
+          }
+          if (
+            scenario.analysis.tornadoRangeMode === "symmetric" ||
+            scenario.analysis.tornadoRangeMode === "data"
+          ) {
+            setTornadoRangeMode(scenario.analysis.tornadoRangeMode);
           }
           if (typeof scenario.analysis.retentionPct === "number") {
             setRetentionPct(scenario.analysis.retentionPct);
@@ -1100,8 +1163,64 @@ export default function App() {
 
   // ---- Tornado sensitivity data ----
   const [tornadoPocket, setTornadoPocket] = useState(true);
-  const [tornadoPriceBump, setTornadoPriceBump] = useState(5); // $
+  const [tornadoPriceBump, setTornadoPriceBump] = useState(10); // percent span for symmetric mode
+  const [tornadoRangeMode, setTornadoRangeMode] = useState<"symmetric" | "data">("symmetric");
   const [tornadoPctBump, setTornadoPctBump] = useState(2); // pp
+
+  const dataDrivenBumps = useMemo(() => {
+    if (!importerRanges) return null;
+    const map: Partial<Record<Tier, number>> = {};
+    TIER_ORDER.forEach((tier) => {
+      const stats = importerRanges[tier];
+      if (stats && stats.max > stats.min) {
+        map[tier] = Math.max(0.25, (stats.max - stats.min) / 2);
+      }
+    });
+    return Object.keys(map).length ? map : null;
+  }, [importerRanges]);
+
+  useEffect(() => {
+    if (tornadoRangeMode === "data" && !dataDrivenBumps) {
+      setTornadoRangeMode("symmetric");
+    }
+  }, [tornadoRangeMode, dataDrivenBumps]);
+
+  const computePriceBumps = useCallback(
+    (priceSet: Prices): Prices => {
+      const pct = Math.max(1, Math.min(50, tornadoPriceBump)) / 100;
+      const symmetric: Prices = {
+        good: Math.max(0.25, priceSet.good * pct),
+        better: Math.max(0.25, priceSet.better * pct),
+        best: Math.max(0.25, priceSet.best * pct),
+      };
+      if (tornadoRangeMode === "data" && dataDrivenBumps) {
+        return {
+          good: dataDrivenBumps.good && dataDrivenBumps.good > 0 ? dataDrivenBumps.good : symmetric.good,
+          better: dataDrivenBumps.better && dataDrivenBumps.better > 0 ? dataDrivenBumps.better : symmetric.better,
+          best: dataDrivenBumps.best && dataDrivenBumps.best > 0 ? dataDrivenBumps.best : symmetric.best,
+        };
+      }
+      return symmetric;
+    },
+    [tornadoPriceBump, tornadoRangeMode, dataDrivenBumps]
+  );
+
+  const avgFromBumps = useCallback((map: Prices) => {
+    const vals = TIER_ORDER.map((tier) => map[tier]).filter(
+      (v) => Number.isFinite(v) && v > 0
+    );
+    if (!vals.length) return 1;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  }, []);
+
+  const dataRangeSummary = useMemo(() => {
+    if (!dataDrivenBumps) return null;
+    return TIER_ORDER.map((tier) => {
+      const delta = dataDrivenBumps[tier];
+      const label = tier.charAt(0).toUpperCase() + tier.slice(1);
+      return delta ? `${label} ±$${delta.toFixed(2)}` : `${label} —`;
+    }).join(" · ");
+  }, [dataDrivenBumps]);
 
   const scenarioForTornado = useMemo(
     () => ({
@@ -1117,9 +1236,12 @@ export default function App() {
   );
 
   const tornadoRows = useMemo(() => {
+    const bumps = computePriceBumps(prices);
+    const avgSpan = avgFromBumps(bumps);
     return tornadoProfit(scenarioForTornado, {
       usePocket: tornadoPocket,
-      priceBump: tornadoPriceBump,
+      priceBump: avgSpan,
+      priceBumps: bumps,
       costBump: 2,
       pctSmall: tornadoPctBump / 100,
       payPct: tornadoPctBump / 200, // half as aggressive as generic pct
@@ -1132,7 +1254,14 @@ export default function App() {
       deltaLow: r.deltaLow,
       deltaHigh: r.deltaHigh,
     }));
-  }, [scenarioForTornado, tornadoPocket, tornadoPriceBump, tornadoPctBump]);
+  }, [
+    scenarioForTornado,
+    tornadoPocket,
+    tornadoPctBump,
+    computePriceBumps,
+    avgFromBumps,
+    prices,
+  ]);
 
   // ---- Optimizer (quick grid) ----
   // A fast, in-component grid optimizer used for compare/tornado visuals.
@@ -1196,44 +1325,49 @@ export default function App() {
   }, [optResult, prices, costs, leak, optConstraints, optimizerProfitDelta]);
 
   // ---- Tornado data (current & optimized) ----
-  const tornadoRowsCurrent = useMemo(
-    () =>
-      tornadoProfit(
-        { N, prices, costs, features, segments, refPrices, leak },
-        {
-          usePocket: tornadoPocket,
-          priceBump: tornadoPriceBump,
-          pctSmall: tornadoPctBump / 100,
-          payPct: tornadoPctBump / 200,
-        }
-      ).map((r) => ({
-        name: r.name,
-        base: r.base,
-        deltaLow: r.deltaLow,
-        deltaHigh: r.deltaHigh,
-      })),
-    [
-      N,
-      prices,
-      costs,
-      features,
-      segments,
-      refPrices,
-      leak,
-      tornadoPocket,
-      tornadoPriceBump,
-      tornadoPctBump,
-    ]
-  );
+  const tornadoRowsCurrent = useMemo(() => {
+    const bumps = computePriceBumps(prices);
+    const avgSpan = avgFromBumps(bumps);
+    return tornadoProfit(
+      { N, prices, costs, features, segments, refPrices, leak },
+      {
+        usePocket: tornadoPocket,
+        priceBump: avgSpan,
+        priceBumps: bumps,
+        pctSmall: tornadoPctBump / 100,
+        payPct: tornadoPctBump / 200,
+      }
+    ).map((r) => ({
+      name: r.name,
+      base: r.base,
+      deltaLow: r.deltaLow,
+      deltaHigh: r.deltaHigh,
+    }));
+  }, [
+    N,
+    prices,
+    costs,
+    features,
+    segments,
+    refPrices,
+    leak,
+    tornadoPocket,
+    tornadoPctBump,
+    computePriceBumps,
+    avgFromBumps,
+  ]);
 
   const tornadoRowsOptim = useMemo(() => {
     if (!quickOpt.best) return [];
     const p = quickOpt.best;
+    const bumps = computePriceBumps(p);
+    const avgSpan = avgFromBumps(bumps);
     return tornadoProfit(
       { N, prices: p, costs, features, segments, refPrices, leak },
       {
         usePocket: tornadoPocket,
-        priceBump: tornadoPriceBump,
+        priceBump: avgSpan,
+        priceBumps: bumps,
         pctSmall: tornadoPctBump / 100,
         payPct: tornadoPctBump / 200,
       }
@@ -1252,8 +1386,9 @@ export default function App() {
     refPrices,
     leak,
     tornadoPocket,
-    tornadoPriceBump,
     tornadoPctBump,
+    computePriceBumps,
+    avgFromBumps,
   ]);
 
   // Cohort retention (percent, per-month). Default 92%.
@@ -1292,6 +1427,7 @@ export default function App() {
     tornadoPocket: boolean;
     tornadoPriceBump: number;
     tornadoPctBump: number;
+    tornadoRangeMode: "symmetric" | "data";
     retentionPct: number;
     kpiFloorAdj: number;
   }) {
@@ -1307,6 +1443,7 @@ export default function App() {
         tornadoPocket: args.tornadoPocket,
         tornadoPriceBump: args.tornadoPriceBump,
         tornadoPctBump: args.tornadoPctBump,
+        tornadoRangeMode: args.tornadoRangeMode,
         retentionPct: args.retentionPct,
         kpiFloorAdj: args.kpiFloorAdj,
       },
@@ -1381,6 +1518,7 @@ export default function App() {
         tornadoPocket,
         tornadoPriceBump,
         tornadoPctBump,
+        tornadoRangeMode,
         retentionPct,
         kpiFloorAdj,
       });
@@ -1448,6 +1586,7 @@ export default function App() {
       tornadoPocket,
       tornadoPriceBump,
       tornadoPctBump,
+      tornadoRangeMode,
       retentionPct,
       kpiFloorAdj,
     });
@@ -1478,6 +1617,12 @@ export default function App() {
         setTornadoPriceBump(sc.analysis.tornadoPriceBump);
       if (typeof sc.analysis.tornadoPctBump === "number")
         setTornadoPctBump(sc.analysis.tornadoPctBump);
+      if (
+        sc.analysis.tornadoRangeMode === "symmetric" ||
+        sc.analysis.tornadoRangeMode === "data"
+      ) {
+        setTornadoRangeMode(sc.analysis.tornadoRangeMode);
+      }
       if (typeof sc.analysis.retentionPct === "number")
         setRetentionPct(sc.analysis.retentionPct);
       if (typeof sc.analysis.kpiFloorAdj === "number")
@@ -1573,7 +1718,7 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="no-print">
+              <div className="no-print flex gap-2">
                 <button
                   type="button"
                   onClick={() => window.print()}
@@ -1582,6 +1727,14 @@ export default function App() {
                   title="Print this analysis"
                 >
                   Print
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTourStart}
+                  className="px-3 py-1 rounded-md border text-sm hover:bg-gray-50"
+                  aria-label="Open guided tour"
+                >
+                  Guided tour
                 </button>
               </div>
             </div>
@@ -1928,20 +2081,21 @@ export default function App() {
 
               <button
                 className="text-xs border px-2 py-1 rounded"
-                onClick={() => {
-                  const snap = buildScenarioSnapshot({
-                    prices,
-                    costs,
-                    features,
-                    refPrices,
-                    leak,
-                    segments,
-                    tornadoPocket,
-                    tornadoPriceBump,
-                    tornadoPctBump,
-                    retentionPct,
-                    kpiFloorAdj,
-                  });
+              onClick={() => {
+                const snap = buildScenarioSnapshot({
+                  prices,
+                  costs,
+                  features,
+                  refPrices,
+                  leak,
+                  segments,
+                  tornadoPocket,
+                  tornadoPriceBump,
+                  tornadoPctBump,
+                  tornadoRangeMode,
+                  retentionPct,
+                  kpiFloorAdj,
+                });
                   const blob = new Blob([JSON.stringify(snap, null, 2)], {
                     type: "application/json",
                   });
@@ -2001,6 +2155,12 @@ export default function App() {
                           setTornadoPriceBump(sc.analysis.tornadoPriceBump);
                         if (typeof sc.analysis.tornadoPctBump === "number")
                           setTornadoPctBump(sc.analysis.tornadoPctBump);
+                        if (
+                          sc.analysis.tornadoRangeMode === "symmetric" ||
+                          sc.analysis.tornadoRangeMode === "data"
+                        ) {
+                          setTornadoRangeMode(sc.analysis.tornadoRangeMode);
+                        }
                         if (typeof sc.analysis.retentionPct === "number")
                           setRetentionPct(sc.analysis.retentionPct);
                         if (typeof sc.analysis.kpiFloorAdj === "number")
@@ -2042,6 +2202,7 @@ export default function App() {
               {/* Sales data importer (opens modal) */}
               <div className="mt-2">
                 <button
+                  id="sales-import-trigger"
                   className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
                   onClick={() => setShowSalesImport(true)}
                   title="Upload sales logs CSV and estimate latent-class segments"
@@ -2120,10 +2281,17 @@ export default function App() {
                 Use compact column names if possible; unknowns can be left blank.
               </div>
               <SalesImport
-                onApply={({ segments, diagnostics }) => {
+                onApply={({ segments, diagnostics, stats }) => {
                   const segs = mapFitToSegments(segments);
-                  setSegments(segs);                         // whatever your state setter is
-                  pushJ?.(`[${now()}] Estimated from sales data (logLik=${Math.round(diagnostics.logLik)}, iters=${diagnostics.iters}, converged=${diagnostics.converged})`);
+                  setSegments(segs);
+                  setImporterRanges(stats?.priceRange ?? null);
+                  setFitInfo(diagnostics);
+                  pushJ?.(
+                    `[${now()}] Estimated from sales data (logLik=${Math.round(
+                      diagnostics.logLik
+                    )}, iters=${diagnostics.iters}, converged=${diagnostics.converged})`
+                  );
+                  toast("success", "Applied latent-class estimate");
                 }}
                 onToast={(kind, msg) => toast(kind, msg)}
                 onDone={() => setShowSalesImport(false)}
@@ -2336,19 +2504,52 @@ export default function App() {
                 />
                 Compute using <span className="font-medium">pocket</span> margin
               </label>
+
               <label className="flex items-center gap-1">
-                Price bump $
-                <input
-                  type="number"
-                  className="border rounded px-2 h-7 w-16"
-                  value={tornadoPriceBump}
+                Range basis
+                <select
+                  className="border rounded px-2 h-7 bg-white"
+                  value={tornadoRangeMode}
                   onChange={(e) =>
-                    setTornadoPriceBump(Number(e.target.value) || 0)
+                    setTornadoRangeMode(
+                      e.target.value as "symmetric" | "data"
+                    )
                   }
-                />
+                >
+                  <option value="symmetric">±{tornadoPriceBump}% symmetric</option>
+                  <option value="data" disabled={!dataDrivenBumps}>
+                    Data-driven (CSV)
+                  </option>
+                </select>
               </label>
+
+              {tornadoRangeMode === "symmetric" ? (
+                <label className="flex items-center gap-1">
+                  Span
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="1"
+                    max="40"
+                    className="border rounded px-2 h-7 w-16"
+                    value={tornadoPriceBump}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (!Number.isFinite(v)) return;
+                      setTornadoPriceBump(Math.max(1, Math.min(40, v)));
+                    }}
+                  />
+                  <span>%</span>
+                </label>
+              ) : (
+                <div className="text-[11px] text-slate-600 min-w-[12rem]">
+                  {dataRangeSummary ??
+                    "Import a sales CSV to unlock data-driven ranges."}
+                </div>
+              )}
+
               <label className="flex items-center gap-1">
-                % bump (FX/Refunds/Payment)
+                Leak bump (FX/Refunds/Payment)
                 <input
                   type="number"
                   step="0.5"
@@ -3650,6 +3851,10 @@ export default function App() {
             })()}
           </Section>
 
+          <Section id="segment-stories" title="Segment stories">
+            <SegmentCards segments={segments} />
+          </Section>
+
           <Section id="segments-mix" title="Segments (mix)">
             <details open className="text-xs">
               <summary className="cursor-pointer select-none font-medium mb-2">
@@ -3749,6 +3954,19 @@ export default function App() {
       </main>
       <StickyToolbelt />
       <Toasts />
+      <OnboardingOverlay
+        open={showOnboarding}
+        stepIndex={onboardingStep}
+        steps={ONBOARDING_STEPS}
+        onBack={() => setOnboardingStep((s) => Math.max(0, s - 1))}
+        onNext={() =>
+          setOnboardingStep((s) =>
+            Math.min(ONBOARDING_STEPS.length - 1, s + 1)
+          )
+        }
+        onDismiss={handleTourDismiss}
+        onJump={(id) => scrollToId(id)}
+      />
     </div>
   );
 }

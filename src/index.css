@@ -133,6 +133,14 @@
   .print-space > * + * { margin-top: 8px !important; }
 }
 
+/* --- Onboarding overlay helpers --- */
+.onboarding-highlight {
+  position: relative;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.75), 0 0 0 6px rgba(255, 255, 255, 0.9);
+  border-radius: 14px;
+  transition: box-shadow 160ms ease;
+}
+
 @media screen {
   .left-rail-scroll {
     overflow-x: visible;

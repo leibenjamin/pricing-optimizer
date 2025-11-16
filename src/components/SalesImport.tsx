@@ -25,9 +25,12 @@ const TIER_LABELS: Record<TierKey, string> = {
 
 type SegmentOut = { name: string; weight: number; beta: { price: number; featA: number; featB: number } };
 type Diagnostics = { logLik: number; iters: number; converged: boolean };
+type FitStats = {
+  priceRange?: Partial<Record<TierKey, { min: number; max: number }>>;
+};
 
 export default function SalesImport(props: {
-  onApply: (fit: { segments: SegmentOut[]; diagnostics: Diagnostics }) => void;
+  onApply: (fit: { segments: SegmentOut[]; diagnostics: Diagnostics; stats?: FitStats }) => void;
   onToast?: (kind: "success" | "error" | "info", msg: string) => void;
   onDone?: () => void;
 }) {
@@ -180,8 +183,24 @@ export default function SalesImport(props: {
       });
 
 
+      const priceRangeByTier = PRICE_KEYS.reduce<Partial<Record<TierKey, { min: number; max: number }>>>(
+        (acc, key, idx) => {
+          const stats = preflight?.priceRange?.[key];
+          if (stats) {
+            const tier = TIER_KEYS[idx];
+            acc[tier] = { min: stats.min, max: stats.max };
+          }
+          return acc;
+        },
+        {}
+      );
+      const hasRange = Object.keys(priceRangeByTier).length > 0;
+
       onToast?.("success", "Estimated coefficients from sales data");
-      onApply(fit);
+      onApply({
+        ...fit,
+        stats: hasRange ? { priceRange: priceRangeByTier } : undefined,
+      });
       onDone?.();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
