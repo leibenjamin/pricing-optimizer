@@ -122,7 +122,7 @@ function Section({
   actions,
   children,
   className = "",
-: {
+}: {
   title: ReactNode;
   id?: string;
   actions?: ReactNode;
