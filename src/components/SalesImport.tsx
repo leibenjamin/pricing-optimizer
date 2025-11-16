@@ -4,7 +4,24 @@ import Papa from "papaparse";
 import type { SalesMapping } from "../lib/salesSchema";
 import { inferMapping, validateMapping } from "../lib/salesSchema";
 import type { LongRow, ParsedResp, SampleResp, ParseReq } from "../workers/salesParser";
-import { csvTemplate } from "../lib/csv";
+import { downloadBlob } from "../lib/download";
+import { buildSalesSampleCSV } from "../lib/salesSample";
+
+type PriceKey = "price_good" | "price_better" | "price_best";
+type TierKey = "good" | "better" | "best";
+
+const PRICE_KEYS: PriceKey[] = ["price_good", "price_better", "price_best"];
+const TIER_KEYS: TierKey[] = ["good", "better", "best"];
+const PRICE_LABELS: Record<PriceKey, string> = {
+  price_good: "Good price",
+  price_better: "Better price",
+  price_best: "Best price",
+};
+const TIER_LABELS: Record<TierKey, string> = {
+  good: "Good",
+  better: "Better",
+  best: "Best",
+};
 
 type SegmentOut = { name: string; weight: number; beta: { price: number; featA: number; featB: number } };
 type Diagnostics = { logLik: number; iters: number; converged: boolean };
@@ -23,19 +40,44 @@ export default function SalesImport(props: {
   const fileTextRef = useRef<string>("");
   const choiceSelectRef = useRef<HTMLSelectElement | null>(null);
 
-  type PriceKey = "price_good" | "price_better" | "price_best";
   type Offenders = { bad: number; total: number; first3: number[] };
 
   const [preflight, setPreflight] = useState<{
     rows: number;
     approxChoices: number;
+    approxNone: number;
     priceQuality: Partial<Record<PriceKey, Offenders>>;
+    priceRange: Partial<Record<PriceKey, { min: number; max: number }>>;
+    shownShare: Partial<Record<TierKey, { shown: number; total: number }>>;
   } | null>(null);
 
   const shownUnmapped = useMemo(
     () => !mapping.shown_good && !mapping.shown_better && !mapping.shown_best,
     [mapping.shown_good, mapping.shown_better, mapping.shown_best]
   );
+
+  const normalizeChoiceCell = (v: unknown): ("good" | "better" | "best" | "none") | null => {
+    if (v == null) return null;
+    const s = String(v).trim().toLowerCase();
+    if (!s) return null;
+    if (s === "none" || s === "0" || s === "-" || s === "n") return "none";
+    if (s === "good" || s === "g" || s === "1") return "good";
+    if (s === "better" || s === "b" || s === "2") return "better";
+    if (s === "best" || s === "3") return "best";
+    return null;
+  };
+
+  const toShownFlag = (v: unknown): 0 | 1 => {
+    if (v === 0 || v === "0" || v === false) return 0;
+    if (v == null || v === "") return 1;
+    if (typeof v === "string") {
+      const s = v.trim().toLowerCase();
+      if (s === "0" || s === "no" || s === "false") return 0;
+    }
+    const n = Number(v);
+    if (Number.isFinite(n)) return n > 0 ? 1 : 0;
+    return 1;
+  };
 
   function handleFile(f: File) {
     setFileName(f.name);
@@ -167,13 +209,25 @@ export default function SalesImport(props: {
         price_better: idx(mapping.price_better),
         price_best: idx(mapping.price_best),
       } as Record<PriceKey, number>,
+      shown: {
+        good: idx(mapping.shown_good),
+        better: idx(mapping.shown_better),
+        best: idx(mapping.shown_best),
+      } as Record<TierKey, number>,
     };
 
     // Parse just enough for diagnostics (no dynamic typing; we want to inspect raw cells)
     const text = fileTextRef.current;
     const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
     if (lines.length < 2) {
-      setPreflight({ rows: 0, approxChoices: 0, priceQuality: {} });
+      setPreflight({
+        rows: 0,
+        approxChoices: 0,
+        approxNone: 0,
+        priceQuality: {},
+        priceRange: {},
+        shownShare: {},
+      });
       return;
     }
 
@@ -185,13 +239,8 @@ export default function SalesImport(props: {
     });
 
     const rows = (parsed.data as string[][]).slice(1); // drop header row
-    const approxChoiceOK = (v: unknown) => {
-      if (v == null) return false;
-      const s = String(v).trim().toLowerCase();
-      return s === "good" || s === "better" || s === "best" || s === "1" || s === "2" || s === "3";
-    };
-
     const priceQuality: Partial<Record<PriceKey, Offenders>> = {};
+    const priceRange: Partial<Record<PriceKey, { min: number; max: number }>> = {};
     (Object.keys(I.price) as PriceKey[]).forEach((k) => {
       const col = I.price[k];
       if (col < 0) return;
@@ -205,25 +254,92 @@ export default function SalesImport(props: {
         if (!Number.isFinite(num)) {
           bad++;
           if (first3.length < 3) first3.push(r + 2); // +2 => 1 for header, 1 for 1-indexed rows
+        } else {
+          const stats = priceRange[k];
+          if (!stats) {
+            priceRange[k] = { min: num, max: num };
+          } else {
+            stats.min = Math.min(stats.min, num);
+            stats.max = Math.max(stats.max, num);
+          }
         }
       }
       priceQuality[k] = { bad, total, first3 };
     });
 
     let approxChoices = 0;
+    let approxNone = 0;
     if (I.choice >= 0) {
       for (let r = 0; r < rows.length; r++) {
         const cell = rows[r][I.choice];
-        if (approxChoiceOK(cell)) approxChoices++;
+        const choice = normalizeChoiceCell(cell);
+        if (choice) {
+          approxChoices++;
+          if (choice === "none") approxNone++;
+        }
       }
     }
+
+    const shownShare: Partial<Record<TierKey, { shown: number; total: number }>> = {};
+    (["good", "better", "best"] as TierKey[]).forEach((tier) => {
+      const col = I.shown[tier];
+      if (col < 0) return;
+      let shown = 0;
+      let total = 0;
+      for (let r = 0; r < rows.length; r++) {
+        const cell = rows[r][col];
+        if (cell == null || String(cell).trim() === "") continue;
+        total++;
+        shown += toShownFlag(cell);
+      }
+      shownShare[tier] = { shown, total };
+    });
 
     setPreflight({
       rows: rows.length,
       approxChoices,
+      approxNone,
       priceQuality,
+      priceRange,
+      shownShare,
     });
   }, [headers, mapping]);
+
+  const fmtCurrency = (n: number | null | undefined) => {
+    if (typeof n !== "number" || !Number.isFinite(n)) return "--";
+    const decimals = Math.abs(n) >= 100 ? 0 : 2;
+    return `$${n.toFixed(decimals)}`;
+  };
+
+  const diagWarnings = useMemo(() => {
+    if (!preflight) return [];
+    const warnings: string[] = [];
+    if (preflight.rows > 0 && preflight.approxChoices === 0) {
+      warnings.push("No recognizable choices yet. Check the choice column mapping or values.");
+    }
+    if (preflight.approxChoices > 0) {
+      const noneShare = preflight.approxNone / preflight.approxChoices;
+      if (noneShare > 0.7) {
+        warnings.push(`Choice column is ${Math.round(noneShare * 100)}% "none" -- is that expected?`);
+      }
+    }
+    PRICE_KEYS.forEach((k) => {
+      const range = preflight.priceRange?.[k];
+      if (!range) return;
+      if (Math.abs(range.max - range.min) < 0.01) {
+        warnings.push(`${PRICE_LABELS[k]} looks constant at ${fmtCurrency(range.min)}. Double-check mapping.`);
+      }
+    });
+    TIER_KEYS.forEach((tier) => {
+      const stats = preflight.shownShare?.[tier];
+      if (!stats || stats.total === 0) return;
+      const share = stats.shown / stats.total;
+      if (share < 0.8) {
+        warnings.push(`${TIER_LABELS[tier]} shown only ${Math.round(share * 100)}% of mapped rows.`);
+      }
+    });
+    return warnings;
+  }, [preflight]);
 
   function pct(bad: number, total: number) {
     if (!total) return 0;
@@ -348,6 +464,90 @@ export default function SalesImport(props: {
         </div>
       )}
 
+      {preflight && (
+        <div className="border rounded p-3 bg-slate-50 text-[11px] space-y-2">
+          <div className="flex items-center justify-between text-[12px] font-semibold text-gray-800">
+            <span>Diagnostics snapshot</span>
+            <span className="text-[10px] text-gray-500">
+              {preflight.rows.toLocaleString()} rows scanned
+            </span>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div>
+              <div className="text-[10px] uppercase text-gray-500">Choice occasions</div>
+              <div className="text-sm font-semibold text-gray-800">
+                {preflight.approxChoices.toLocaleString()}
+              </div>
+              <div className="text-[10px] text-gray-600">
+                {preflight.rows
+                  ? `${((preflight.approxChoices / Math.max(1, preflight.rows)) * 100).toFixed(1)}% of rows`
+                  : "No rows yet"}
+                {preflight.approxChoices > 0 && (
+                  <>
+                    {" · "}
+                    {((preflight.approxNone / Math.max(1, preflight.approxChoices)) * 100).toFixed(1)}% "none"
+                  </>
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase text-gray-500">Quick take</div>
+              <div className="text-sm font-semibold text-gray-800">
+                {diagWarnings.length === 0 ? "Looks reasonable" : "Needs attention"}
+              </div>
+              {diagWarnings.length > 0 && (
+                <div className="text-[10px] text-amber-700">
+                  {diagWarnings.length} potential issue{diagWarnings.length > 1 ? "s" : ""}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            {PRICE_KEYS.map((k) => {
+              const stats = preflight.priceRange?.[k];
+              return (
+                <div key={k}>
+                  <div className="text-[10px] uppercase text-gray-500">{PRICE_LABELS[k]}</div>
+                  <div className="text-sm font-semibold text-gray-800">
+                    {stats ? `${fmtCurrency(stats.min)} – ${fmtCurrency(stats.max)}` : "Not mapped"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            {TIER_KEYS.map((tier) => {
+              const stats = preflight.shownShare?.[tier];
+              const share =
+                stats && stats.total > 0 ? Math.round((stats.shown / stats.total) * 100) : null;
+              return (
+                <div key={tier}>
+                  <div className="text-[10px] uppercase text-gray-500">{TIER_LABELS[tier]} shown</div>
+                  <div className="text-sm font-semibold text-gray-800">
+                    {share == null
+                      ? shownUnmapped
+                        ? "Assuming 100%"
+                        : "Not mapped"
+                      : `${share}% of rows`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {diagWarnings.length > 0 && (
+            <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 space-y-0.5">
+              {diagWarnings.map((msg, idx) => (
+                <div key={`${msg}-${idx}`}>⚠ {msg}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Bottom actions (sticky inside card) */}
       <div className="mt-3 border-t pt-2 sticky bottom-0 bg-white/90 backdrop-blur supports-backdrop-filter:bg-white/70">
         <div className="flex flex-wrap items-center gap-2">
@@ -388,16 +588,12 @@ export default function SalesImport(props: {
             type="button"
             className="text-[11px] underline text-blue-600"
             onClick={() => {
-              const blob = new Blob([csvTemplate()], { type: "text/csv;charset=utf-8" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = "scenario_template.csv";
-              a.click();
-              setTimeout(() => URL.revokeObjectURL(url), 500);
+              const csv = buildSalesSampleCSV(200);
+              downloadBlob(csv, "sales_sample.csv", "text/csv;charset=utf-8");
+              onToast?.("info", "Downloaded sample sales CSV (good/better/best)");
             }}
           >
-            Open sample CSV
+            Download sample CSV
           </button>
         </div>
 
