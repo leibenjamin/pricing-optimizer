@@ -416,12 +416,45 @@ export default function App() {
   }
 
   function scrollToId(id: string) {
+    if (typeof document === "undefined") return;
     const el = document.getElementById(id);
     if (!el) return;
-    // Account for the sticky header height (KPIs + nav)
-    const stickyHeight = 80; // tweak if needed (px)
-    const top = el.getBoundingClientRect().top + window.scrollY - stickyHeight;
-    window.scrollTo({ top, behavior: "smooth" });
+    const stickyHeight = 90;
+    const scrollParent = findScrollableParent(el);
+    const docElement = document.scrollingElement || document.documentElement;
+
+    if (!scrollParent || scrollParent === document.body || scrollParent === docElement) {
+      const top = el.getBoundingClientRect().top + window.scrollY - stickyHeight;
+      window.scrollTo({ top, behavior: "smooth" });
+      return;
+    }
+
+    const parentRect = scrollParent.getBoundingClientRect();
+    const elementRect = el.getBoundingClientRect();
+    const targetTop = elementRect.top - parentRect.top + scrollParent.scrollTop - 12;
+    scrollParent.scrollTo({ top: targetTop, behavior: "smooth" });
+
+    const containerRect = scrollParent.getBoundingClientRect();
+    if (containerRect.top < stickyHeight) {
+      const adjust = containerRect.top - stickyHeight;
+      window.scrollBy({ top: adjust, behavior: "smooth" });
+    }
+  }
+
+  function findScrollableParent(el: HTMLElement | null): HTMLElement | null {
+    if (typeof window === "undefined" || !el) return null;
+    let node = el.parentElement;
+    while (node && node !== document.body) {
+      const style = window.getComputedStyle(node);
+      if (
+        ["auto", "scroll", "overlay"].includes(style.overflowY) &&
+        node.scrollHeight > node.clientHeight
+      ) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+    return document.scrollingElement || document.documentElement;
   }
 
   // Stable, optional journal logger
@@ -437,6 +470,43 @@ export default function App() {
   const [prices, setPrices] = useStickyState("po:prices", { good: 9, better: 15, best: 25 });
 
   const [refPrices, setRefPrices] = useStickyState("po:refs", { good: 10, better: 18, best: 30 });
+
+  const priceEditStart = useRef<Record<Tier, number | null>>({
+    good: null,
+    better: null,
+    best: null,
+  });
+
+  const beginPriceEdit = useCallback(
+    (tier: Tier) => {
+      if (priceEditStart.current[tier] === null) {
+        priceEditStart.current[tier] = prices[tier];
+      }
+    },
+    [prices]
+  );
+
+  const commitPriceEdit = useCallback(
+    (tier: Tier) => {
+      const start = priceEditStart.current[tier];
+      if (start === null) return;
+      const next = prices[tier];
+      if (start !== next) {
+        pushJ(formatPriceChange(tier, start, next));
+      }
+      priceEditStart.current[tier] = null;
+    },
+    [prices, pushJ]
+  );
+
+  const updatePrice = useCallback(
+    (tier: Tier, value: number) => {
+      const safe = Number.isFinite(value) ? Math.max(0, value) : 0;
+      const rounded = Math.round(safe * 100) / 100;
+      setPrices((prev) => ({ ...prev, [tier]: rounded }));
+    },
+    [setPrices]
+  );
 
   // Track which scenario preset is currently active (purely UI-affordance)
   const [scenarioPresetId, setScenarioPresetId] = useState<string | null>(null);
@@ -463,6 +533,30 @@ export default function App() {
     pushJ(`Loaded preset: ${p.name}`);
   }, [setPrices, setCosts, setRefPrices, setLeak, pushJ]);
 
+  const sliderMax = useMemo(() => {
+    const preset = scenarioPresetId
+      ? PRESETS.find((x) => x.id === scenarioPresetId)
+      : null;
+    const presetMax = preset
+      ? Math.max(preset.prices.good, preset.prices.better, preset.prices.best)
+      : 0;
+    const currentMax = Math.max(prices.good, prices.better, prices.best);
+    const refMax = Math.max(refPrices.good, refPrices.better, refPrices.best);
+    const base = Math.max(presetMax, currentMax, refMax, 100);
+    const padded = Math.ceil((base * 1.5) / 10) * 10;
+    return Math.max(100, padded);
+  }, [
+    scenarioPresetId,
+    prices.good,
+    prices.better,
+    prices.best,
+    refPrices.good,
+    refPrices.better,
+    refPrices.best,
+  ]);
+
+  const sliderMin = 0;
+
 
   // (optional) a quick helper to set refs from current sliders
   const setRefsFromCurrent = () =>
@@ -472,8 +566,6 @@ export default function App() {
       best: prices.best,
     });
 
-  const [bestDraft, setBestDraft] = useState<number>(prices.best);
-  const [bestDragStart, setBestDragStart] = useState<number | null>(null);
   const [features, setFeatures] = useState({
     featA: { good: 1, better: 1, best: 1 },
     featB: { good: 0, better: 1, best: 1 },
@@ -553,10 +645,6 @@ export default function App() {
       converged: fit.converged,
     });
   }, []);
-
-  useEffect(() => {
-    setBestDraft(prices.best);
-  }, [prices.best]);
 
   useEffect(() => {
     const sid = new URLSearchParams(location.search).get("s");
@@ -791,10 +879,23 @@ export default function App() {
   // Demand scale for demo math
   const N = 1000;
 
-  const probs = useMemo(() => {
-    const p = { good: prices.good, better: prices.better, best: bestDraft };
-    return choiceShares(p, features, segments, refPrices);
-  }, [prices.good, prices.better, bestDraft, features, segments, refPrices]);
+  const probs = useMemo(
+    () =>
+      choiceShares(
+        { good: prices.good, better: prices.better, best: prices.best },
+        features,
+        segments,
+        refPrices
+      ),
+    [
+      prices.good,
+      prices.better,
+      prices.best,
+      features,
+      segments,
+      refPrices,
+    ]
+  );
 
   // Profit frontier: sweep Best price; keep Good/Better fixed (latent-class mix)
   const frontier = useMemo(() => {
@@ -1599,73 +1700,51 @@ export default function App() {
             <div className="shrink-0 space-y-4">
             </div>
             <div id="scenarioScroll" className="flex-1 min-h-0 overflow-y-auto pr-2">
-              {/* GOOD & BETTER: keep current immediate-commit + log-on-change behavior */}
-              {(["good", "better"] as const).map((tier) => (
+              {(["good", "better", "best"] as const).map((tier) => (
                 <div key={tier} className="space-y-1">
                   <label className="block text-sm font-medium capitalize">
-                    {tier} price (${prices[tier]})
+                    {tier} price (${prices[tier].toLocaleString(undefined, { maximumFractionDigits: 2 })})
                   </label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={prices[tier]}
-                    onChange={(e) =>
-                      setPrices((p) => {
-                        const to = Number(e.target.value);
-                        const from = p[tier];
-                        if (from !== to)
-                          pushJ(formatPriceChange(tier, from, to));
-                        return { ...p, [tier]: to };
-                      })
-                    }
-                    className="w-full"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={sliderMin}
+                      max={sliderMax}
+                      step={0.01}
+                      value={prices[tier]}
+                      onFocus={() => beginPriceEdit(tier)}
+                      onPointerDown={() => beginPriceEdit(tier)}
+                      onMouseDown={() => beginPriceEdit(tier)}
+                      onTouchStart={() => beginPriceEdit(tier)}
+                      onChange={(e) => updatePrice(tier, Number(e.target.value))}
+                      onPointerUp={() => commitPriceEdit(tier)}
+                      onPointerCancel={() => commitPriceEdit(tier)}
+                      onMouseUp={() => commitPriceEdit(tier)}
+                      onTouchEnd={() => commitPriceEdit(tier)}
+                      onBlur={() => commitPriceEdit(tier)}
+                      className="flex-1"
+                      aria-label={`${tier} price slider`}
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      inputMode="decimal"
+                      value={prices[tier]}
+                      onFocus={() => beginPriceEdit(tier)}
+                      onChange={(e) => updatePrice(tier, Number(e.target.value))}
+                      onBlur={() => commitPriceEdit(tier)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          (e.currentTarget as HTMLInputElement).blur();
+                        }
+                      }}
+                      className="w-24 border rounded px-2 py-1 text-sm"
+                      aria-label={`${tier} price input`}
+                    />
+                  </div>
                 </div>
               ))}
-
-              {/* BEST: live-drag on draft, single journal entry on release */}
-              <div className="space-y-1">
-                <label className="block text-sm font-medium capitalize">
-                  best price (${bestDraft})
-                </label>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={bestDraft}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    setBestDraft(v); // live UI + charts (because scenario uses bestDraft)
-                  }}
-                  onPointerDown={() => {
-                    setBestDragStart(prices.best); // remember where the drag started
-                  }}
-                  onPointerUp={() => {
-                    // Commit once and log once
-                    setPrices((p) => {
-                      const from = bestDragStart ?? p.best;
-                      const to = bestDraft;
-                      if (from !== to)
-                        pushJ(formatPriceChange("best", from, to));
-                      return { ...p, best: to };
-                    });
-                    setBestDragStart(null);
-                  }}
-                  onBlur={() => {
-                    // Keyboard/tab-out safety: also commit if focus leaves the slider
-                    setPrices((p) => {
-                      const from = bestDragStart ?? p.best;
-                      const to = bestDraft;
-                      if (from !== to)
-                        pushJ(formatPriceChange("best", from, to));
-                      return { ...p, best: to };
-                    });
-                    setBestDragStart(null);
-                  }}
-                  className="w-full"
-                />
-              </div>
             </div>
             <div className="grid grid-cols-3 gap-2 mt-2">
               {(["good", "better", "best"] as const).map((tier) => (
