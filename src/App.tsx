@@ -20,6 +20,7 @@ import {
   defaultSegments,
   normalizeWeights,
   type Segment,
+  type Prices,
 } from "./lib/segments";
 import { choiceShares } from "./lib/choice";
 import { type SearchRanges } from "./lib/optimize";
@@ -42,7 +43,7 @@ import { feasibilitySliceGB } from "./lib/coverage";
 import { PRESETS, type Preset } from "./lib/presets";
 import PresetPicker from "./components/PresetPicker";
 
-import { explainGaps, topDriver } from "./lib/explain";
+import { explainGaps, topDriver, explainOptimizerResult } from "./lib/explain";
 import InfoTip from "./components/InfoTip";
 
 import ActionCluster from "./components/ActionCluster";
@@ -744,6 +745,36 @@ export default function App() {
     profit: number;
   } | null>(null);
 
+  const computeScenarioProfit = useCallback(
+    (ladder: Prices, usePocket: boolean) => {
+      const probs = choiceShares(ladder, features, segments, refPrices);
+      const qty = {
+        good: Math.round(N * probs.good),
+        better: Math.round(N * probs.better),
+        best: Math.round(N * probs.best),
+      };
+
+      if (!usePocket) {
+        return (
+          qty.good * (ladder.good - costs.good) +
+          qty.better * (ladder.better - costs.better) +
+          qty.best * (ladder.best - costs.best)
+        );
+      }
+
+      const pocketGood = computePocketPrice(ladder.good, "good", leak).pocket;
+      const pocketBetter = computePocketPrice(ladder.better, "better", leak).pocket;
+      const pocketBest = computePocketPrice(ladder.best, "best", leak).pocket;
+
+      return (
+        qty.good * (pocketGood - costs.good) +
+        qty.better * (pocketBetter - costs.better) +
+        qty.best * (pocketBest - costs.best)
+      );
+    },
+    [N, features, segments, refPrices, costs, leak]
+  );
+
   function runOptimizer() {
     // cancel any in-flight run
     if (cancelRef.current) {
@@ -1140,6 +1171,29 @@ export default function App() {
     leak,
     optConstraints,
   ]);
+  const optimizerProfitDelta = useMemo(() => {
+    if (!optResult) return null;
+    const usePocket = !!optConstraints.usePocketProfit;
+    const baseProfit = computeScenarioProfit(prices, usePocket);
+    return { delta: optResult.profit - baseProfit, base: baseProfit };
+  }, [optResult, optConstraints.usePocketProfit, prices, computeScenarioProfit]);
+  const optimizerWhyLines = useMemo(() => {
+    if (!optResult) return [];
+    return explainOptimizerResult({
+      basePrices: prices,
+      optimizedPrices: optResult.prices,
+      costs,
+      leak,
+      constraints: {
+        gapGB: optConstraints.gapGB,
+        gapBB: optConstraints.gapBB,
+        marginFloor: optConstraints.marginFloor,
+        usePocketMargins: optConstraints.usePocketMargins,
+        usePocketProfit: optConstraints.usePocketProfit,
+      },
+      profitDelta: optimizerProfitDelta?.delta ?? 0,
+    });
+  }, [optResult, prices, costs, leak, optConstraints, optimizerProfitDelta]);
 
   // ---- Tornado data (current & optimized) ----
   const tornadoRowsCurrent = useMemo(
@@ -3304,6 +3358,18 @@ export default function App() {
                   <span className="text-gray-500">No result yet</span>
                 )}
               </div>
+              {optResult && optimizerWhyLines.length > 0 && (
+                <div className="mt-2 rounded border border-dashed border-gray-200 bg-slate-50 p-3">
+                  <div className="text-xs font-semibold text-slate-700 mb-1">
+                    Why these prices?
+                  </div>
+                  <ul className="list-disc ml-4 space-y-1 text-[11px] text-gray-700">
+                    {optimizerWhyLines.map((line, idx) => (
+                      <li key={idx}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <details className="text-[11px] text-gray-600">
                 <summary className="cursor-pointer select-none">
                   How ranges & floors work
