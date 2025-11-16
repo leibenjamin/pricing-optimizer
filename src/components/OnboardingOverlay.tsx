@@ -12,7 +12,7 @@ type Step = {
 export default function OnboardingOverlay(props: {
   open: boolean;
   stepIndex: number;
-  steps: Step[];
+  steps: readonly Step[];
   onBack: () => void;
   onNext: () => void;
   onDismiss: () => void;
@@ -56,7 +56,7 @@ export default function OnboardingOverlay(props: {
 
   return (
     <div
-      className="no-print fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/70 px-4"
+      className="no-print fixed inset-0 z-70 flex items-center justify-center bg-slate-900/70 px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="onboarding-heading"
@@ -89,7 +89,7 @@ export default function OnboardingOverlay(props: {
               type="button"
               className="text-xs border px-3 py-1.5 rounded bg-white hover:bg-slate-50"
               onClick={() => {
-                onJump?.(step.targetId);
+                onJump?.(step.targetId!);
               }}
             >
               Focus that section

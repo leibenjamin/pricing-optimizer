@@ -501,7 +501,10 @@ export default function App() {
       }
       node = node.parentElement;
     }
-    return document.scrollingElement || document.documentElement;
+    const root = document.scrollingElement;
+    return root && root instanceof HTMLElement
+      ? root
+      : document.documentElement;
   }
 
   // Stable, optional journal logger
@@ -802,6 +805,9 @@ export default function App() {
     usePocketProfit: false,
   });
 
+  // Demand scale for demo math
+  const N = 1000;
+
   // Result of last run
   const [optResult, setOptResult] = useState<{
     prices: { good: number; better: number; best: number };
@@ -980,9 +986,6 @@ export default function App() {
     }
     return acc;
   }
-
-  // Demand scale for demo math
-  const N = 1000;
 
   const probs = useMemo(
     () =>
@@ -2542,7 +2545,7 @@ export default function App() {
                   <span>%</span>
                 </label>
               ) : (
-                <div className="text-[11px] text-slate-600 min-w-[12rem]">
+                <div className="text-[11px] text-slate-600 min-w-48">
                   {dataRangeSummary ??
                     "Import a sales CSV to unlock data-driven ranges."}
                 </div>
@@ -3118,7 +3121,7 @@ export default function App() {
                           <InfoTip
                             id={entry.infoId}
                             ariaLabel={entry.aria}
-                            align="center"
+                            align="left"
                             className="text-slate-500"
                           />
                         </span>
