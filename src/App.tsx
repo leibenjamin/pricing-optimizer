@@ -1,6 +1,6 @@
 // src/App.tsx
 
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, type ReactNode } from "react";
 // replace direct imports:
 const FrontierChartReal = lazy(() => import("./components/FrontierChart"));
 const Tornado = lazy(() => import("./components/Tornado"));
@@ -61,6 +61,17 @@ const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 
+const WATERFALL_LEGEND = [
+  { key: "list", label: "List", infoId: "waterfall.step.list", aria: "What is the list price starting point?" },
+  { key: "promo", label: "Promo", infoId: "waterfall.step.promo", aria: "How do promo discounts work?" },
+  { key: "volume", label: "Volume", infoId: "waterfall.step.volume", aria: "What is the volume discount step?" },
+  { key: "paymentPct", label: "Payment %", infoId: "waterfall.step.paymentPct", aria: "Why is there a payment % fee?" },
+  { key: "paymentFixed", label: "Payment $", infoId: "waterfall.step.paymentFixed", aria: "Why is there a payment $ fee?" },
+  { key: "fx", label: "FX", infoId: "waterfall.step.fx", aria: "What does the FX step represent?" },
+  { key: "refunds", label: "Refunds", infoId: "waterfall.step.refunds", aria: "How are refunds handled?" },
+  { key: "pocket", label: "Pocket", infoId: "waterfall.step.pocket", aria: "What is pocket price?" },
+] as const;
+
 type SaveError = {
   error?: string;
   issues?: Array<{ path?: Array<string | number>; message?: string }>;
@@ -75,11 +86,11 @@ function Section({
   actions,
   children,
   className = "",
-}: {
-  title: string;
+: {
+  title: ReactNode;
   id?: string;
-  actions?: React.ReactNode;
-  children: React.ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
   return (
@@ -2623,7 +2634,17 @@ export default function App() {
           <div className="print-page" aria-hidden="true" />
           <Section
             id="pocket-price-waterfall"
-            title="Pocket Price Waterfall"
+            title={
+              <span className="inline-flex items-center gap-2">
+                <span>Pocket Price Waterfall</span>
+                <InfoTip
+                  className="ml-1"
+                  align="right"
+                  id="chart.waterfall"
+                  ariaLabel="How does the pocket price waterfall work?"
+                />
+              </span>
+            }
             className="print:bg-white print:shadow-none print:h-auto"
             actions={
               <ActionCluster chart="waterfall" id="waterfall-main" csv={true} />
@@ -2824,7 +2845,6 @@ export default function App() {
                   <ErrorBoundary title="Waterfall chart failed">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-sm font-semibold text-slate-700">Pocket Price Waterfall</h3>
-                      <InfoTip className="ml-1" align="right" id="chart.waterfall" />
                     </div>
                     <Waterfall
                       chartId="waterfall-main"
@@ -2833,6 +2853,22 @@ export default function App() {
                       listPrice={listForWater}
                       steps={water.steps}
                     />
+                    <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-slate-600">
+                      {WATERFALL_LEGEND.map((entry) => (
+                        <span
+                          key={entry.key}
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1"
+                        >
+                          <span className="font-semibold text-slate-800">{entry.label}</span>
+                          <InfoTip
+                            id={entry.infoId}
+                            ariaLabel={entry.aria}
+                            align="center"
+                            className="text-slate-500"
+                          />
+                        </span>
+                      ))}
+                    </div>
                   </ErrorBoundary>
                 </Suspense>
               </div>

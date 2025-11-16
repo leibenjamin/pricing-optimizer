@@ -46,6 +46,31 @@ export const EXPLAIN: Record<string, string> = {
     <b>Pocket price waterfall</b> starts from list price and subtracts leakages
     (promo, payment, FX, refunds) to show <i>pocket</i>. Toggle “Use pocket margins”
     to enforce floors on pocket, not list.`,
+  "waterfall.step.list": `
+    <b>List price</b> is the sticker/quote price before any discounts or downstream
+    leakages. Every step in the waterfall nets down from this anchor.`,
+  "waterfall.step.promo": `
+    <b>Promo</b> captures deal-level discounts or incentives (coupon codes,
+    discretionary markdowns). Entered per tier so Good/Better/Best can have
+    different promotional intensity.`,
+  "waterfall.step.volume": `
+    <b>Volume</b> represents structured tiered rebates (procurement bands,
+    channel volume discounts). Applied as a % of list for the selected tier.`,
+  "waterfall.step.paymentPct": `
+    <b>Payment %</b> is the processor take-rate (Stripe 2.9%, App Store 30%, etc.).
+    It hits the net after tier discounts, so higher promos reduce this leakage.`,
+  "waterfall.step.paymentFixed": `
+    <b>Payment $</b> is the flat fee per transaction (e.g., $0.30 interchange).
+    This matters most for low-ticket tiers where fixed fees bite margin.`,
+  "waterfall.step.fx": `
+    <b>FX</b> is the foreign-exchange spread or cross-border fee. Leave at 0 if
+    you do not sell internationally.`,
+  "waterfall.step.refunds": `
+    <b>Refunds</b> approximates chargebacks/returns as a % of list GMV. Use it to
+    model goodwill credits or churn clawbacks.`,
+  "waterfall.step.pocket": `
+    <b>Pocket</b> is what you keep after leakages. Use pocket-based margin floors
+    when you want optimizer guardrails on real contribution, not list.`,
 
   "chart.tornado": `
     <b>Tornado sensitivity</b> varies one factor at a time around a base case and
