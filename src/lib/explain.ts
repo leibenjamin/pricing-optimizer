@@ -1,4 +1,6 @@
 // src/lib/explain.ts
+import type { Prices } from "./segments";
+import { computePocketPrice, type Leakages, type Tier } from "./waterfall";
 
 /**
  * Central dictionary for short, product-ready HTML snippets that explain KPIs
@@ -122,4 +124,99 @@ export function topDriver(
   const dir = Math.abs(t.deltaHigh) >= Math.abs(t.deltaLow) ? "up" : "down";
   const amt = Math.round(Math.max(Math.abs(t.deltaLow), Math.abs(t.deltaHigh)));
   return `${t.name} (${dir}): ±$${amt}`;
+}
+
+const TIER_LABELS: Record<Tier, string> = {
+  good: "Good",
+  better: "Better",
+  best: "Best",
+};
+
+function fmtPrice(n: number) {
+  const rounded = Number(n.toFixed(2));
+  return `$${rounded.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
+function fmtMoney(n: number) {
+  const rounded = Math.round(n);
+  return `$${rounded.toLocaleString()}`;
+}
+
+function fmtPct(n: number) {
+  return `${Math.round(n * 1000) / 10}%`;
+}
+
+export function explainOptimizerResult(args: {
+  basePrices: Prices;
+  optimizedPrices: Prices;
+  costs: Prices;
+  leak?: Leakages;
+  constraints: {
+    gapGB: number;
+    gapBB: number;
+    marginFloor: Prices;
+    usePocketMargins?: boolean;
+    usePocketProfit?: boolean;
+  };
+  profitDelta: number;
+}): string[] {
+  const { basePrices, optimizedPrices, costs, leak, constraints } = args;
+  const bullets: string[] = [];
+  const profitDelta = Number.isFinite(args.profitDelta) ? args.profitDelta : 0;
+  const profitMode = constraints.usePocketProfit ? "pocket" : "list";
+  const deltaText = `${profitDelta >= 0 ? "+" : "-"}${fmtMoney(Math.abs(profitDelta))}`;
+  bullets.push(
+    `Ladder -> ${fmtPrice(optimizedPrices.good)}/${fmtPrice(optimizedPrices.better)}/${fmtPrice(
+      optimizedPrices.best
+    )} (baseline ${fmtPrice(basePrices.good)}/${fmtPrice(basePrices.better)}/${fmtPrice(
+      basePrices.best
+    )}); profit ${deltaText} vs current (${profitMode}).`
+  );
+
+  const gapNotes = explainGaps(optimizedPrices, {
+    gapGB: constraints.gapGB,
+    gapBB: constraints.gapBB,
+  });
+  if (gapNotes.length) {
+    bullets.push(`Gap floors binding: ${gapNotes.join("; ")}`);
+  } else {
+    const gbSlack = optimizedPrices.better - optimizedPrices.good - constraints.gapGB;
+    const bbSlack = optimizedPrices.best - optimizedPrices.better - constraints.gapBB;
+    bullets.push(
+      `Gaps slack by ${fmtPrice(Math.max(gbSlack, 0))} (G/B) and ${fmtPrice(Math.max(bbSlack, 0))} (B/Best).`
+    );
+  }
+
+  const usePocketForMargins = !!constraints.usePocketMargins && !!leak;
+  const marginStats = (["good", "better", "best"] as const).map((tier) => {
+    const basis =
+      usePocketForMargins && leak ? computePocketPrice(optimizedPrices[tier], tier, leak).pocket : optimizedPrices[tier];
+    const margin = (basis - costs[tier]) / Math.max(basis, 1e-6);
+    return {
+      tier,
+      label: TIER_LABELS[tier],
+      margin,
+      floor: constraints.marginFloor[tier],
+    };
+  });
+  const bindingMargins = marginStats.filter((s) => s.margin - s.floor < 0.01);
+  const basisLabel = usePocketForMargins ? "pocket" : "list";
+  if (bindingMargins.length) {
+    const detail = bindingMargins
+      .map((s) => `${s.label} ${fmtPct(s.margin)} (floor ${fmtPct(s.floor)})`)
+      .join("; ");
+    bullets.push(`Margins (${basisLabel}) hugging floors: ${detail}.`);
+  } else {
+    const tightest = marginStats.reduce((acc, cur) => (cur.margin < acc.margin ? cur : acc), marginStats[0]);
+    const floorText = `${fmtPct(constraints.marginFloor.good)} / ${fmtPct(constraints.marginFloor.better)} / ${fmtPct(
+      constraints.marginFloor.best
+    )} (G/B/Best)`;
+    bullets.push(
+      `Margins (${basisLabel}) clear floors ${floorText}; tightest is ${tightest.label} at ${fmtPct(
+        tightest.margin
+      )}.`
+    );
+  }
+
+  return bullets;
 }
