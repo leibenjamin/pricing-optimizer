@@ -344,21 +344,25 @@ export default function App() {
   function StickyToolbelt() {
     // One place to define section + chart ids (keeps labels & dispatch consistent)
     const GROUPS: Array<{
-      kind: "frontier" | "waterfall" | "tornado" | "takerate";
+      kind: "frontier" | "waterfall" | "tornado" | "takerate" | "cohort" | "coverage";
       sectionId: string;
       chartId: string;
       label: string; // short chip label
       aria: string;  // descriptive label
     }> = [
-      { kind: "frontier",  sectionId: "profit-frontier",        chartId: "frontier-main",  label: "Frontier",  aria: "Export Profit Frontier" },
-      { kind: "waterfall", sectionId: "pocket-price-waterfall", chartId: "waterfall-main", label: "Waterfall", aria: "Export Pocket Price Waterfall" },
-      { kind: "tornado",   sectionId: "tornado",                chartId: "tornado-main",   label: "Tornado",   aria: "Export Tornado Sensitivity" },
-      { kind: "takerate",  sectionId: "take-rate",              chartId: "takerate-main",  label: "Take-Rate", aria: "Export Take-Rate Bars" },
+      { kind: "frontier",  sectionId: "profit-frontier",        chartId: "frontier-main",      label: "Frontier",    aria: "Export Profit Frontier" },
+      { kind: "takerate",  sectionId: "take-rate",              chartId: "takerate-main",      label: "Take-Rate",   aria: "Export Take-Rate Bars" },
+      { kind: "cohort",    sectionId: "cohort-rehearsal",       chartId: "cohort-curve",       label: "Cohort",      aria: "Export Cohort rehearsal" },
+      { kind: "tornado",   sectionId: "tornado",                chartId: "tornado-main",       label: "Tornado",     aria: "Export Tornado Sensitivity" },
+      { kind: "tornado",   sectionId: "tornado-compare",        chartId: "tornado-current",    label: "Shift (Cur)", aria: "Export sensitivity shift (Current)" },
+      { kind: "tornado",   sectionId: "tornado-compare",        chartId: "tornado-optim",      label: "Shift (Opt)", aria: "Export sensitivity shift (Optimized)" },
+      { kind: "waterfall", sectionId: "pocket-price-waterfall", chartId: "waterfall-main",     label: "Waterfall",   aria: "Export Pocket Price Waterfall" },
+      { kind: "coverage",  sectionId: "kpi-pocket-coverage",    chartId: "coverage-main",      label: "Coverage",    aria: "Export pocket floor coverage" },
     ];
 
     // Dispatch helper (used by buttons and keyboard shortcuts)
     function dispatchExport(
-      kind: "frontier" | "waterfall" | "tornado" | "takerate",
+      kind: "frontier" | "waterfall" | "tornado" | "takerate" | "cohort" | "coverage",
       id: string,
       type: "png" | "csv"
     ) {
@@ -1135,6 +1139,29 @@ export default function App() {
   const cancelRef = useRef<null | (() => void)>(null);
 
   const [kpiFloorAdj, setKpiFloorAdj] = useState(0); // -10..+10 (pp)
+  const coverageChartId = "coverage-main";
+  const coverageSnapshot = useMemo(() => {
+    const floors0 = optConstraints.marginFloor;
+    const adj = (x: number) =>
+      Math.max(0, Math.min(0.95, x + kpiFloorAdj / 100));
+    const floors1 = {
+      good: adj(floors0.good),
+      better: adj(floors0.better),
+      best: adj(floors0.best),
+    };
+    const constraints = { gapGB: optConstraints.gapGB, gapBB: optConstraints.gapBB };
+    const base = pocketCoverage(optRanges, costs, floors0, constraints, leak);
+    const moved = pocketCoverage(optRanges, costs, floors1, constraints, leak);
+    const pct0 = Math.round(base.coverage * 100);
+    const pct1 = Math.round(moved.coverage * 100);
+    return {
+      pct0,
+      pct1,
+      delta: pct1 - pct0,
+      tested: moved.tested,
+      step: optRanges.step,
+    };
+  }, [optConstraints.marginFloor, optConstraints.gapGB, optConstraints.gapBB, optRanges, costs, leak, kpiFloorAdj]);
 
   const lastAppliedPricesRef = useRef<{
     good: number;
@@ -1302,6 +1329,116 @@ export default function App() {
       setBaselineKPIs(currentKPIs);
     }
   }, [baselineKPIs, currentKPIs]);
+
+  const exportCoverageSnapshot = useCallback(
+    (type: "png" | "csv") => {
+      if (!coverageSnapshot) return;
+      if (type === "csv") {
+        const rows: Array<[string, string | number]> = [
+          ["baseline_pct", coverageSnapshot.pct0],
+          ["adjusted_pct", coverageSnapshot.pct1],
+          ["delta_pp", coverageSnapshot.delta],
+          ["tested_combos", coverageSnapshot.tested],
+          ["grid_step", coverageSnapshot.step],
+          ["floor_adjust_pp", kpiFloorAdj],
+        ];
+        const csv =
+          "metric,value\n" +
+          rows.map(([k, v]) => `${k},${v}`).join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "pocket_coverage.csv";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 500);
+      } else {
+        const width = 640;
+        const height = 360;
+        const scale = 2;
+        const canvas = document.createElement("canvas");
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.scale(scale, scale);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = "#0f172a";
+        ctx.font = "20px 'Inter', 'Segoe UI', sans-serif";
+        ctx.fillText("Pocket floor coverage", 32, 40);
+        ctx.font = "14px 'Inter', 'Segoe UI', sans-serif";
+        ctx.fillStyle = "#475569";
+        ctx.fillText(
+          `Baseline: ${coverageSnapshot.pct0}%`,
+          32,
+          70
+        );
+        ctx.fillText(
+          `Adjusted: ${coverageSnapshot.pct1}%`,
+          32,
+          95
+        );
+        ctx.fillText(
+          `Delta: ${coverageSnapshot.delta >= 0 ? "+" : ""}${coverageSnapshot.delta}pp`,
+          32,
+          120
+        );
+        ctx.fillText(
+          `Tested ladders: ${coverageSnapshot.tested.toLocaleString()}`,
+          32,
+          145
+        );
+        ctx.fillText(`Grid step: $${optRanges.step}`, 32, 170);
+
+        const chartX = 300;
+        const chartY = 80;
+        const chartHeight = 220;
+        const barWidth = 70;
+        const gap = 40;
+
+        const drawBar = (xPos: number, pct: number, color: string) => {
+          const hVal = Math.max(0, Math.min(100, pct)) / 100;
+          const barHeight = hVal * chartHeight;
+          ctx.fillStyle = color;
+          ctx.fillRect(
+            xPos,
+            chartY + chartHeight - barHeight,
+            barWidth,
+            barHeight
+          );
+          ctx.fillStyle = "#0f172a";
+          ctx.font = "14px 'Inter', 'Segoe UI', sans-serif";
+          ctx.fillText(
+            `${pct}%`,
+            xPos,
+            chartY + chartHeight + 24
+          );
+        };
+
+        ctx.fillStyle = "#cbd5f5";
+        drawBar(chartX, coverageSnapshot.pct0, "#cbd5f5");
+        drawBar(chartX + barWidth + gap, coverageSnapshot.pct1, "#2563eb");
+
+        const pngUrl = canvas.toDataURL("image/png");
+        const a = document.createElement("a");
+        a.href = pngUrl;
+        a.download = "pocket_coverage.png";
+        a.click();
+      }
+    },
+    [coverageSnapshot, kpiFloorAdj, optRanges.step]
+  );
+
+  useEffect(() => {
+    const onExport = (ev: Event) => {
+      const ce = ev as CustomEvent<{ id?: string; type?: "png" | "csv" }>;
+      if (ce.detail?.id && ce.detail.id !== coverageChartId) return;
+      exportCoverageSnapshot(ce.detail?.type ?? "png");
+    };
+    window.addEventListener("export:coverage", onExport as EventListener);
+    return () => window.removeEventListener("export:coverage", onExport as EventListener);
+  }, [coverageChartId, exportCoverageSnapshot]);
 
   const explainDelta = useMemo<ExplainDelta | null>(() => {
     if (!baselineKPIs || !segments.length) return null;
@@ -2729,7 +2866,11 @@ export default function App() {
             </Suspense>
           </Section>
 
-          <Section id="cohort-rehearsal" title="Cohort rehearsal (12 months)">
+          <Section
+            id="cohort-rehearsal"
+            title="Cohort rehearsal (12 months)"
+            actions={<ActionCluster chart="cohort" id="cohort-curve" csv />}
+          >
             {(() => {
               const probsNow = choiceShares(
                 prices,
@@ -2780,26 +2921,6 @@ export default function App() {
                       </span>
                     </div>
 
-                    <button
-                      className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50"
-                      onClick={() => {
-                        const header = "month,margin\n";
-                        const rows = pts
-                          .map((p) => `${p.month},${p.margin.toFixed(4)}`)
-                          .join("\n");
-                        const blob = new Blob([header + rows], {
-                          type: "text/csv",
-                        });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = `cohort_margin_12m_ret${retentionPct}.csv`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      }}
-                    >
-                      Export CSV
-                    </button>
                   </div>
 
                   <div className="mt-2">
@@ -2809,6 +2930,8 @@ export default function App() {
                       )}%)`}
                       x={pts.map((p) => p.month)}
                       y={pts.map((p) => p.margin)}
+                      chartId="cohort-curve"
+                      exportKind="cohort"
                     />
                   </div>
                 </>
@@ -3181,6 +3304,14 @@ export default function App() {
           <Section
             id="tornado-compare"
             title="Sensitivity shift: Current vs Optimized"
+            actions={
+              quickOpt.best ? (
+                <div className="flex flex-wrap gap-2">
+                  <ActionCluster chart="tornado" id="tornado-current" csv />
+                  <ActionCluster chart="tornado" id="tornado-optim" csv />
+                </div>
+              ) : undefined
+            }
           >
             {quickOpt.best ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -3192,7 +3323,7 @@ export default function App() {
                     }
                   >
                     <ErrorBoundary title="Tornado chart failed">
-                      <Tornado rows={tornadoRowsCurrent} />
+                      <Tornado rows={tornadoRowsCurrent} chartId="tornado-current" />
                     </ErrorBoundary>
                   </Suspense>
                 </div>
@@ -3206,7 +3337,7 @@ export default function App() {
                     }
                   >
                     <ErrorBoundary title="Tornado chart failed">
-                      <Tornado rows={tornadoRowsOptim} />
+                      <Tornado rows={tornadoRowsOptim} chartId="tornado-optim" />
                     </ErrorBoundary>
                   </Suspense>
                 </div>
@@ -4030,7 +4161,11 @@ export default function App() {
             </div>
           </Section>
 
-          <Section id="kpi-pocket-coverage" title="KPI — Pocket floor coverage">
+          <Section
+            id="kpi-pocket-coverage"
+            title="KPI — Pocket floor coverage"
+            actions={<ActionCluster chart="coverage" id={coverageChartId} csv />}
+          >
             {/* Sensitivity control */}
             <div className="flex items-center gap-2 text-xs mb-2">
               <span className="text-gray-600">Floor sensitivity:</span>

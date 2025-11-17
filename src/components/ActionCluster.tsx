@@ -6,7 +6,7 @@ export default function ActionCluster({
   csv = true,
   className = "",
 }: {
-  chart: "frontier" | "takerate" | "waterfall" | "tornado";
+  chart: "frontier" | "takerate" | "waterfall" | "tornado" | "cohort" | "coverage";
   id: string;
   csv?: boolean;
   className?: string;
