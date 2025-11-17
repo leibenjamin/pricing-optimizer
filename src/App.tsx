@@ -462,6 +462,41 @@ export default function App() {
   }, [toasts]);
 
   const [activeSection, setActiveSection] = useState<string>("profit-frontier");
+  const stickyNavRef = useRef<HTMLDivElement | null>(null);
+
+  const getStickyOffset = useCallback(() => {
+    if (typeof window === "undefined") return 80;
+    const sticky = stickyNavRef.current;
+    if (!sticky) return 80;
+    const height = sticky.offsetHeight || sticky.getBoundingClientRect().height;
+    // Add a small margin so sections aren't flush against the sticky strip.
+    return Math.max(64, Math.round(height) + 12);
+  }, []);
+
+  const focusSection = useCallback((el: HTMLElement | null) => {
+    if (!el || typeof window === "undefined") return;
+    const previousTabIndex = el.getAttribute("tabindex");
+    if (previousTabIndex === null) el.setAttribute("tabindex", "-1");
+    const focus = () => {
+      try {
+        el.focus({ preventScroll: true });
+      } catch {
+        /* ignore */
+      }
+    };
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(focus);
+    } else {
+      focus();
+    }
+    if (previousTabIndex === null) {
+      const cleanup = () => {
+        if (el.getAttribute("tabindex") === "-1") el.removeAttribute("tabindex");
+      };
+      el.addEventListener("blur", cleanup, { once: true });
+      window.setTimeout(cleanup, 1500);
+    }
+  }, []);
 
   function labelFor(id: string) {
     switch (id) {
@@ -486,30 +521,37 @@ export default function App() {
     if (typeof document === "undefined") return;
     const el = document.getElementById(id);
     if (!el) return;
-    const stickyHeight = 100;
+    const stickyHeight = getStickyOffset();
+    const margin = 12;
     const scrollParent = findScrollableParent(el);
     const docElement = document.scrollingElement || document.documentElement;
 
     if (!scrollParent || scrollParent === document.body || scrollParent === docElement) {
-      const top = el.getBoundingClientRect().top + window.scrollY - stickyHeight;
+      const top = el.getBoundingClientRect().top + window.scrollY - stickyHeight - margin;
       window.scrollTo({ top, behavior: "smooth" });
+      window.setTimeout(() => focusSection(el), 400);
       return;
     }
 
     const parentRect = scrollParent.getBoundingClientRect();
-    const elementRect = el.getBoundingClientRect();
-    const targetTop = elementRect.top - parentRect.top + scrollParent.scrollTop - 12;
-    if (typeof scrollParent.scrollTo === "function") {
-      scrollParent.scrollTo({ top: targetTop, behavior: "smooth" });
-    } else {
-      scrollParent.scrollTop = targetTop;
+    const parentTargetTop = parentRect.top + window.scrollY - stickyHeight - margin;
+    if (Math.abs(window.scrollY - parentTargetTop) > 1) {
+      window.scrollTo({ top: parentTargetTop, behavior: "smooth" });
     }
 
-    const containerRect = scrollParent.getBoundingClientRect();
-    if (containerRect.top < stickyHeight) {
-      const adjust = containerRect.top - stickyHeight;
-      window.scrollBy({ top: adjust, behavior: "smooth" });
+    const elementRect = el.getBoundingClientRect();
+    const targetTop =
+      elementRect.top - parentRect.top + scrollParent.scrollTop - margin;
+    if (typeof scrollParent.scrollTo === "function") {
+      scrollParent.scrollTo({
+        top: Math.max(0, targetTop),
+        behavior: "smooth",
+      });
+    } else {
+      scrollParent.scrollTop = Math.max(0, targetTop);
     }
+
+    window.setTimeout(() => focusSection(el), 400);
   }
 
   function findScrollableParent(el: HTMLElement | null): HTMLElement | null {
@@ -1969,6 +2011,7 @@ export default function App() {
 
       {/* Sticky KPI bar (desktop & tablet) */}
       <div
+        ref={stickyNavRef}
         className="sticky top-0 z-40 hidden md:block bg-white/80 backdrop-blur border-b print:hidden"
         role="region"
         aria-label="Key metrics and quick navigation"
