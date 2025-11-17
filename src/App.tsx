@@ -132,7 +132,7 @@ function Section({
   return (
     <section
       id={id}
-      className={`rounded-2xl shadow p-3 md:p-4 border border-gray-200 bg-white print-avoid print-card print-pad ${className}`}
+      className={`scroll-mt-24 md:scroll-mt-32 rounded-2xl shadow p-3 md:p-4 border border-gray-200 bg-white print-avoid print-card print-pad ${className}`}
     >
       <div className="mb-3 print:mb-2 flex items-center justify-between gap-3">
         <h2 className="font-semibold text-lg print:text-base print-tight">{title}</h2>
@@ -466,7 +466,7 @@ export default function App() {
     if (typeof document === "undefined") return;
     const el = document.getElementById(id);
     if (!el) return;
-    const stickyHeight = 90;
+    const stickyHeight = 100;
     const scrollParent = findScrollableParent(el);
     const docElement = document.scrollingElement || document.documentElement;
 
@@ -479,7 +479,11 @@ export default function App() {
     const parentRect = scrollParent.getBoundingClientRect();
     const elementRect = el.getBoundingClientRect();
     const targetTop = elementRect.top - parentRect.top + scrollParent.scrollTop - 12;
-    scrollParent.scrollTo({ top: targetTop, behavior: "smooth" });
+    if (typeof scrollParent.scrollTo === "function") {
+      scrollParent.scrollTo({ top: targetTop, behavior: "smooth" });
+    } else {
+      scrollParent.scrollTop = targetTop;
+    }
 
     const containerRect = scrollParent.getBoundingClientRect();
     if (containerRect.top < stickyHeight) {
@@ -545,6 +549,78 @@ export default function App() {
     best: null,
   });
 
+  type PendingPriceLog =
+    | { from: number; to: number; timer: ReturnType<typeof setTimeout> | null }
+    | null;
+  const pendingPriceLogs = useRef<Record<Tier, PendingPriceLog>>({
+    good: null,
+    better: null,
+    best: null,
+  });
+
+  const clearPendingPriceLog = useCallback((tier: Tier) => {
+    const pending = pendingPriceLogs.current[tier];
+    if (pending?.timer) {
+      clearTimeout(pending.timer);
+    }
+    pendingPriceLogs.current[tier] = null;
+  }, []);
+
+  const flushPendingPriceLog = useCallback(
+    (tier: Tier) => {
+      const pending = pendingPriceLogs.current[tier];
+      if (!pending) return;
+      if (pending.timer) {
+        clearTimeout(pending.timer);
+      }
+      pendingPriceLogs.current[tier] = null;
+      if (Math.abs(pending.to - pending.from) < 0.005) return;
+      pushJ(formatPriceChange(tier, pending.from, pending.to));
+    },
+    [pushJ]
+  );
+
+  const queuePriceLog = useCallback(
+    (tier: Tier, nextValue: number, immediate = false) => {
+      const start = priceEditStart.current[tier];
+      if (start === null) return;
+      if (Math.abs(nextValue - start) < 0.005) {
+        clearPendingPriceLog(tier);
+        return;
+      }
+      const existing = pendingPriceLogs.current[tier];
+      if (existing) {
+        if (existing.timer) clearTimeout(existing.timer);
+        existing.to = nextValue;
+      } else {
+        pendingPriceLogs.current[tier] = {
+          from: start,
+          to: nextValue,
+          timer: null,
+        };
+      }
+      if (immediate) {
+        flushPendingPriceLog(tier);
+        return;
+      }
+      pendingPriceLogs.current[tier]!.timer = window.setTimeout(
+        () => flushPendingPriceLog(tier),
+        350
+      );
+    },
+    [clearPendingPriceLog, flushPendingPriceLog]
+  );
+
+  useEffect(() => {
+    return () => {
+      (["good", "better", "best"] as const).forEach((tier) => {
+        const pending = pendingPriceLogs.current[tier];
+        if (pending?.timer) clearTimeout(pending.timer);
+        pendingPriceLogs.current[tier] = null;
+      });
+    };
+  }, []);
+
   const beginPriceEdit = useCallback(
     (tier: Tier) => {
       if (priceEditStart.current[tier] === null) {
@@ -555,16 +631,17 @@ export default function App() {
   );
 
   const commitPriceEdit = useCallback(
-    (tier: Tier) => {
+    (tier: Tier, override?: number) => {
       const start = priceEditStart.current[tier];
       if (start === null) return;
-      const next = prices[tier];
-      if (start !== next) {
-        pushJ(formatPriceChange(tier, start, next));
-      }
+      const target =
+        Number.isFinite(override) && typeof override === "number"
+          ? override
+          : prices[tier];
+      queuePriceLog(tier, target, true);
       priceEditStart.current[tier] = null;
     },
-    [prices, pushJ]
+    [prices, queuePriceLog]
   );
 
   const updatePrice = useCallback(
@@ -572,14 +649,43 @@ export default function App() {
       const safe = Number.isFinite(value) ? Math.max(0, value) : 0;
       const rounded = Math.round(safe * 100) / 100;
       setPrices((prev) => ({ ...prev, [tier]: rounded }));
+      queuePriceLog(tier, rounded);
     },
-    [setPrices]
+    [queuePriceLog, setPrices]
   );
 
   // Track which scenario preset is currently active (purely UI-affordance)
   const [scenarioPresetId, setScenarioPresetId] = useState<string | null>(null);
 
   const [costs, setCosts] = useStickyState("po:costs", { good: 3, better: 5, best: 8 });
+
+  const costEditStart = useRef<Record<Tier, number | null>>({
+    good: null,
+    better: null,
+    best: null,
+  });
+
+  const beginCostEdit = useCallback(
+    (tier: Tier) => {
+      if (costEditStart.current[tier] === null) {
+        costEditStart.current[tier] = costs[tier];
+      }
+    },
+    [costs]
+  );
+
+  const commitCostEdit = useCallback(
+    (tier: Tier, override?: number) => {
+      const start = costEditStart.current[tier];
+      if (start === null) return;
+      const next = Number.isFinite(override) ? Number(override) : costs[tier];
+      if (Math.abs(start - next) >= 0.005) {
+        pushJ(formatCostChange(tier, start, next));
+      }
+      costEditStart.current[tier] = null;
+    },
+    [costs, pushJ]
+  );
 
   const [leak, setLeak] = useStickyState("po:leak", {
     promo: { good: 0.05, better: 0.05, best: 0.05 }, // 5% promo
@@ -1951,15 +2057,15 @@ export default function App() {
                       min={0}
                       step={0.01}
                       inputMode="decimal"
-                      value={prices[tier]}
-                      onFocus={() => beginPriceEdit(tier)}
-                      onChange={(e) => updatePrice(tier, Number(e.target.value))}
-                      onBlur={() => commitPriceEdit(tier)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          (e.currentTarget as HTMLInputElement).blur();
-                        }
-                      }}
+                    value={prices[tier]}
+                    onFocus={() => beginPriceEdit(tier)}
+                    onChange={(e) => updatePrice(tier, Number(e.target.value))}
+                    onBlur={(e) => commitPriceEdit(tier, Number(e.target.value))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        (e.currentTarget as HTMLInputElement).blur();
+                      }
+                    }}
                       className="w-24 border rounded px-2 py-1 text-sm"
                       aria-label={`${tier} price input`}
                     />
@@ -1976,15 +2082,17 @@ export default function App() {
                   <input
                     type="number"
                     value={costs[tier]}
-                    onChange={(e) =>
-                      setCosts((c) => {
-                        const to = Number(e.target.value || 0);
-                        const from = c[tier];
-                        if (from !== to)
-                          pushJ(formatCostChange(tier, from, to));
-                        return { ...c, [tier]: to };
-                      })
-                    }
+                    onFocus={() => beginCostEdit(tier)}
+                    onChange={(e) => {
+                      const to = Number(e.target.value || 0);
+                      setCosts((c) => ({ ...c, [tier]: to }));
+                    }}
+                    onBlur={(e) => commitCostEdit(tier, Number(e.target.value))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        (e.currentTarget as HTMLInputElement).blur();
+                      }
+                    }}
                     className="w-full border rounded px-2 py-1"
                   />
                 </div>
