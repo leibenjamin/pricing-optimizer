@@ -1,5 +1,5 @@
 // src/components/SalesImport.tsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
 import type { SalesMapping } from "../lib/salesSchema";
 import { inferMapping, validateMapping } from "../lib/salesSchema";
@@ -58,6 +58,12 @@ export default function SalesImport(props: {
     () => !mapping.shown_good && !mapping.shown_better && !mapping.shown_best,
     [mapping.shown_good, mapping.shown_better, mapping.shown_best]
   );
+
+  const handleDownloadSample = useCallback(() => {
+    const csv = buildSalesSampleCSV(200);
+    downloadBlob(csv, "sales_sample.csv", "text/csv;charset=utf-8");
+    onToast?.("info", "Downloaded sample sales CSV (Good/Better/Best with shown_* flags)");
+  }, [onToast]);
 
   const normalizeChoiceCell = (v: unknown): ("good" | "better" | "best" | "none") | null => {
     if (v == null) return null;
@@ -365,6 +371,11 @@ export default function SalesImport(props: {
     return Math.round((100 * bad) / total);
   }
 
+  const nonePct = useMemo(() => {
+    if (!preflight || preflight.approxChoices === 0) return null;
+    return (preflight.approxNone / Math.max(1, preflight.approxChoices)) * 100;
+  }, [preflight]);
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -394,6 +405,19 @@ export default function SalesImport(props: {
       <p className="text-[11px] text-gray-600">
         Map columns, then click <b>Estimate</b>. We’ll show row counts and basic data quality before fitting.
       </p>
+
+      <div className="flex flex-wrap items-center gap-3 rounded border border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
+        <div className="flex-1 min-w-[220px]">
+          Need data? Download the sample CSV (200 choice occasions with Good/Better/Best prices, features, and shown_* flags).
+        </div>
+        <button
+          type="button"
+          className="text-xs border border-blue-500 text-blue-600 px-3 py-1.5 rounded bg-white hover:bg-blue-50 whitespace-nowrap"
+          onClick={handleDownloadSample}
+        >
+          Download sample
+        </button>
+      </div>
 
       {/* Mapping UI */}
       {headers.length > 0 && (
@@ -485,14 +509,14 @@ export default function SalesImport(props: {
 
       {preflight && (
         <div className="border rounded p-3 bg-slate-50 text-[11px] space-y-2">
-          <div className="flex items-center justify-between text-[12px] font-semibold text-gray-800">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] font-semibold text-gray-800">
             <span>Diagnostics snapshot</span>
             <span className="text-[10px] text-gray-500">
               {preflight.rows.toLocaleString()} rows scanned
             </span>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-3">
             <div>
               <div className="text-[10px] uppercase text-gray-500">Choice occasions</div>
               <div className="text-sm font-semibold text-gray-800">
@@ -511,6 +535,16 @@ export default function SalesImport(props: {
               </div>
             </div>
             <div>
+              <div className="text-[10px] uppercase text-gray-500">“None” share</div>
+              <div className="text-sm font-semibold text-gray-800">
+                {nonePct == null ? "—" : `${nonePct.toFixed(1)}%`}
+              </div>
+              <div className="text-[10px] text-gray-600">
+                {preflight.approxNone.toLocaleString()} of{" "}
+                {preflight.approxChoices.toLocaleString()} recognized choices
+              </div>
+            </div>
+            <div>
               <div className="text-[10px] uppercase text-gray-500">Quick take</div>
               <div className="text-sm font-semibold text-gray-800">
                 {diagWarnings.length === 0 ? "Looks reasonable" : "Needs attention"}
@@ -526,11 +560,23 @@ export default function SalesImport(props: {
           <div className="grid gap-2 sm:grid-cols-3">
             {PRICE_KEYS.map((k) => {
               const stats = preflight.priceRange?.[k];
+              if (!stats) {
+                return (
+                  <div key={k}>
+                    <div className="text-[10px] uppercase text-gray-500">{PRICE_LABELS[k]}</div>
+                    <div className="text-sm font-semibold text-gray-800">Not mapped</div>
+                  </div>
+                );
+              }
+              const span = Math.max(0, stats.max - stats.min);
               return (
                 <div key={k}>
                   <div className="text-[10px] uppercase text-gray-500">{PRICE_LABELS[k]}</div>
                   <div className="text-sm font-semibold text-gray-800">
-                    {stats ? `${fmtCurrency(stats.min)} – ${fmtCurrency(stats.max)}` : "Not mapped"}
+                    {`${fmtCurrency(stats.min)} — ${fmtCurrency(stats.max)}`}
+                  </div>
+                  <div className="text-[10px] text-gray-500">
+                    {span === 0 ? "No variance detected" : `Span Δ${fmtCurrency(span)}`}
                   </div>
                 </div>
               );
@@ -542,6 +588,12 @@ export default function SalesImport(props: {
               const stats = preflight.shownShare?.[tier];
               const share =
                 stats && stats.total > 0 ? Math.round((stats.shown / stats.total) * 100) : null;
+              const detail =
+                stats && stats.total > 0
+                  ? `${stats.shown.toLocaleString()} of ${stats.total.toLocaleString()} rows`
+                  : shownUnmapped
+                  ? "No shown_* columns mapped"
+                  : "Not mapped";
               return (
                 <div key={tier}>
                   <div className="text-[10px] uppercase text-gray-500">{TIER_LABELS[tier]} shown</div>
@@ -552,6 +604,7 @@ export default function SalesImport(props: {
                         : "Not mapped"
                       : `${share}% of rows`}
                   </div>
+                  <div className="text-[10px] text-gray-500">{detail}</div>
                 </div>
               );
             })}
@@ -602,17 +655,6 @@ export default function SalesImport(props: {
             onClick={() => choiceSelectRef.current?.focus()}
           >
             Check “choice” column mapping
-          </button>
-          <button
-            type="button"
-            className="text-[11px] underline text-blue-600"
-            onClick={() => {
-              const csv = buildSalesSampleCSV(200);
-              downloadBlob(csv, "sales_sample.csv", "text/csv;charset=utf-8");
-              onToast?.("info", "Downloaded sample sales CSV (good/better/best)");
-            }}
-          >
-            Download sample CSV
           </button>
         </div>
 
