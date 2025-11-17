@@ -28,13 +28,17 @@ export default function OnboardingOverlay(props: {
     if (!el) return;
     el.classList.add("onboarding-highlight");
     el.setAttribute("data-onboarding-highlight", "true");
-    // Scroll into view without fighting the sticky KPI bar too much.
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (onJump) {
+      onJump(step.targetId);
+    } else {
+      // Fallback to the native behavior if no scroll helper was provided.
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
     return () => {
       el.classList.remove("onboarding-highlight");
       el.removeAttribute("data-onboarding-highlight");
     };
-  }, [open, step?.targetId, step?.id]);
+  }, [open, step?.targetId, step?.id, onJump]);
 
   // Prevent body scroll while the overlay is open.
   useEffect(() => {
@@ -118,4 +122,3 @@ export default function OnboardingOverlay(props: {
     </div>
   );
 }
-

@@ -1904,6 +1904,19 @@ export default function App() {
                 Good/Better/Best ladder • pocket price waterfall • profit frontier •
                 tornado sensitivity • cohorts
               </p>
+              <div className="no-print mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                <button
+                  type="button"
+                  onClick={handleTourStart}
+                  className="inline-flex items-center gap-1 rounded-md bg-sky-600 px-4 py-1.5 text-sm font-medium text-white shadow hover:bg-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+                  aria-label="Take the guided product tour"
+                >
+                  Take tour
+                </button>
+                <span className="text-xs text-slate-500">
+                  4 steps · highlights each key section
+                </span>
+              </div>
             </div>
 
             {/* Right: actions */}
@@ -1946,14 +1959,6 @@ export default function App() {
                   title="Print this analysis"
                 >
                   Print
-                </button>
-                <button
-                  type="button"
-                  onClick={handleTourStart}
-                  className="px-3 py-1 rounded-md border text-sm hover:bg-gray-50"
-                  aria-label="Open guided tour"
-                >
-                  Guided tour
                 </button>
               </div>
             </div>
