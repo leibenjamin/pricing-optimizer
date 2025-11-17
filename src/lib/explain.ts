@@ -170,7 +170,12 @@ export function explainOptimizerResult(args: {
       optimizedPrices.best
     )} (baseline ${fmtPrice(basePrices.good)}/${fmtPrice(basePrices.better)}/${fmtPrice(
       basePrices.best
-    )}); profit ${deltaText} vs current (${profitMode}).`
+    )}); profit ${deltaText} vs current (${profitMode} basis).`
+  );
+  bullets.push(
+    constraints.usePocketProfit
+      ? "Objective: maximize pocket profit (list minus promo/fees/FX/refunds)."
+      : "Objective: maximize list contribution (before downstream leakages)."
   );
 
   const gapNotes = explainGaps(optimizedPrices, {
@@ -211,10 +216,11 @@ export function explainOptimizerResult(args: {
     const floorText = `${fmtPct(constraints.marginFloor.good)} / ${fmtPct(constraints.marginFloor.better)} / ${fmtPct(
       constraints.marginFloor.best
     )} (G/B/Best)`;
+    const slack = tightest.margin - constraints.marginFloor[tightest.tier];
     bullets.push(
       `Margins (${basisLabel}) clear floors ${floorText}; tightest is ${tightest.label} at ${fmtPct(
         tightest.margin
-      )}.`
+      )} (slack ${fmtPct(slack)} vs. floor).`
     );
   }
 

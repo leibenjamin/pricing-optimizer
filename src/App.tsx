@@ -558,7 +558,7 @@ export default function App() {
   });
 
   type PendingPriceLog =
-    | { from: number; to: number; timer: ReturnType<typeof setTimeout> | null }
+    | { from: number; to: number; timer: number | null }
     | null;
   const pendingPriceLogs = useRef<Record<Tier, PendingPriceLog>>({
     good: null,
@@ -620,11 +620,12 @@ export default function App() {
   );
 
   useEffect(() => {
+    const logs = pendingPriceLogs.current;
     return () => {
       (["good", "better", "best"] as const).forEach((tier) => {
-        const pending = pendingPriceLogs.current[tier];
+        const pending = logs[tier];
         if (pending?.timer) clearTimeout(pending.timer);
-        pendingPriceLogs.current[tier] = null;
+        logs[tier] = null;
       });
     };
   }, []);
@@ -927,6 +928,10 @@ export default function App() {
     prices: { good: number; better: number; best: number };
     profit: number;
   } | null>(null);
+  const [optimizerExplainer, setOptimizerExplainer] = useState<{
+    lines: string[];
+    appliedAt: number;
+  } | null>(null);
 
   const computeScenarioProfit = useCallback(
     (ladder: Prices, usePocket: boolean) => {
@@ -1016,6 +1021,14 @@ export default function App() {
 
   function applyOptimizedPrices() {
     if (!optResult) return;
+    setOptimizerExplainer(
+      optimizerWhyLines.length
+        ? { lines: optimizerWhyLines, appliedAt: Date.now() }
+        : null
+    );
+    pushJ?.(
+      `[${now()}] Applied optimizer ladder $${optResult.prices.good}/$${optResult.prices.better}/$${optResult.prices.best}`
+    );
     setPrices({
       good: optResult.prices.good,
       better: optResult.prices.better,
@@ -2008,6 +2021,32 @@ export default function App() {
                   <div>{explainDelta.segmentLine}</div>
                   <div className="mt-0.5">{explainDelta.suggestion}</div>
                 </div>
+
+                {optimizerExplainer && optimizerExplainer.lines.length > 0 && (
+                  <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-700">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-slate-500">
+                      <span>
+                        Optimizer applied at{" "}
+                        {new Date(optimizerExplainer.appliedAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-[10px] underline text-slate-500 hover:text-slate-700"
+                        onClick={() => setOptimizerExplainer(null)}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                    <ul className="mt-1 list-disc space-y-1 pl-4">
+                      {optimizerExplainer.lines.map((line, idx) => (
+                        <li key={`opt-explain-${idx}`}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500">
                   <span className="max-w-xl">
