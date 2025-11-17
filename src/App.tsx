@@ -1856,6 +1856,7 @@ export default function App() {
     const ids = [
       "profit-frontier",
       "pocket-price-waterfall",
+      "compare-board",
       "cohort-rehearsal",
       "tornado",
       "global-optimizer",
