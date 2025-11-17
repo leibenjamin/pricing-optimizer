@@ -65,15 +65,23 @@ const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 
 const WATERFALL_LEGEND = [
-  { key: "list", label: "List", infoId: "waterfall.step.list", aria: "What is the list price starting point?" },
-  { key: "promo", label: "Promo", infoId: "waterfall.step.promo", aria: "How do promo discounts work?" },
-  { key: "volume", label: "Volume", infoId: "waterfall.step.volume", aria: "What is the volume discount step?" },
-  { key: "paymentPct", label: "Payment %", infoId: "waterfall.step.paymentPct", aria: "Why is there a payment % fee?" },
-  { key: "paymentFixed", label: "Payment $", infoId: "waterfall.step.paymentFixed", aria: "Why is there a payment $ fee?" },
-  { key: "fx", label: "FX", infoId: "waterfall.step.fx", aria: "What does the FX step represent?" },
-  { key: "refunds", label: "Refunds", infoId: "waterfall.step.refunds", aria: "How are refunds handled?" },
-  { key: "pocket", label: "Pocket", infoId: "waterfall.step.pocket", aria: "What is pocket price?" },
+  { key: "list", label: "List", color: "#0ea5e9", infoId: "waterfall.step.list", aria: "What is the list price starting point?" },
+  { key: "promo", label: "Promo", color: "#f97316", infoId: "waterfall.step.promo", aria: "How do promo discounts work?" },
+  { key: "volume", label: "Volume", color: "#fb923c", infoId: "waterfall.step.volume", aria: "What is the volume discount step?" },
+  { key: "paymentPct", label: "Payment %", color: "#facc15", infoId: "waterfall.step.paymentPct", aria: "Why is there a payment % fee?" },
+  { key: "paymentFixed", label: "Payment $", color: "#fde047", infoId: "waterfall.step.paymentFixed", aria: "Why is there a payment $ fee?" },
+  { key: "fx", label: "FX", color: "#38bdf8", infoId: "waterfall.step.fx", aria: "What does the FX step represent?" },
+  { key: "refunds", label: "Refunds", color: "#f87171", infoId: "waterfall.step.refunds", aria: "How are refunds handled?" },
+  { key: "pocket", label: "Pocket", color: "#22c55e", infoId: "waterfall.step.pocket", aria: "What is pocket price?" },
 ] as const;
+
+const WATERFALL_COLOR_MAP: Record<string, string> = WATERFALL_LEGEND.reduce(
+  (acc, entry) => {
+    acc[entry.label] = entry.color;
+    return acc;
+  },
+  {} as Record<string, string>
+);
 
 const TIER_ORDER: readonly Tier[] = ["good", "better", "best"] as const;
 
@@ -2481,7 +2489,12 @@ export default function App() {
               <ErrorBoundary title="Frontier chart failed">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-slate-700">Profit frontier</h3>
-                  <InfoTip className="ml-1" align="right" id="chart.frontier" />
+                  <InfoTip
+                    className="ml-1"
+                    align="right"
+                    id="chart.frontier"
+                    ariaLabel="What does the Profit Frontier chart show?"
+                  />
                 </div>
                 <FrontierChartReal
                   chartId="frontier-main"
@@ -2506,7 +2519,12 @@ export default function App() {
               <ErrorBoundary title="Take-Rate chart failed">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-slate-700">Take-rate mix</h3>
-                  <InfoTip className="ml-1" align="right" id="chart.takeRate" />
+                  <InfoTip
+                    className="ml-1"
+                    align="right"
+                    id="chart.takeRate"
+                    ariaLabel="How should I read take-rate bars?"
+                  />
                 </div>                
                 <TakeRateChart chartId="takerate-main" data={probs} />
               </ErrorBoundary>
@@ -2684,7 +2702,12 @@ export default function App() {
               <ErrorBoundary title="Tornado chart failed">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-slate-700">Tornado sensitivity</h3>
-                  <InfoTip className="ml-1" align="right" id="chart.tornado" />
+                  <InfoTip
+                    className="ml-1"
+                    align="right"
+                    id="chart.tornado"
+                    ariaLabel="Why is this called a tornado chart?"
+                  />
                 </div>
                 <Tornado chartId="tornado-main" title="Tornado: Profit Sensitivity" rows={tornadoRows} />
               </ErrorBoundary>
@@ -3218,13 +3241,20 @@ export default function App() {
                       subtitle={`${waterTier} • list $${listForWater.toFixed(2)}`}
                       listPrice={listForWater}
                       steps={water.steps}
+                      colorMap={WATERFALL_COLOR_MAP}
                     />
                     <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-slate-600">
                       {WATERFALL_LEGEND.map((entry) => (
                         <span
                           key={entry.key}
                           className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1"
+                          aria-label={`${entry.label} legend item`}
                         >
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{ backgroundColor: entry.color }}
+                            aria-hidden="true"
+                          />
                           <span className="font-semibold text-slate-800">{entry.label}</span>
                           <InfoTip
                             id={entry.infoId}
@@ -3271,6 +3301,7 @@ export default function App() {
                               listPrice={list}
                               steps={wf.steps}
                               variant="mini"
+                              colorMap={WATERFALL_COLOR_MAP}
                             />
                           </ErrorBoundary>
                         </Suspense>

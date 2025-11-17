@@ -45,6 +45,17 @@ const SHORT: Record<string, string> = {
   Pocket: "Pocket",
 };
 
+const DEFAULT_COLORS: Record<string, string> = {
+  List: "#0ea5e9",
+  Promo: "#f97316",
+  Volume: "#fb923c",
+  "Payment %": "#facc15",
+  "Payment $": "#fde047",
+  FX: "#38bdf8",
+  Refunds: "#f87171",
+  Pocket: "#22c55e",
+};
+
 export type WaterStep = { label: string; delta: number };
 
 // Compose a strict option type for this chart
@@ -64,6 +75,7 @@ export default function Waterfall({
   variant = "full",
   onDownloadLabel = "PNG",
   chartId,
+  colorMap,
 }: {
   title: string;
   subtitle?: string;
@@ -72,11 +84,13 @@ export default function Waterfall({
   variant?: "full" | "mini";
   onDownloadLabel?: string;
   chartId?: string;
+  colorMap?: Record<string, string>;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
 
   const isMini = variant === "mini";
+  const palette = colorMap ?? DEFAULT_COLORS;
 
   const [vw, setVw] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1024);
   useEffect(() => {
@@ -128,14 +142,20 @@ export default function Waterfall({
 
     // For mini: only the final pocket bar gets a label (on top).
     // For full: keep plain numbers (framework will label all bars above).
+    const labelOrder = ["List", ...steps.map((s) => s.label)];
+    const colorFor = (label: string) =>
+      palette[label] ?? DEFAULT_COLORS[label] ?? "#0f172a";
     const changeData = changes.map((v, idx) => {
-      if (!localIsMini) return v;
-      // Explicit label shape (structural typing)
+      const labelName = labelOrder[idx] ?? "";
+      const color = colorFor(labelName);
+      if (!localIsMini) {
+        return { value: v, itemStyle: { color } };
+      }
       const lbl =
         idx === changes.length - 1
           ? { show: true, position: "top" as const, fontSize: 9 }
           : { show: false };
-      return { value: v, label: lbl };
+      return { value: v, label: lbl, itemStyle: { color } };
     });
 
     // Strongly-typed tooltip formatter (no 'any')
