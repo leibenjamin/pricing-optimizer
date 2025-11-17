@@ -37,12 +37,21 @@ const Segment = z.object({
   })
 })
 
+const Range = z.object({ min: Num, max: Num })
+const PriceRange = z.object({
+  good: Range.optional(),
+  better: Range.optional(),
+  best: Range.optional(),
+}).partial()
+
 const Analysis = z.object({
   tornadoPocket: z.boolean().optional(),
   tornadoPriceBump: Num.optional(),
   tornadoPctBump: Num.optional(),
   retentionPct: Num.optional(),
   kpiFloorAdj: Num.optional(),
+  priceRange: PriceRange.optional(),
+  priceRangeSource: z.enum(["synthetic", "imported", "shared"]).optional(),
 }).passthrough() // allow future keys
 
 const ScenarioSchema = z.object({
