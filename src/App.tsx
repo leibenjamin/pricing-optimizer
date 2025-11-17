@@ -41,6 +41,13 @@ import { pocketCoverage } from "./lib/coverage";
 import HeatmapMini from "./components/HeatmapMini";
 import { feasibilitySliceGB } from "./lib/coverage";
 
+import {
+  collectPriceRange,
+  hasMeaningfulRange,
+  type PriceRangeSource,
+  type TierRangeMap,
+} from "./lib/priceRange";
+
 import { PRESETS, type Preset } from "./lib/presets";
 import PresetPicker from "./components/PresetPicker";
 
@@ -84,6 +91,11 @@ const WATERFALL_COLOR_MAP: Record<string, string> = WATERFALL_LEGEND.reduce(
 );
 
 const TIER_ORDER: readonly Tier[] = ["good", "better", "best"] as const;
+
+type PriceRangeState = {
+  map: TierRangeMap;
+  source: PriceRangeSource;
+};
 
 const ONBOARDING_STEPS = [
   {
@@ -811,14 +823,38 @@ export default function App() {
 
   // ADD: latent-class segments state
   const [segments, setSegments] = useState<Segment[]>(defaultSegments);
-  const [importerRanges, setImporterRanges] = useState<
-    Partial<Record<Tier, { min: number; max: number }>> | null
-  >(null);
+  const syntheticRangeRef = useRef<TierRangeMap | null>(null);
+  const [priceRangeState, setPriceRangeState] = useState<PriceRangeState | null>(null);
+
+  const setPriceRangeFromData = useCallback(
+    (map: TierRangeMap | null, source: PriceRangeSource) => {
+      if (map && hasMeaningfulRange(map)) {
+        setPriceRangeState({ map, source });
+        return true;
+      }
+      return false;
+    },
+    []
+  );
+
+  const fallbackToSyntheticRanges = useCallback(() => {
+    const fallback = syntheticRangeRef.current;
+    if (fallback && hasMeaningfulRange(fallback)) {
+      setPriceRangeState({ map: fallback, source: "synthetic" });
+    } else {
+      setPriceRangeState(null);
+    }
+  }, []);
 
 
   // Estimate model once from synthetic data
   useEffect(() => {
     const rows = defaultSim();
+    const syntheticRange = collectPriceRange(rows);
+    if (hasMeaningfulRange(syntheticRange)) {
+      syntheticRangeRef.current = syntheticRange;
+      setPriceRangeState((prev) => prev ?? { map: syntheticRange, source: "synthetic" });
+    }
     // Closer init + more iters + a tiny tolerance for better convergence:
     const fit = fitMNL(
       rows,
@@ -858,6 +894,8 @@ export default function App() {
               tornadoRangeMode?: "symmetric" | "data";
               retentionPct?: number;
               kpiFloorAdj?: number;
+              priceRange?: TierRangeMap;
+              priceRangeSource?: PriceRangeSource;
             };
           };
         };
@@ -891,6 +929,19 @@ export default function App() {
           if (typeof scenario.analysis.kpiFloorAdj === "number") {
             setKpiFloorAdj(scenario.analysis.kpiFloorAdj);
           }
+          if (scenario.analysis.priceRange) {
+            const ok = setPriceRangeFromData(
+              scenario.analysis.priceRange,
+              scenario.analysis.priceRangeSource ?? "shared"
+            );
+            if (!ok) {
+              fallbackToSyntheticRanges();
+            }
+          } else {
+            fallbackToSyntheticRanges();
+          }
+        } else {
+          fallbackToSyntheticRanges();
         }
 
         rememberId(sid);
@@ -1298,16 +1349,17 @@ export default function App() {
   const [tornadoPctBump, setTornadoPctBump] = useState(2); // pp
 
   const dataDrivenBumps = useMemo(() => {
-    if (!importerRanges) return null;
+    const ranges = priceRangeState?.map;
+    if (!ranges) return null;
     const map: Partial<Record<Tier, number>> = {};
     TIER_ORDER.forEach((tier) => {
-      const stats = importerRanges[tier];
+      const stats = ranges[tier];
       if (stats && stats.max > stats.min) {
         map[tier] = Math.max(0.25, (stats.max - stats.min) / 2);
       }
     });
     return Object.keys(map).length ? map : null;
-  }, [importerRanges]);
+  }, [priceRangeState]);
 
   useEffect(() => {
     if (tornadoRangeMode === "data" && !dataDrivenBumps) {
@@ -1343,14 +1395,31 @@ export default function App() {
     return vals.reduce((a, b) => a + b, 0) / vals.length;
   }, []);
 
+
   const dataRangeSummary = useMemo(() => {
-    if (!dataDrivenBumps) return null;
-    return TIER_ORDER.map((tier) => {
-      const delta = dataDrivenBumps[tier];
+    const map = priceRangeState?.map;
+    if (!map) return null;
+    const prefix =
+      priceRangeState?.source === "imported"
+        ? "Imported ranges"
+        : priceRangeState?.source === "shared"
+        ? "Scenario ranges"
+        : "Synthetic ranges";
+    const rows = TIER_ORDER.map((tier) => {
+      const stats = map[tier];
       const label = tier.charAt(0).toUpperCase() + tier.slice(1);
-      return delta ? `${label} ±$${delta.toFixed(2)}` : `${label} —`;
-    }).join(" · ");
-  }, [dataDrivenBumps]);
+      if (!stats) return `${label} --`;
+      return `${label} $${stats.min.toFixed(2)}-$${stats.max.toFixed(2)}`;
+    });
+    return `${prefix}: ${rows.join(" · " )}`;
+  }, [priceRangeState]);
+
+  const dataRangeOptionLabel =
+    priceRangeState?.source === "imported"
+      ? "Data-driven (CSV)"
+      : priceRangeState?.source === "shared"
+      ? "Data-driven (scenario)"
+      : "Data-driven (default)";
 
   const scenarioForTornado = useMemo(
     () => ({
@@ -1560,6 +1629,7 @@ export default function App() {
     tornadoRangeMode: "symmetric" | "data";
     retentionPct: number;
     kpiFloorAdj: number;
+    priceRange: PriceRangeState | null;
   }) {
     const segs = normalizeSegmentsForSave(args.segments);
     return {
@@ -1576,6 +1646,12 @@ export default function App() {
         tornadoRangeMode: args.tornadoRangeMode,
         retentionPct: args.retentionPct,
         kpiFloorAdj: args.kpiFloorAdj,
+        ...(args.priceRange
+          ? {
+              priceRange: args.priceRange.map,
+              priceRangeSource: args.priceRange.source,
+            }
+          : {}),
       },
     };
   }
@@ -1651,6 +1727,7 @@ export default function App() {
         tornadoRangeMode,
         retentionPct,
         kpiFloorAdj,
+        priceRange: priceRangeState,
       });
 
       // 3) POST with retries/backoff for 5xx/429 + per-request timeout
@@ -1719,6 +1796,7 @@ export default function App() {
       tornadoRangeMode,
       retentionPct,
       kpiFloorAdj,
+      priceRange: priceRangeState,
     });
     writeSlot(id, snap);
     pushJ?.(`[${now()}] Saved current scenario to slot ${id}`);
@@ -1757,6 +1835,17 @@ export default function App() {
         setRetentionPct(sc.analysis.retentionPct);
       if (typeof sc.analysis.kpiFloorAdj === "number")
         setKpiFloorAdj(sc.analysis.kpiFloorAdj);
+      if (sc.analysis.priceRange) {
+        const ok = setPriceRangeFromData(
+          sc.analysis.priceRange,
+          sc.analysis.priceRangeSource ?? "shared"
+        );
+        if (!ok) fallbackToSyntheticRanges();
+      } else {
+        fallbackToSyntheticRanges();
+      }
+    } else {
+      fallbackToSyntheticRanges();
     }
     pushJ?.(`[${now()}] Loaded scenario from slot ${id}`);
     toast("success", `Loaded ${id}`);
@@ -2253,6 +2342,7 @@ export default function App() {
                   tornadoRangeMode,
                   retentionPct,
                   kpiFloorAdj,
+                  priceRange: priceRangeState,
                 });
                   const blob = new Blob([JSON.stringify(snap, null, 2)], {
                     type: "application/json",
@@ -2323,6 +2413,17 @@ export default function App() {
                           setRetentionPct(sc.analysis.retentionPct);
                         if (typeof sc.analysis.kpiFloorAdj === "number")
                           setKpiFloorAdj(sc.analysis.kpiFloorAdj);
+                        if (sc.analysis.priceRange) {
+                          const ok = setPriceRangeFromData(
+                            sc.analysis.priceRange,
+                            sc.analysis.priceRangeSource ?? "shared"
+                          );
+                          if (!ok) fallbackToSyntheticRanges();
+                        } else {
+                          fallbackToSyntheticRanges();
+                        }
+                      } else {
+                        fallbackToSyntheticRanges();
                       }
 
                       pushJ?.(`[${now()}] Imported scenario JSON`);
@@ -2442,7 +2543,16 @@ export default function App() {
                 onApply={({ segments, diagnostics, stats }) => {
                   const segs = mapFitToSegments(segments);
                   setSegments(segs);
-                  setImporterRanges(stats?.priceRange ?? null);
+                  if (
+                    !stats ||
+                    !stats.priceRange ||
+                    !setPriceRangeFromData(
+                      stats.priceRange,
+                      stats.priceRangeSource ?? "imported"
+                    )
+                  ) {
+                    fallbackToSyntheticRanges();
+                  }
                   setFitInfo(diagnostics);
                   pushJ?.(
                     `[${now()}] Estimated from sales data (logLik=${Math.round(
@@ -2685,8 +2795,8 @@ export default function App() {
                   }
                 >
                   <option value="symmetric">±{tornadoPriceBump}% symmetric</option>
-                  <option value="data" disabled={!dataDrivenBumps}>
-                    Data-driven (CSV)
+                  <option value="data" disabled={!priceRangeState?.map}>
+                    {dataRangeOptionLabel}
                   </option>
                 </select>
               </label>
@@ -2712,7 +2822,7 @@ export default function App() {
               ) : (
                 <div className="text-[11px] text-slate-600 min-w-48">
                   {dataRangeSummary ??
-                    "Import a sales CSV to unlock data-driven ranges."}
+                    "No data-driven ranges yet. Import sales data to override the default span."}
                 </div>
               )}
 

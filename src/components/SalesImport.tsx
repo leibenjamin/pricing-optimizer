@@ -6,6 +6,7 @@ import { inferMapping, validateMapping } from "../lib/salesSchema";
 import type { LongRow, ParsedResp, SampleResp, ParseReq } from "../workers/salesParser";
 import { downloadBlob } from "../lib/download";
 import { buildSalesSampleCSV } from "../lib/salesSample";
+import { collectPriceRange, hasMeaningfulRange, type TierRangeMap } from "../lib/priceRange";
 
 type PriceKey = "price_good" | "price_better" | "price_best";
 type TierKey = "good" | "better" | "best";
@@ -26,7 +27,8 @@ const TIER_LABELS: Record<TierKey, string> = {
 type SegmentOut = { name: string; weight: number; beta: { price: number; featA: number; featB: number } };
 type Diagnostics = { logLik: number; iters: number; converged: boolean };
 type FitStats = {
-  priceRange?: Partial<Record<TierKey, { min: number; max: number }>>;
+  priceRange?: TierRangeMap;
+  priceRangeSource?: "synthetic" | "imported" | "shared";
 };
 
 export default function SalesImport(props: {
@@ -189,23 +191,18 @@ export default function SalesImport(props: {
       });
 
 
-      const priceRangeByTier = PRICE_KEYS.reduce<Partial<Record<TierKey, { min: number; max: number }>>>(
-        (acc, key, idx) => {
-          const stats = preflight?.priceRange?.[key];
-          if (stats) {
-            const tier = TIER_KEYS[idx];
-            acc[tier] = { min: stats.min, max: stats.max };
-          }
-          return acc;
-        },
-        {}
-      );
-      const hasRange = Object.keys(priceRangeByTier).length > 0;
+      const priceRangeByTier = collectPriceRange(longRows);
+      const hasRange = hasMeaningfulRange(priceRangeByTier);
 
       onToast?.("success", "Estimated coefficients from sales data");
       onApply({
         ...fit,
-        stats: hasRange ? { priceRange: priceRangeByTier } : undefined,
+        stats: hasRange
+          ? {
+              priceRange: priceRangeByTier,
+              priceRangeSource: "imported",
+            }
+          : undefined,
       });
       onDone?.();
     } catch (e) {
