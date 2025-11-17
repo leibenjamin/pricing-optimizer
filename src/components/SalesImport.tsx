@@ -390,13 +390,6 @@ export default function SalesImport(props: {
           />
         </label>
         {fileName && <span className="text-xs text-gray-500">{fileName}</span>}
-        <button
-          className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50 disabled:opacity-50"
-          disabled={!mappingCheck.ok || !headers.length || busy}
-          onClick={runEstimate}
-        >
-          {busy ? "Estimating…" : "Estimate"}
-        </button>
       </div>
 
       <p className="text-[11px] text-gray-600">
