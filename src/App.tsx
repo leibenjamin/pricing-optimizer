@@ -357,7 +357,7 @@ export default function App() {
       { kind: "tornado",   sectionId: "tornado-compare",        chartId: "tornado-current",    label: "Shift (Cur)", aria: "Export sensitivity shift (Current)" },
       { kind: "tornado",   sectionId: "tornado-compare",        chartId: "tornado-optim",      label: "Shift (Opt)", aria: "Export sensitivity shift (Optimized)" },
       { kind: "waterfall", sectionId: "pocket-price-waterfall", chartId: "waterfall-main",     label: "Waterfall",   aria: "Export Pocket Price Waterfall" },
-      { kind: "coverage",  sectionId: "kpi-pocket-coverage",    chartId: "coverage-main",      label: "Coverage",    aria: "Export pocket floor coverage" },
+      { kind: "coverage",  sectionId: "kpi-pocket-coverage",    chartId: "coverage-heatmap",   label: "Coverage",    aria: "Export pocket floor coverage" },
     ];
 
     // Dispatch helper (used by buttons and keyboard shortcuts)
@@ -1139,7 +1139,6 @@ export default function App() {
   const cancelRef = useRef<null | (() => void)>(null);
 
   const [kpiFloorAdj, setKpiFloorAdj] = useState(0); // -10..+10 (pp)
-  const coverageChartId = "coverage-main";
   const coverageSnapshot = useMemo(() => {
     const floors0 = optConstraints.marginFloor;
     const adj = (x: number) =>
@@ -1160,15 +1159,11 @@ export default function App() {
       delta: pct1 - pct0,
       tested: moved.tested,
       step: optRanges.step,
+      floors: floors1,
     };
   }, [optConstraints.marginFloor, optConstraints.gapGB, optConstraints.gapBB, optRanges, costs, leak, kpiFloorAdj]);
 
   const lastAppliedPricesRef = useRef<{
-    good: number;
-    better: number;
-    best: number;
-  } | null>(null);
-  const lastAppliedFloorsRef = useRef<{
     good: number;
     better: number;
     best: number;
@@ -1329,116 +1324,6 @@ export default function App() {
       setBaselineKPIs(currentKPIs);
     }
   }, [baselineKPIs, currentKPIs]);
-
-  const exportCoverageSnapshot = useCallback(
-    (type: "png" | "csv") => {
-      if (!coverageSnapshot) return;
-      if (type === "csv") {
-        const rows: Array<[string, string | number]> = [
-          ["baseline_pct", coverageSnapshot.pct0],
-          ["adjusted_pct", coverageSnapshot.pct1],
-          ["delta_pp", coverageSnapshot.delta],
-          ["tested_combos", coverageSnapshot.tested],
-          ["grid_step", coverageSnapshot.step],
-          ["floor_adjust_pp", kpiFloorAdj],
-        ];
-        const csv =
-          "metric,value\n" +
-          rows.map(([k, v]) => `${k},${v}`).join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "pocket_coverage.csv";
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 500);
-      } else {
-        const width = 640;
-        const height = 360;
-        const scale = 2;
-        const canvas = document.createElement("canvas");
-        canvas.width = width * scale;
-        canvas.height = height * scale;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        ctx.scale(scale, scale);
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, width, height);
-        ctx.fillStyle = "#0f172a";
-        ctx.font = "20px 'Inter', 'Segoe UI', sans-serif";
-        ctx.fillText("Pocket floor coverage", 32, 40);
-        ctx.font = "14px 'Inter', 'Segoe UI', sans-serif";
-        ctx.fillStyle = "#475569";
-        ctx.fillText(
-          `Baseline: ${coverageSnapshot.pct0}%`,
-          32,
-          70
-        );
-        ctx.fillText(
-          `Adjusted: ${coverageSnapshot.pct1}%`,
-          32,
-          95
-        );
-        ctx.fillText(
-          `Delta: ${coverageSnapshot.delta >= 0 ? "+" : ""}${coverageSnapshot.delta}pp`,
-          32,
-          120
-        );
-        ctx.fillText(
-          `Tested ladders: ${coverageSnapshot.tested.toLocaleString()}`,
-          32,
-          145
-        );
-        ctx.fillText(`Grid step: $${optRanges.step}`, 32, 170);
-
-        const chartX = 300;
-        const chartY = 80;
-        const chartHeight = 220;
-        const barWidth = 70;
-        const gap = 40;
-
-        const drawBar = (xPos: number, pct: number, color: string) => {
-          const hVal = Math.max(0, Math.min(100, pct)) / 100;
-          const barHeight = hVal * chartHeight;
-          ctx.fillStyle = color;
-          ctx.fillRect(
-            xPos,
-            chartY + chartHeight - barHeight,
-            barWidth,
-            barHeight
-          );
-          ctx.fillStyle = "#0f172a";
-          ctx.font = "14px 'Inter', 'Segoe UI', sans-serif";
-          ctx.fillText(
-            `${pct}%`,
-            xPos,
-            chartY + chartHeight + 24
-          );
-        };
-
-        ctx.fillStyle = "#cbd5f5";
-        drawBar(chartX, coverageSnapshot.pct0, "#cbd5f5");
-        drawBar(chartX + barWidth + gap, coverageSnapshot.pct1, "#2563eb");
-
-        const pngUrl = canvas.toDataURL("image/png");
-        const a = document.createElement("a");
-        a.href = pngUrl;
-        a.download = "pocket_coverage.png";
-        a.click();
-      }
-    },
-    [coverageSnapshot, kpiFloorAdj, optRanges.step]
-  );
-
-  useEffect(() => {
-    const onExport = (ev: Event) => {
-      const ce = ev as CustomEvent<{ id?: string; type?: "png" | "csv" }>;
-      if (ce.detail?.id && ce.detail.id !== coverageChartId) return;
-      exportCoverageSnapshot(ce.detail?.type ?? "png");
-    };
-    window.addEventListener("export:coverage", onExport as EventListener);
-    return () => window.removeEventListener("export:coverage", onExport as EventListener);
-  }, [coverageChartId, exportCoverageSnapshot]);
 
   const explainDelta = useMemo<ExplainDelta | null>(() => {
     if (!baselineKPIs || !segments.length) return null;
@@ -4161,12 +4046,12 @@ export default function App() {
             </div>
           </Section>
 
+
           <Section
             id="kpi-pocket-coverage"
             title="KPI — Pocket floor coverage"
-            actions={<ActionCluster chart="coverage" id={coverageChartId} csv />}
+            actions={<ActionCluster chart="coverage" id="coverage-heatmap" csv />}
           >
-            {/* Sensitivity control */}
             <div className="flex items-center gap-2 text-xs mb-2">
               <span className="text-gray-600">Floor sensitivity:</span>
               <input
@@ -4180,48 +4065,18 @@ export default function App() {
             </div>
 
             {(() => {
-              // Baseline floors (no adjustment)
-              const floors0 = optConstraints.marginFloor;
-
-              // Adjusted floors (slider)
-              const adj = (x: number) =>
-                Math.max(0, Math.min(0.95, x + kpiFloorAdj / 100));
-              const floors1 = {
-                good: adj(floors0.good),
-                better: adj(floors0.better),
-                best: adj(floors0.best),
-              };
-
-              // Compute coverage
-              const base = pocketCoverage(
-                optRanges,
-                costs,
-                floors0,
-                { gapGB: optConstraints.gapGB, gapBB: optConstraints.gapBB },
-                leak
-              );
-              const moved = pocketCoverage(
-                optRanges,
-                costs,
-                floors1,
-                { gapGB: optConstraints.gapGB, gapBB: optConstraints.gapBB },
-                leak
-              );
-
-              const pct0 = Math.round(base.coverage * 100);
-              const pct1 = Math.round(moved.coverage * 100);
-              const delta = pct1 - pct0;
-
+              const pct0 = coverageSnapshot.pct0;
+              const pct1 = coverageSnapshot.pct1;
+              const delta = coverageSnapshot.delta;
               const tone =
                 pct1 >= 70
                   ? "text-green-700 bg-green-50 border-green-200"
                   : pct1 >= 40
                   ? "text-amber-700 bg-amber-50 border-amber-200"
                   : "text-red-700 bg-red-50 border-red-200";
-
+              const floors1 = coverageSnapshot.floors;
               return (
                 <>
-                  {/* KPI number + explain line + apply button */}
                   <div
                     className={`rounded border px-4 py-3 inline-flex items-center gap-4 ${tone}`}
                   >
@@ -4233,57 +4088,33 @@ export default function App() {
                         feasible ladders (pocket floors)
                       </div>
                       <div className="text-[11px] text-gray-600 mt-1">
-                        baseline {pct0}% → {pct1}%{" "}
-                        {delta >= 0 ? `(+${delta}pp)` : `(${delta}pp)`} •{" "}
-                        {moved.tested.toLocaleString()} combos • step $
-                        {optRanges.step}
+                        baseline {pct0}% → {pct1}% ·{" "}
+                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} ·{" "}
+                        {coverageSnapshot.tested.toLocaleString()} combos · step $
+                        {coverageSnapshot.step}
                       </div>
                     </div>
                     <button
                       className="text-xs border rounded px-3 py-1 bg-white hover:bg-gray-50"
                       onClick={() => {
-                        lastAppliedFloorsRef.current = {
-                          ...optConstraints.marginFloor,
-                        }; // stash
-                        // Write adjusted floors back to constraints
-                        setOptConstraints((prev) => ({
-                          ...prev,
-                          marginFloor: { ...floors1 },
-                        }));
-                        // Optional: log to journal if you use pushJ
-                        if (typeof pushJ === "function") {
-                          pushJ(
-                            `Applied floors: good ${Math.round(
-                              floors1.good * 100
-                            )}% • better ${Math.round(
-                              floors1.better * 100
-                            )}% • best ${Math.round(floors1.best * 100)}%`
-                          );
-                        }
-                      }}
-                    >
-                      Apply adjusted floors
-                    </button>
-
-                    <button
-                      className="ml-2 text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50 disabled:opacity-50"
-                      disabled={!lastAppliedFloorsRef.current}
-                      onClick={() => {
-                        const prev = lastAppliedFloorsRef.current;
-                        if (!prev) return;
                         setOptConstraints((c) => ({
                           ...c,
-                          marginFloor: { ...prev },
+                          marginFloor: { ...floors1 },
                         }));
-                        lastAppliedFloorsRef.current = null;
-                        pushJ?.("Undo: restored previous margin floors");
+                        toast(
+                          "success",
+                          `Applied floors: Good ${Math.round(
+                            floors1.good * 100
+                          )}%, Better ${Math.round(
+                            floors1.better * 100
+                          )}%, Best ${Math.round(floors1.best * 100)}%`
+                        );
                       }}
                     >
-                      Undo apply floors
+                      Apply floors
                     </button>
                   </div>
 
-                  {/* Mini heatmap (Good × Better slice) */}
                   <div className="mt-3">
                     {(() => {
                       const { cells, gTicks, bTicks, bestUsed } =
@@ -4305,7 +4136,7 @@ export default function App() {
                             </summary>
                             <div className="text-[11px] text-gray-600 mt-1">
                               Good × Better feasibility with Best fixed near the
-                              lower feasible bound (≈ ${bestUsed}).
+                              lower feasible bound (approx {bestUsed}).
                             </div>
                           </details>
 
@@ -4313,6 +4144,8 @@ export default function App() {
                             cells={cells}
                             gTicks={gTicks}
                             bTicks={bTicks}
+                            chartId="coverage-heatmap"
+                            exportKind="coverage"
                           />
                         </>
                       );

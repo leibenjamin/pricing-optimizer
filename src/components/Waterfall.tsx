@@ -73,7 +73,6 @@ export default function Waterfall({
   listPrice,
   steps,
   variant = "full",
-  onDownloadLabel = "PNG",
   chartId,
   colorMap,
 }: {
@@ -82,7 +81,6 @@ export default function Waterfall({
   listPrice: number;
   steps: WaterStep[];
   variant?: "full" | "mini";
-  onDownloadLabel?: string;
   chartId?: string;
   colorMap?: Record<string, string>;
 }) {
@@ -270,7 +268,7 @@ export default function Waterfall({
       chartRef.current?.dispose();
       chartRef.current = null;
     };
-  }, [title, subtitle, listPrice, steps, variant, vw]);
+  }, [title, subtitle, listPrice, steps, variant, vw, palette]);
 
   type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
 
@@ -316,25 +314,6 @@ export default function Waterfall({
 
   return (
     <div className={`relative w-full ${isMini ? "h-56" : "h-80 md:h-72"} overflow-hidden`}>
-      {!isMini && (
-        <button
-          className="absolute right-2 top-2 text-[10px] border rounded px-2 py-1 bg-white/70"
-          onClick={() => {
-            if (!chartRef.current) return;
-            const url = chartRef.current.getDataURL({
-              type: "png",
-              pixelRatio: 2,
-              backgroundColor: "#ffffff",
-            });
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "waterfall.png";
-            a.click();
-          }}
-        >
-          {onDownloadLabel}
-        </button>
-      )}
       <div ref={ref} className="w-full h-full" />
     </div>
   );

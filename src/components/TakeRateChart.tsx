@@ -132,27 +132,7 @@ export default function TakeRateChart(props: {
 
   return (
     <div className={`w-full ${className ?? ""}`}>
-      {/* tiny toolbar */}
-      <div className="flex items-center justify-between mb-1">
-        <div className="text-xs text-gray-600">Take-rate by tier</div>
-        <button
-          className="text-[11px] border rounded px-2 py-1 bg-white hover:bg-gray-50"
-          aria-label="Download take-rate CSV"
-          onClick={() => {
-            const rows: (string | number)[][] = [
-              ["tier", "take_rate_pct"],
-              ["None",   (data.none   * 100).toFixed(2)],
-              ["Good",   (data.good   * 100).toFixed(2)],
-              ["Better", (data.better * 100).toFixed(2)],
-              ["Best",   (data.best   * 100).toFixed(2)],
-            ];
-            const csv = csvFromRows(rows);
-            downloadBlob(csv, "take_rate.csv", "text/csv;charset=utf-8");
-          }}
-        >
-          CSV
-        </button>
-      </div>
+      <div className="text-xs text-gray-600 mb-1">Take-rate by tier</div>
 
       {/* chart root */}
       <div className="h-64 w-full" ref={divRef} />
