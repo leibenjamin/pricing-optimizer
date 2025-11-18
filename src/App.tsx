@@ -2673,6 +2673,72 @@ export default function App() {
             </Modal>
           </Section>
 
+          <Section id="preset-scenarios" title="Preset scenarios">
+            <PresetPicker
+              presets={PRESETS}
+              activeId={scenarioPresetId}
+              onApply={applyScenarioPreset}
+              infoId="presets.scenario"
+              className="mt-1"
+            />
+          </Section>
+
+          <Section id="scenario-journal" title="Scenario Journal">
+            <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
+              {journal.length === 0 ? (
+                <li className="text-gray-400">
+                  Adjust sliders/toggles to log changes…
+                </li>
+              ) : (
+                journal.map((line, i) => <li key={i}>{line}</li>)
+              )}
+              <li>
+                Revenue (N=1000): <strong>{fmtUSD(revenue)}</strong>
+              </li>
+              <li>
+                Profit (N=1000): <strong>{fmtUSD(profit)}</strong>
+              </li>
+              <li>
+                Active customers:{" "}
+                <strong>{activeCustomers.toLocaleString()}</strong>
+              </li>
+              <li>
+                ARPU (active only): <strong>{fmtUSD(arpu)}</strong>
+              </li>
+              <li>
+                Profit / customer (all N):{" "}
+                <strong>{fmtUSD(profitPerCustomer)}</strong>
+              </li>
+              <li>
+                Gross margin: <strong>{fmtPct(grossMarginPct)}</strong>
+              </li>
+            </ul>
+            <div className="mt-2 flex gap-2">
+              <button
+                className="text-xs border px-2 py-1 rounded"
+                onClick={() => setJournal([])}
+              >
+                Clear
+              </button>
+              <button
+                className="text-xs border px-2 py-1 rounded"
+                onClick={() => {
+                  const blob = new Blob([journal.slice().reverse().join("\n")], {
+                    type: "text/plain",
+                  });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "scenario-journal.txt";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                Download .txt
+              </button>
+            </div>
+          </Section>
+
           <Section id="reference-prices" title="Reference prices">
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2 items-center">
               <label className="text-sm">Good</label>
@@ -2962,6 +3028,46 @@ export default function App() {
             </p>
           </Section>
 
+          <Section id="callouts" title="Callouts">
+            <div className="text-sm text-gray-700 space-y-2">
+              <div>
+                <strong>So what?</strong> Conversion delta{" "}
+                {Math.round((probs.good + probs.better + probs.best) * 100)}%.
+              </div>
+              <div className="text-xs text-gray-600">
+                Best-price optimum -> <strong>${approx(bestPriceOpt)}</strong>{" "}
+                (profit -> <strong>{fmtUSD(bestProfitOpt)}</strong>). Segments:
+                Price-sens / Value / Premium.
+              </div>
+              {optResult && (
+                <div className="mt-1 inline-block text-[11px] px-2 py-1 rounded bg-gray-100 border">
+                  Opt best: ${optResult.prices.good}/{optResult.prices.better}/
+                  {optResult.prices.best} (profit delta $
+                  {Math.round(optResult.profit)})
+                </div>
+              )}
+              <details className="mt-1">
+                <summary className="cursor-pointer select-none text-[11px] text-gray-600">
+                  Why these numbers?
+                </summary>
+                <div className="space-y-1 mt-1 text-[11px] text-gray-600">
+                  <div>
+                    Frontier shows profit vs Best price with current Good/Better
+                    fixed.
+                  </div>
+                  <div>
+                    Pocket price ({waterTier}) -> ${water.pocket.toFixed(2)} from
+                    list ${listForWater.toFixed(2)}.
+                  </div>
+                  <div>
+                    Anchoring on refs ${refPrices.good}/${refPrices.better}/$
+                    {refPrices.best}; loss aversion on increases.
+                  </div>
+                </div>
+              </details>
+            </div>
+          </Section>
+
           <Section id="current-vs-optimized" title="Current vs Optimized">
             {(() => {
               const curProfit = optConstraints.usePocketProfit
@@ -3121,6 +3227,317 @@ export default function App() {
                 </div>
               );
             })()}
+          </Section>
+
+          <Section id="global-optimizer" title="Global Optimizer">
+            {/* Compact header: inline ranges + actions */}
+            <div className="flex flex-col gap-3">
+              {/* Header row wraps nicely on small screens */}
+              <div className="flex flex-wrap items-end gap-3 text-xs">
+                <span className="font-semibold mr-2 basis-full sm:basis-auto">
+                  Ranges ($)
+                </span>
+
+                {/* Good */}
+                <label className="flex items-center gap-1">
+                  <span className="w-12">Good</span>
+                  <input
+                    type="number"
+                    className="border rounded px-2 h-8 w-16"
+                    aria-label="Good min"
+                    value={optRanges.good[0]}
+                    onChange={(e) =>
+                      setOptRanges((r) => ({
+                        ...r,
+                        good: [Number(e.target.value), r.good[1]] as [
+                          number,
+                          number
+                        ],
+                      }))
+                    }
+                  />
+                  <span>-</span>
+                  <input
+                    type="number"
+                    className="border rounded px-2 h-8 w-16"
+                    aria-label="Good max"
+                    value={optRanges.good[1]}
+                    onChange={(e) =>
+                      setOptRanges((r) => ({
+                        ...r,
+                        good: [r.good[0], Number(e.target.value)] as [
+                          number,
+                          number
+                        ],
+                      }))
+                    }
+                  />
+                </label>
+
+                {/* Better */}
+                <label className="flex items-center gap-1">
+                  <span className="w-12">Better</span>
+                  <input
+                    type="number"
+                    className="border rounded px-2 h-8 w-16"
+                    aria-label="Better min"
+                    value={optRanges.better[0]}
+                    onChange={(e) =>
+                      setOptRanges((r) => ({
+                        ...r,
+                        better: [Number(e.target.value), r.better[1]] as [
+                          number,
+                          number
+                        ],
+                      }))
+                    }
+                  />
+                  <span>-</span>
+                  <input
+                    type="number"
+                    className="border rounded px-2 h-8 w-16"
+                    aria-label="Better max"
+                    value={optRanges.better[1]}
+                    onChange={(e) =>
+                      setOptRanges((r) => ({
+                        ...r,
+                        better: [r.better[0], Number(e.target.value)] as [
+                          number,
+                          number
+                        ],
+                      }))
+                    }
+                  />
+                </label>
+
+                {/* Best */}
+                <label className="flex items-center gap-1">
+                  <span className="w-12">Best</span>
+                  <input
+                    type="number"
+                    className="border rounded px-2 h-8 w-16"
+                    aria-label="Best min"
+                    value={optRanges.best[0]}
+                    onChange={(e) =>
+                      setOptRanges((r) => ({
+                        ...r,
+                        best: [Number(e.target.value), r.best[1]] as [
+                          number,
+                          number
+                        ],
+                      }))
+                    }
+                  />
+                  <span>-</span>
+                  <input
+                    type="number"
+                    className="border rounded px-2 h-8 w-16"
+                    aria-label="Best max"
+                    value={optRanges.best[1]}
+                    onChange={(e) =>
+                      setOptRanges((r) => ({
+                        ...r,
+                        best: [r.best[0], Number(e.target.value)] as [
+                          number,
+                          number
+                        ],
+                      }))
+                    }
+                  />
+                </label>
+
+                {/* Step */}
+                <label className="flex items-center gap-1">
+                  <span className="w-8">Step</span>
+                  <input
+                    type="number"
+                    className="border rounded px-2 h-8 w-16"
+                    aria-label="Step"
+                    value={optRanges.step}
+                    onChange={(e) =>
+                      setOptRanges((r) => ({
+                        ...r,
+                        step: Math.max(0.25, Number(e.target.value)),
+                      }))
+                    }
+                  />
+                </label>
+
+                {/* Actions */}
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50"
+                    onClick={runOptimizer}
+                    disabled={isOptRunning}
+                  >
+                    {isOptRunning ? "Running..." : "Run"}
+                  </button>
+                  <button
+                    className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50 disabled:opacity-50"
+                    onClick={applyOptimizedPrices}
+                    disabled={!optResult || isOptRunning}
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+
+              {/* Result line (one-liner) */}
+              <div className="text-xs text-gray-700">
+                {optError && (
+                  <span className="text-red-600 mr-2">Error: {optError}</span>
+                )}
+                {optResult ? (
+                  <span>
+                    Best ladder ${optResult.prices.good}/$
+                    {optResult.prices.better}/${optResult.prices.best} -> Profit
+                    delta ${Math.round(optResult.profit)}
+                  </span>
+                ) : (
+                  <span className="text-gray-500">No result yet</span>
+                )}
+              </div>
+              {optResult && optimizerWhyLines.length > 0 && (
+                <div className="mt-2 rounded border border-dashed border-gray-200 bg-slate-50 p-3">
+                  <div className="text-xs font-semibold text-slate-700 mb-1">
+                    Why these prices?
+                  </div>
+                  <ul className="list-disc ml-4 space-y-1 text-[11px] text-gray-700">
+                    {optimizerWhyLines.map((line, idx) => (
+                      <li key={idx}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <details className="text-[11px] text-gray-600">
+                <summary className="cursor-pointer select-none">
+                  How ranges & floors work
+                </summary>
+                <div className="mt-1 print-tight">
+                  Optimizer searches the grid defined by ranges and step. Gap
+                  constraints keep ladder spacing consistent. Floors can be
+                  checked on list or <em>pocket</em> margin. Use Apply to write
+                  prices back to the Scenario Panel.
+                </div>
+              </details>
+
+              {/* Advanced constraints (collapsible) */}
+              <details className="rounded border border-gray-200 p-3 bg-gray-50/60">
+                <summary className="cursor-pointer select-none text-xs font-medium">
+                  Advanced constraints
+                </summary>
+
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                  <label className="flex items-center gap-2">
+                    <span className="w-28">Gap G->B</span>
+                    <input
+                      type="number"
+                      className="border rounded px-2 h-8 flex-1"
+                      value={optConstraints.gapGB}
+                      onChange={(e) =>
+                        setOptConstraints((c) => ({
+                          ...c,
+                          gapGB: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <span className="w-28">Gap B->Best</span>
+                    <input
+                      type="number"
+                      className="border rounded px-2 h-8 flex-1"
+                      value={optConstraints.gapBB}
+                      onChange={(e) =>
+                        setOptConstraints((c) => ({
+                          ...c,
+                          gapBB: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <div>
+                    <div className="text-[11px] font-semibold mb-1">
+                      Margin floors
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(["good", "better", "best"] as const).map((t) => (
+                        <label key={t} className="text-[11px]">
+                          {t}
+                          <input
+                            type="number"
+                            className="mt-1 w-full border rounded px-1 py-0.5"
+                            value={optConstraints.marginFloor[t]}
+                            step={0.01}
+                            onChange={(e) =>
+                              setOptConstraints((c) => ({
+                                ...c,
+                                marginFloor: {
+                                  ...c.marginFloor,
+                                  [t]: Number(e.target.value),
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={optConstraints.charm}
+                      onChange={(e) =>
+                        setOptConstraints((c) => ({
+                          ...c,
+                          charm: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span>Charm endings (.99)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={optConstraints.usePocketMargins}
+                      onChange={(e) =>
+                        setOptConstraints((c) => ({
+                          ...c,
+                          usePocketMargins: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span>
+                      Use <em>pocket</em> price for margin floors
+                    </span>
+                  </label>
+
+                  <p className="text-[11px] text-gray-500 sm:col-span-2 print-tight">
+                    When enabled, margins are checked on pocket (after
+                    promo/payment/FX/refunds) instead of list.
+                  </p>
+
+                  <label className="flex items-center gap-2 sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={optConstraints.usePocketProfit}
+                      onChange={(e) =>
+                        setOptConstraints((c) => ({
+                          ...c,
+                          usePocketProfit: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span>Compute profit using pocket price</span>
+                  </label>
+                </div>
+              </details>
+            </div>
           </Section>
 
           <div className="print-page" aria-hidden="true" />
@@ -3669,419 +4086,11 @@ export default function App() {
           </Section>
         </div>
 
-        {/* Right: Journal */}
+        {/* Right: Support cards */}
         <div
           className="col-span-12 md:col-span-3 space-y-3 md:space-y-4 min-w-0 self-start md:text-[13px] pr-1"
         >
-          <Section id="preset-scenarios" title="Preset scenarios">
-            <PresetPicker
-              presets={PRESETS}
-              activeId={scenarioPresetId}
-              onApply={applyScenarioPreset}
-              infoId="presets.scenario"
-              className="mt-1"
-            />
-          </Section>
-
-          <Section id="scenario-journal" title="Scenario Journal">
-            <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
-              {journal.length === 0 ? (
-                <li className="text-gray-400">
-                  Adjust sliders/toggles to log changes…
-                </li>
-              ) : (
-                journal.map((line, i) => <li key={i}>{line}</li>)
-              )}
-              <li>
-                Revenue (N=1000): <strong>{fmtUSD(revenue)}</strong>
-              </li>
-              <li>
-                Profit (N=1000): <strong>{fmtUSD(profit)}</strong>
-              </li>
-              <li>
-                Active customers:{" "}
-                <strong>{activeCustomers.toLocaleString()}</strong>
-              </li>
-              <li>
-                ARPU (active only): <strong>{fmtUSD(arpu)}</strong>
-              </li>
-              <li>
-                Profit / customer (all N):{" "}
-                <strong>{fmtUSD(profitPerCustomer)}</strong>
-              </li>
-              <li>
-                Gross margin: <strong>{fmtPct(grossMarginPct)}</strong>
-              </li>
-            </ul>
-            <div className="mt-2 flex gap-2">
-              <button
-                className="text-xs border px-2 py-1 rounded"
-                onClick={() => setJournal([])}
-              >
-                Clear
-              </button>
-              <button
-                className="text-xs border px-2 py-1 rounded"
-                onClick={() => {
-                  const blob = new Blob(
-                    [journal.slice().reverse().join("\n")],
-                    { type: "text/plain" }
-                  );
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = "scenario-journal.txt";
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-              >
-                Download .txt
-              </button>
-            </div>
-          </Section>
-
-          <Section id="callouts" title="Callouts">
-            <div className="text-sm text-gray-700 space-y-2">
-              <div>
-                <strong>So what?</strong> Conversion ≈{" "}
-                {Math.round((probs.good + probs.better + probs.best) * 100)}%.
-              </div>
-              <div className="text-xs text-gray-600">
-                Best-price optimum ≈ <strong>${approx(bestPriceOpt)}</strong>{" "}
-                (profit ≈ <strong>{fmtUSD(bestProfitOpt)}</strong>). Segments:
-                Price-sens / Value / Premium.
-              </div>
-              {optResult && (
-                <div className="mt-1 inline-block text-[11px] px-2 py-1 rounded bg-gray-100 border">
-                  Opt best: ${optResult.prices.good}/{optResult.prices.better}/
-                  {optResult.prices.best} • π≈${Math.round(optResult.profit)}
-                </div>
-              )}
-              <details className="mt-1">
-                <summary className="cursor-pointer select-none text-[11px] text-gray-600">
-                  Why these numbers?
-                </summary>
-                <div className="space-y-1 mt-1 text-[11px] text-gray-600">
-                  <div>
-                    Frontier shows profit vs Best price with current Good/Better
-                    fixed.
-                  </div>
-                  <div>
-                    Pocket price ({waterTier}) ≈ ${water.pocket.toFixed(2)} from
-                    list ${listForWater.toFixed(2)}.
-                  </div>
-                  <div>
-                    Anchoring on refs ${refPrices.good}/${refPrices.better}/$
-                    {refPrices.best}; loss aversion on increases.
-                  </div>
-                </div>
-              </details>
-            </div>
-          </Section>
-
-          <Section id="global-optimizer" title="Global Optimizer">
-            {/* Compact header: inline ranges + actions */}
-            <div className="flex flex-col gap-3">
-              {/* Header row wraps nicely on small screens */}
-              <div className="flex flex-wrap items-end gap-3 text-xs">
-                <span className="font-semibold mr-2 basis-full sm:basis-auto">
-                  Ranges ($)
-                </span>
-
-                {/* Good */}
-                <label className="flex items-center gap-1">
-                  <span className="w-12">Good</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Good min"
-                    value={optRanges.good[0]}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        good: [Number(e.target.value), r.good[1]] as [
-                          number,
-                          number
-                        ],
-                      }))
-                    }
-                  />
-                  <span>–</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Good max"
-                    value={optRanges.good[1]}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        good: [r.good[0], Number(e.target.value)] as [
-                          number,
-                          number
-                        ],
-                      }))
-                    }
-                  />
-                </label>
-
-                {/* Better */}
-                <label className="flex items-center gap-1">
-                  <span className="w-12">Better</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Better min"
-                    value={optRanges.better[0]}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        better: [Number(e.target.value), r.better[1]] as [
-                          number,
-                          number
-                        ],
-                      }))
-                    }
-                  />
-                  <span>–</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Better max"
-                    value={optRanges.better[1]}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        better: [r.better[0], Number(e.target.value)] as [
-                          number,
-                          number
-                        ],
-                      }))
-                    }
-                  />
-                </label>
-
-                {/* Best */}
-                <label className="flex items-center gap-1">
-                  <span className="w-12">Best</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Best min"
-                    value={optRanges.best[0]}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        best: [Number(e.target.value), r.best[1]] as [
-                          number,
-                          number
-                        ],
-                      }))
-                    }
-                  />
-                  <span>–</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Best max"
-                    value={optRanges.best[1]}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        best: [r.best[0], Number(e.target.value)] as [
-                          number,
-                          number
-                        ],
-                      }))
-                    }
-                  />
-                </label>
-
-                {/* Step */}
-                <label className="flex items-center gap-1">
-                  <span className="w-8">Step</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Step"
-                    value={optRanges.step}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        step: Math.max(0.25, Number(e.target.value)),
-                      }))
-                    }
-                  />
-                </label>
-
-                {/* Actions */}
-                <div className="ml-auto flex items-center gap-2">
-                  <button
-                    className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50"
-                    onClick={runOptimizer}
-                    disabled={isOptRunning}
-                  >
-                    {isOptRunning ? "Running…" : "Run"}
-                  </button>
-                  <button
-                    className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50 disabled:opacity-50"
-                    onClick={applyOptimizedPrices}
-                    disabled={!optResult || isOptRunning}
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-
-              {/* Result line (one-liner) */}
-              <div className="text-xs text-gray-700">
-                {optError && (
-                  <span className="text-red-600 mr-2">Error: {optError}</span>
-                )}
-                {optResult ? (
-                  <span>
-                    Best ladder $${optResult.prices.good}/$$
-                    {optResult.prices.better}/$${optResult.prices.best} • Profit
-                    ≈ ${Math.round(optResult.profit)}
-                  </span>
-                ) : (
-                  <span className="text-gray-500">No result yet</span>
-                )}
-              </div>
-              {optResult && optimizerWhyLines.length > 0 && (
-                <div className="mt-2 rounded border border-dashed border-gray-200 bg-slate-50 p-3">
-                  <div className="text-xs font-semibold text-slate-700 mb-1">
-                    Why these prices?
-                  </div>
-                  <ul className="list-disc ml-4 space-y-1 text-[11px] text-gray-700">
-                    {optimizerWhyLines.map((line, idx) => (
-                      <li key={idx}>{line}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <details className="text-[11px] text-gray-600">
-                <summary className="cursor-pointer select-none">
-                  How ranges & floors work
-                </summary>
-                <div className="mt-1 print-tight">
-                  Optimizer searches the grid defined by ranges and step. Gap
-                  constraints keep ladder spacing consistent. Floors can be
-                  checked on list or <em>pocket</em> margin. Use Apply to write
-                  prices back to the Scenario Panel.
-                </div>
-              </details>
-
-              {/* Advanced constraints (collapsible) */}
-              <details className="rounded border border-gray-200 p-3 bg-gray-50/60">
-                <summary className="cursor-pointer select-none text-xs font-medium">
-                  Advanced constraints
-                </summary>
-
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
-                  <label className="flex items-center gap-2">
-                    <span className="w-28">Gap G→B</span>
-                    <input
-                      type="number"
-                      className="border rounded px-2 h-8 w-20"
-                      value={optConstraints.gapGB}
-                      onChange={(e) =>
-                        setOptConstraints((c) => ({
-                          ...c,
-                          gapGB: Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <span className="w-28">Gap B→Best</span>
-                    <input
-                      type="number"
-                      className="border rounded px-2 h-8 w-20"
-                      value={optConstraints.gapBB}
-                      onChange={(e) =>
-                        setOptConstraints((c) => ({
-                          ...c,
-                          gapBB: Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </label>
-
-                  {(["good", "better", "best"] as const).map((t) => (
-                    <label key={t} className="flex items-center gap-2">
-                      <span className="w-28 capitalize">{t} margin ≥</span>
-                      <input
-                        type="number"
-                        step={0.01}
-                        className="border rounded px-2 h-8 w-20"
-                        value={optConstraints.marginFloor[t]}
-                        onChange={(e) =>
-                          setOptConstraints((c) => ({
-                            ...c,
-                            marginFloor: {
-                              ...c.marginFloor,
-                              [t]: Number(e.target.value),
-                            },
-                          }))
-                        }
-                      />
-                    </label>
-                  ))}
-
-                  <label className="flex items-center gap-2 sm:col-span-2">
-                    <input
-                      type="checkbox"
-                      checked={optConstraints.charm}
-                      onChange={(e) =>
-                        setOptConstraints((c) => ({
-                          ...c,
-                          charm: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>Charm endings (.99)</span>
-                  </label>
-
-                  <label className="flex items-center gap-2 sm:col-span-2">
-                    <input
-                      type="checkbox"
-                      checked={optConstraints.usePocketMargins}
-                      onChange={(e) =>
-                        setOptConstraints((c) => ({
-                          ...c,
-                          usePocketMargins: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>
-                      Use <em>pocket</em> price for margin floors
-                    </span>
-                  </label>
-
-                  <p className="text-[11px] text-gray-500 sm:col-span-2 print-tight">
-                    When enabled, margins are checked on pocket (after
-                    promo/payment/FX/refunds) instead of list.
-                  </p>
-
-                  <label className="flex items-center gap-2 sm:col-span-2">
-                    <input
-                      type="checkbox"
-                      checked={optConstraints.usePocketProfit}
-                      onChange={(e) =>
-                        setOptConstraints((c) => ({
-                          ...c,
-                          usePocketProfit: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>Compute profit using pocket price</span>
-                  </label>
-                </div>
-              </details>
-            </div>
-          </Section>
-
-
+          
           <Section
             id="kpi-pocket-coverage"
             title="KPI — Pocket floor coverage"
