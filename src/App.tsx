@@ -359,6 +359,11 @@ export default function App() {
       { kind: "waterfall", sectionId: "pocket-price-waterfall", chartId: "waterfall-main",     label: "Waterfall",   aria: "Export Pocket Price Waterfall" },
       { kind: "coverage",  sectionId: "kpi-pocket-coverage",    chartId: "coverage-heatmap",   label: "Coverage",    aria: "Export pocket floor coverage" },
     ];
+    const [isToolbeltOpen, setIsToolbeltOpen] = useStickyState(
+      "po:export-toolbar-open",
+      false
+    );
+    const TOOLBELT_PANEL_ID = "po-export-toolbar";
 
     // Dispatch helper (used by buttons and keyboard shortcuts)
     function dispatchExport(
@@ -389,66 +394,96 @@ export default function App() {
       return () => window.removeEventListener("keydown", onKey);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+    useEffect(() => {
+      if (!isToolbeltOpen) return;
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          setIsToolbeltOpen(false);
+        }
+      };
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }, [isToolbeltOpen, setIsToolbeltOpen]);
 
     return (
-      <div
-        className="no-print fixed bottom-4 right-4 z-50 rounded-lg border bg-white/95 backdrop-blur shadow px-2 py-1"
-        role="toolbar"
-        aria-label="Quick export toolbar"
-      >
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[90vw]">
-          {GROUPS.map((g, i) => (
-            <div
-              key={g.chartId}
-              className="flex items-center gap-1 border rounded-md px-1 py-0.5"
-              aria-label={g.aria}
-              title={`${g.label} • Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
-            >
-              {/* Chip label scrolls to the section */}
-              <button
-                type="button"
-                className="px-1 text-[11px] text-slate-700 hover:underline"
-                onClick={() => scrollToId(g.sectionId)}
-                aria-label={`Scroll to ${g.label} section`}
-              >
-                {g.label}
-              </button>
+      <div className="no-print fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 rounded-full border bg-white/95 backdrop-blur px-3 py-1 text-xs font-semibold shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+          aria-expanded={isToolbeltOpen}
+          aria-controls={TOOLBELT_PANEL_ID}
+          onClick={() => setIsToolbeltOpen((open) => !open)}
+          title={
+            isToolbeltOpen ? "Hide quick export shortcuts" : "Show quick export shortcuts"
+          }
+        >
+          <span>Exports</span>
+          <span className="text-[11px] font-normal text-slate-500">
+            {isToolbeltOpen ? "Hide" : "Show"}
+          </span>
+        </button>
+        {isToolbeltOpen && (
+          <div
+            id={TOOLBELT_PANEL_ID}
+            className="rounded-lg border bg-white/95 backdrop-blur shadow px-2 py-1"
+            role="toolbar"
+            aria-label="Quick export toolbar"
+          >
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[90vw]">
+              {GROUPS.map((g, i) => (
+                <div
+                  key={g.chartId}
+                  className="flex items-center gap-1 border rounded-md px-1 py-0.5"
+                  aria-label={g.aria}
+                  title={`${g.label} • Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
+                >
+                  {/* Chip label scrolls to the section */}
+                  <button
+                    type="button"
+                    className="px-1 text-[11px] text-slate-700 hover:underline"
+                    onClick={() => scrollToId(g.sectionId)}
+                    aria-label={`Scroll to ${g.label} section`}
+                  >
+                    {g.label}
+                  </button>
 
-              {/* Export PNG */}
-              <button
-                type="button"
-                className="text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
-                aria-label={`${g.aria} as PNG`}
-                onClick={() => dispatchExport(g.kind, g.chartId, "png")}
-              >
-                PNG
-              </button>
+                  {/* Export PNG */}
+                  <button
+                    type="button"
+                    className="text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
+                    aria-label={`${g.aria} as PNG`}
+                    onClick={() => dispatchExport(g.kind, g.chartId, "png")}
+                  >
+                    PNG
+                  </button>
 
-              {/* Export CSV */}
-              <button
-                type="button"
-                className="text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
-                aria-label={`${g.aria} as CSV`}
-                onClick={() => dispatchExport(g.kind, g.chartId, "csv")}
-              >
-                CSV
-              </button>
+                  {/* Export CSV */}
+                  <button
+                    type="button"
+                    className="text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
+                    aria-label={`${g.aria} as CSV`}
+                    onClick={() => dispatchExport(g.kind, g.chartId, "csv")}
+                  >
+                    CSV
+                  </button>
+                </div>
+              ))}
+
+              {/* Separator + Print */}
+              <div className="ml-1 pl-1 border-l">
+                <button
+                  type="button"
+                  className="text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
+                  aria-label="Print this analysis"
+                  title="Print this analysis"
+                  onClick={() => window.print()}
+                >
+                  Print
+                </button>
+              </div>
             </div>
-          ))}
-
-          {/* Separator + Print */}
-          <div className="ml-1 pl-1 border-l">
-            <button
-              type="button"
-              className="text-[11px] border rounded px-2 py-1 hover:bg-gray-50"
-              aria-label="Print this analysis"
-              title="Print this analysis"
-              onClick={() => window.print()}
-            >
-              Print
-            </button>
           </div>
-        </div>
+        )}
       </div>
     );
   }
