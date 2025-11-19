@@ -1,5 +1,5 @@
 // src/components/Tornado.tsx
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as echarts from "echarts/core";
 import { BarChart, type BarSeriesOption } from "echarts/charts";
 import {
@@ -43,6 +43,13 @@ export default function Tornado({
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
+  const [vw, setVw] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1280);
+
+  useEffect(() => {
+    const onResize = () => setVw(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -52,10 +59,13 @@ export default function Tornado({
     const cats = rows.map((r) => r.name);
     const left = rows.map((r) => Math.min(0, r.deltaLow));
     const right = rows.map((r) => Math.max(0, r.deltaHigh));
+    const isNarrow = vw < 900;
+    const axisFont = isNarrow ? 10 : 12;
+    const showValueLabels = !isNarrow;
 
     const option: ECOption = {
       title: { text: title, left: "center", top: 4, textStyle: { fontWeight: 700, fontSize: 14 } },
-      grid: { left: 70, right: 30, top: 32, bottom: 28, containLabel: true },
+      grid: { left: isNarrow ? 70 : 90, right: isNarrow ? 40 : 60, top: 36, bottom: 32, containLabel: true },
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
@@ -72,13 +82,13 @@ export default function Tornado({
       },
       xAxis: {
         type: "value",
-        axisLabel: { formatter: (v: number) => `$${v}` },
+        axisLabel: { formatter: (v: number) => `$${v}`, fontSize: axisFont },
         splitLine: { lineStyle: { color: "#eef2f7" } },
       },
       yAxis: {
         type: "category",
         data: cats,
-        axisLabel: { fontSize: 12 },
+        axisLabel: { fontSize: axisFont },
       },
       series: [
         {
@@ -87,10 +97,10 @@ export default function Tornado({
           data: left,
           itemStyle: { color: "#93c5fd" }, // light blue
           label: {
-            show: true,
+            show: showValueLabels,
             position: "left",
             formatter: (p) => `$${Math.abs(Number(p.value)).toFixed(0)}`,
-            fontSize: 11,
+            fontSize: axisFont,
           },
         },
         {
@@ -99,10 +109,10 @@ export default function Tornado({
           data: right,
           itemStyle: { color: "#60a5fa" }, // blue
           label: {
-            show: true,
+            show: showValueLabels,
             position: "right",
             formatter: (p) => `$${Math.abs(Number(p.value)).toFixed(0)}`,
-            fontSize: 11,
+            fontSize: axisFont,
           },
         },
       ],
@@ -117,7 +127,7 @@ export default function Tornado({
       chartRef.current?.dispose();
       chartRef.current = null;
     };
-  }, [rows, title]);
+  }, [rows, title, vw]);
 
   type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
 

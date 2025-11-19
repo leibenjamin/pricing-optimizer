@@ -90,21 +90,14 @@ export default function FrontierChartReal({
     const isNarrow = vw < 768;
     const axisFont = isNarrow ? 10 : 12;
     const labelFont = isNarrow ? 10 : 12;
-    const topPad = isNarrow ? 10 : 16;
-    const rightPad = isNarrow ? 8 : 12;
-    const bottomPad = isNarrow ? 24 : 30;
+    const topPad = isNarrow ? 20 : 32;
+    const rightPad = isNarrow ? 18 : 32;
+    const bottomPad = isNarrow ? 36 : 48;
 
     const option: ECOption = {
       animation: false,
-      title: {
-        text: "Profit vs Best Price (Good/Better fixed)",
-        left: "center",
-        top: 8,
-        // Title font size scales with viewport width
-        textStyle: { fontSize: isNarrow ? 12 : 14 },
-      },
       grid: {
-        left: 40,
+        left: isNarrow ? 44 : 64,
         right: rightPad,
         top: topPad,
         bottom: bottomPad,

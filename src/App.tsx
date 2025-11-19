@@ -68,7 +68,6 @@ import CompareBoard from "./components/CompareBoard";
 import { kpisFromSnapshot, type SnapshotKPIs } from "./lib/snapshots";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
-const approx = (n: number) => Math.round(n); // for prices
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 
 const WATERFALL_LEGEND = [
@@ -161,6 +160,23 @@ function Section({
       </div>
       <div className="space-y-3 print-space">{children}</div>
     </section>
+  );
+}
+
+function Explanation({
+  slot,
+  children,
+}: {
+  slot: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      data-copy-slot={slot}
+      className="rounded border border-dashed border-slate-300 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-600 leading-relaxed"
+    >
+      {children}
+    </div>
   );
 }
 
@@ -354,8 +370,6 @@ export default function App() {
       { kind: "takerate",  sectionId: "take-rate",              chartId: "takerate-main",      label: "Take-Rate",   aria: "Export Take-Rate Bars" },
       { kind: "cohort",    sectionId: "cohort-rehearsal",       chartId: "cohort-curve",       label: "Cohort",      aria: "Export Cohort rehearsal" },
       { kind: "tornado",   sectionId: "tornado",                chartId: "tornado-main",       label: "Tornado",     aria: "Export Tornado Sensitivity" },
-      { kind: "tornado",   sectionId: "tornado-compare",        chartId: "tornado-current",    label: "Shift (Cur)", aria: "Export sensitivity shift (Current)" },
-      { kind: "tornado",   sectionId: "tornado-compare",        chartId: "tornado-optim",      label: "Shift (Opt)", aria: "Export sensitivity shift (Optimized)" },
       { kind: "waterfall", sectionId: "pocket-price-waterfall", chartId: "waterfall-main",     label: "Waterfall",   aria: "Export Pocket Price Waterfall" },
       { kind: "coverage",  sectionId: "kpi-pocket-coverage",    chartId: "coverage-heatmap",   label: "Coverage",    aria: "Export pocket floor coverage" },
     ];
@@ -539,6 +553,8 @@ export default function App() {
 
   function labelFor(id: string) {
     switch (id) {
+      case "callouts":
+        return "Callouts";
       case "profit-frontier":
         return "Profit Frontier";
       case "pocket-price-waterfall":
@@ -1319,8 +1335,6 @@ export default function App() {
     refPrices,
   ]);
 
-  const bestPriceOpt = frontier.optimum?.bestPrice ?? prices.best;
-  const bestProfitOpt = frontier.optimum?.profit ?? 0;
 
   // Expected profit (current slider scenario)
   const take = {
@@ -1443,6 +1457,7 @@ export default function App() {
 
   // ---- Tornado sensitivity data ----
   const [tornadoPocket, setTornadoPocket] = useState(true);
+  const [tornadoView, setTornadoView] = useState<"current" | "optimized">("current");
   const [tornadoPriceBump, setTornadoPriceBump] = useState(10); // percent span for symmetric mode
   const [tornadoRangeMode, setTornadoRangeMode] = useState<"symmetric" | "data">("symmetric");
   const [tornadoPctBump, setTornadoPctBump] = useState(2); // pp
@@ -1520,47 +1535,6 @@ export default function App() {
       ? "Data-driven (scenario)"
       : "Data-driven (default)";
 
-  const scenarioForTornado = useMemo(
-    () => ({
-      N,
-      prices,
-      costs,
-      features,
-      segments,
-      refPrices,
-      leak,
-    }),
-    [N, prices, costs, features, segments, refPrices, leak]
-  );
-
-  const tornadoRows = useMemo(() => {
-    const bumps = computePriceBumps(prices);
-    const avgSpan = avgFromBumps(bumps);
-    return tornadoProfit(scenarioForTornado, {
-      usePocket: tornadoPocket,
-      priceBump: avgSpan,
-      priceBumps: bumps,
-      costBump: 2,
-      pctSmall: tornadoPctBump / 100,
-      payPct: tornadoPctBump / 200, // half as aggressive as generic pct
-      payFixed: 0.05,
-      refBump: 2,
-      segTilt: 0.1,
-    }).map((r) => ({
-      name: r.name,
-      base: r.base,
-      deltaLow: r.deltaLow,
-      deltaHigh: r.deltaHigh,
-    }));
-  }, [
-    scenarioForTornado,
-    tornadoPocket,
-    tornadoPctBump,
-    computePriceBumps,
-    avgFromBumps,
-    prices,
-  ]);
-
   // ---- Optimizer (quick grid) ----
   // A fast, in-component grid optimizer used for compare/tornado visuals.
   // Does NOT replace the Worker-based optimizer you already have.
@@ -1598,6 +1572,13 @@ export default function App() {
     leak,
     optConstraints,
   ]);
+
+  useEffect(() => {
+    if (!quickOpt.best && tornadoView === "optimized") {
+      setTornadoView("current");
+    }
+  }, [quickOpt.best, tornadoView]);
+
   const optimizerProfitDelta = useMemo(() => {
     if (!optResult) return null;
     const usePocket = !!optConstraints.usePocketProfit;
@@ -1688,6 +1669,14 @@ export default function App() {
     computePriceBumps,
     avgFromBumps,
   ]);
+
+  const hasOptimizedTornado = Boolean(quickOpt.best);
+  const activeTornadoRows =
+    tornadoView === "optimized" && hasOptimizedTornado
+      ? tornadoRowsOptim
+      : tornadoRowsCurrent;
+  const tornadoViewLabel =
+    tornadoView === "optimized" && hasOptimizedTornado ? "Optimized" : "Current";
 
   // Cohort retention (percent, per-month). Default 92%.
   const [retentionPct, setRetentionPct] = useState<number>(() => {
@@ -2148,6 +2137,7 @@ export default function App() {
           <nav className="pb-2">
             <div className="flex gap-2 overflow-x-auto no-scrollbar text-sm">
               {[
+                "callouts",
                 "profit-frontier",
                 "pocket-price-waterfall",
                 "compare-board",
@@ -2800,12 +2790,84 @@ export default function App() {
 
         {/* Center: Charts */}
         <div className="col-span-12 md:col-span-6 space-y-4 min-w-0">
+          <Section id="callouts" title="Callouts snapshot">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="rounded-xl border border-blue-100 bg-blue-50/40 px-3 py-2">
+                <div className="text-[11px] uppercase text-slate-600">
+                  Profit vs baseline
+                </div>
+                <div className="text-2xl font-semibold text-slate-900">
+                  {explainDelta
+                    ? `${explainDelta.deltaProfit >= 0 ? "+" : "-"}$${Math.abs(
+                        explainDelta.deltaProfit
+                      ).toFixed(0)}`
+                    : "Pin a baseline"}
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1">
+                  {explainDelta
+                    ? `Revenue ${explainDelta.deltaRevenue >= 0 ? "+" : "-"}$${Math.abs(
+                        explainDelta.deltaRevenue
+                      ).toFixed(0)} · Active ${
+                        explainDelta.deltaActive >= 0 ? "+" : "-"
+                      }${Math.abs(explainDelta.deltaActive).toFixed(0)} · ARPU ${
+                        explainDelta.deltaARPU >= 0 ? "+" : "-"
+                      }$${Math.abs(explainDelta.deltaARPU).toFixed(2)}`
+                    : "Use “Set baseline to now” so deltas have context."}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 px-3 py-2">
+                <div className="text-[11px] uppercase text-slate-600">
+                  Main driver
+                </div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {explainDelta?.mainDriver ?? "Drivers appear here once a baseline is set."}
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1">
+                  {explainDelta?.segmentLine ?? "Narrate which segment is winning or losing once deltas are available."}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-purple-100 bg-purple-50/40 px-3 py-2">
+                <div className="text-[11px] uppercase text-slate-600">
+                  Optimizer outlook
+                </div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {optimizerWhyLines.length > 0
+                    ? optimizerWhyLines[0]
+                    : quickOpt.best
+                    ? "Optimizer ready — run to refresh insights."
+                    : "Set ranges & floors, then run the optimizer."}
+                </div>
+                {optimizerWhyLines.length > 1 && (
+                  <p className="text-[11px] text-slate-600 mt-1">
+                    {optimizerWhyLines[1]}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <Explanation slot="callouts.overview">
+              Provide a 2‑3 sentence narrative here that summarizes the current ladder, why the optimizer’s
+              guidance matters, and how a hiring manager should interpret the KPIs before diving into
+              the charts. Desktop ChatGPT: describe the storyline at a “consultant readout” level (what
+              changed, who benefits, which guardrails are binding) and mention how to validate the
+              recommendation (e.g., rerun optimizer, review waterfall, print summary).
+            </Explanation>
+          </Section>
+
           <Section
             id="profit-frontier"
             title="Profit Frontier"
             className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
             actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
           >
+            <Explanation slot="chart.profitFrontier">
+              Desktop ChatGPT: explain how to narrate the profit frontier — what holding Good/Better constant means,
+              how to spot the sweet spot vs. margin floors, and when to use this plot before invoking the optimizer.
+              Mention that each point is a full mixed-logit evaluation, so it is ideal for fast sense-checking of the
+              Best tier and for answering “what if we nudged premium $X?” questions.
+            </Explanation>
             <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontier… </div>}>
               <ErrorBoundary title="Frontier chart failed">
                 <div className="flex items-center justify-between mb-2">
@@ -2832,6 +2894,11 @@ export default function App() {
             className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
             actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
           >
+            <Explanation slot="chart.takeRate">
+              Desktop ChatGPT: outline how to use take-rate bars to judge conversion mix, what “None” represents,
+              and which inputs (prices, features, reference prices) materially shift these bars. Include guidance on
+              how hiring managers should talk through a mix change (e.g., “Value seekers grew +Xpp when we…”).
+            </Explanation>
             <Suspense
               fallback={
                 <div className="text-xs text-gray-500 p-2">Loading bars…</div>
@@ -2857,6 +2924,11 @@ export default function App() {
             title="Cohort rehearsal (12 months)"
             actions={<ActionCluster chart="cohort" id="cohort-curve" csv />}
           >
+            <Explanation slot="chart.cohort">
+              Desktop ChatGPT: describe what the cohort rehearsal simulates (retention slider, pocket margin over a
+              12‑month period) and when a PM should tweak retention vs. pricing. Highlight that this is where to
+              narrate sustainability of profit rather than just one-period lift.
+            </Explanation>
             {(() => {
               const probsNow = choiceShares(
                 prices,
@@ -2931,6 +3003,11 @@ export default function App() {
             className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
             actions={<ActionCluster chart="tornado" id="tornado-main" csv />}
           >
+            <Explanation slot="chart.tornado">
+              Desktop ChatGPT: describe how to read a tornado chart for pricing (one factor at a time, impacts on
+              profit) and spell out why switching between Current vs. Optimized helps. Call out when to keep focus on
+              pocket vs. list profit, and mention that the leak bump control stress-tests FX/refund assumptions.
+            </Explanation>
             <div className="flex flex-wrap items-center gap-3 text-xs mb-2">
               <label className="flex items-center gap-2">
                 <input
@@ -2997,6 +3074,47 @@ export default function App() {
                 />
                 <span>pp</span>
               </label>
+
+              <div className="flex items-center gap-1">
+                <span>View</span>
+                <div className="inline-flex overflow-hidden rounded border">
+                  <button
+                    type="button"
+                    className={`px-2 h-7 ${tornadoView === "current" ? "bg-gray-900 text-white" : "bg-white"}`}
+                    onClick={() => setTornadoView("current")}
+                  >
+                    Current
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-2 h-7 ${
+                      tornadoView === "optimized" && hasOptimizedTornado
+                        ? "bg-gray-900 text-white"
+                        : "bg-white"
+                    } ${!hasOptimizedTornado ? "opacity-50 cursor-not-allowed" : ""}`}
+                    onClick={() => hasOptimizedTornado && setTornadoView("optimized")}
+                    disabled={!hasOptimizedTornado}
+                  >
+                    Optimized
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-slate-600 mb-2">
+              {tornadoView === "optimized" && !hasOptimizedTornado
+                ? "Run the optimizer to enable the Optimized view and compare driver magnitudes."
+                : "Use the controls above to test pocket/list assumptions and to resize the span used for each driver."}
+            </div>
+
+            <div className="flex items-center justify-between mb-2 text-xs text-slate-600">
+              <span>Showing: {tornadoViewLabel} ladder</span>
+              <InfoTip
+                className="ml-1"
+                align="right"
+                id="chart.tornado"
+                ariaLabel="How should I use the tornado sensitivity chart?"
+              />
             </div>
 
             <Suspense
@@ -3007,68 +3125,22 @@ export default function App() {
               }
             >
               <ErrorBoundary title="Tornado chart failed">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-slate-700">Tornado sensitivity</h3>
-                  <InfoTip
-                    className="ml-1"
-                    align="right"
-                    id="chart.tornado"
-                    ariaLabel="Why is this called a tornado chart?"
-                  />
-                </div>
-                <Tornado chartId="tornado-main" title="Tornado: Profit Sensitivity" rows={tornadoRows} />
+                <Tornado
+                  chartId="tornado-main"
+                  title={`Tornado: ${tornadoViewLabel} profit sensitivity`}
+                  rows={activeTornadoRows}
+                />
               </ErrorBoundary>
             </Suspense>
-
-            <p className="text-[11px] text-gray-600 mt-1 print-tight">
-              One-way sensitivity on current scenario. Bars show change in
-              profit when each driver is nudged down (left) or up (right).
-              Toggle pocket to account for promos/fees/FX/refunds; adjust bump
-              sizes to test robustness.
-            </p>
           </Section>
 
-          <Section id="callouts" title="Callouts">
-            <div className="text-sm text-gray-700 space-y-2">
-              <div>
-                <strong>So what?</strong> Conversion delta{" "}
-                {Math.round((probs.good + probs.better + probs.best) * 100)}%.
-              </div>
-              <div className="text-xs text-gray-600">
-                Best-price optimum -`&gt; <strong>${approx(bestPriceOpt)}</strong>{" "}
-                (profit -`&gt; <strong>{fmtUSD(bestProfitOpt)}</strong>). Segments:
-                Price-sens / Value / Premium.
-              </div>
-              {optResult && (
-                <div className="mt-1 inline-block text-[11px] px-2 py-1 rounded bg-gray-100 border">
-                  Opt best: ${optResult.prices.good}/{optResult.prices.better}/
-                  {optResult.prices.best} (profit delta $
-                  {Math.round(optResult.profit)})
-                </div>
-              )}
-              <details className="mt-1">
-                <summary className="cursor-pointer select-none text-[11px] text-gray-600">
-                  Why these numbers?
-                </summary>
-                <div className="space-y-1 mt-1 text-[11px] text-gray-600">
-                  <div>
-                    Frontier shows profit vs Best price with current Good/Better
-                    fixed.
-                  </div>
-                  <div>
-                    Pocket price ({waterTier}) -`&gt; ${water.pocket.toFixed(2)} from
-                    list ${listForWater.toFixed(2)}.
-                  </div>
-                  <div>
-                    Anchoring on refs ${refPrices.good}/${refPrices.better}/$
-                    {refPrices.best}; loss aversion on increases.
-                  </div>
-                </div>
-              </details>
-            </div>
-          </Section>
+          
 
           <Section id="current-vs-optimized" title="Current vs Optimized">
+            <Explanation slot="chart.currentOptimized">
+              Desktop ChatGPT: explain how to use this card stack to narrate “before vs after” ladder economics, when
+              to trust the quick optimizer, and how to talk through the Delta card plus Undo button in demos.
+            </Explanation>
             {(() => {
               const curProfit = optConstraints.usePocketProfit
                 ? // pocket profit using current prices
@@ -3230,6 +3302,11 @@ export default function App() {
           </Section>
 
           <Section id="global-optimizer" title="Global Optimizer">
+            <Explanation slot="chart.optimizer">
+              Desktop ChatGPT: provide copy that frames this as the “decision cockpit” — explain ranges, steps,
+              charm-ending toggle, and pocket-vs-list guardrails. Call out how to cite binding constraints and what
+              to say when the optimizer fails or returns no feasible ladder.
+            </Explanation>
             {/* Compact header: inline ranges + actions */}
             <div className="flex flex-col gap-3">
               {/* Header row wraps nicely on small screens */}
@@ -3537,11 +3614,43 @@ export default function App() {
                   </label>
                 </div>
               </details>
+
+              <details className="mt-4 rounded border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs">
+                <summary className="cursor-pointer select-none font-medium">
+                  Field guide (copy placeholder)
+                </summary>
+                <div
+                  data-copy-slot="waterfall.fieldGuide"
+                  className="space-y-2 text-slate-600 mt-2"
+                >
+                  <div>
+                    <span className="font-semibold">Tier discounts</span>: TODO — describe how promo vs. volume knobs
+                    affect list-to-pocket math and when to prioritize each tier.
+                  </div>
+                  <div>
+                    <span className="font-semibold">Global leakages</span>: TODO — explain processor %, fixed fees, FX,
+                    and refunds along with the types of businesses that feel each leakage the most.
+                  </div>
+                  <div>
+                    <span className="font-semibold">Compare all tiers</span>: TODO — narrative on using the mini
+                    waterfalls to defend Good/Better/Best deltas.
+                  </div>
+                  <div>
+                    <span className="font-semibold">Channel blend</span>: TODO — instructions for blending Stripe vs.
+                    marketplaces and how to talk about the resulting composite leak profile.
+                  </div>
+                </div>
+              </details>
             </div>
           </Section>
 
           <div className="print-page" aria-hidden="true" />
           <Section id="compare-board" title="Scenario Compare (A/B/C)">
+            <Explanation slot="chart.compareBoard">
+              Desktop ChatGPT: describe how to position these A/B/C slots during interviews — e.g., “Save current,
+              branch, then reload while screen-sharing.” Mention how KPIs update and how to interpret gaps between
+              saved ladders.
+            </Explanation>
             <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
               <span className="text-gray-600">Save current to:</span>
               {(["A", "B", "C"] as const).map((id) => (
@@ -3639,55 +3748,6 @@ export default function App() {
           </Section>
 
           <Section
-            id="tornado-compare"
-            title="Sensitivity shift: Current vs Optimized"
-            actions={
-              quickOpt.best ? (
-                <div className="flex flex-wrap gap-2">
-                  <ActionCluster chart="tornado" id="tornado-current" csv />
-                  <ActionCluster chart="tornado" id="tornado-optim" csv />
-                </div>
-              ) : undefined
-            }
-          >
-            {quickOpt.best ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs font-medium mb-1">Current ladder</div>
-                  <Suspense                    
-                    fallback={
-                      <div className="text-xs text-gray-500 p-2">Loading…</div>
-                    }
-                  >
-                    <ErrorBoundary title="Tornado chart failed">
-                      <Tornado rows={tornadoRowsCurrent} chartId="tornado-current" />
-                    </ErrorBoundary>
-                  </Suspense>
-                </div>
-                <div>
-                  <div className="text-xs font-medium mb-1">
-                    Optimized ladder
-                  </div>
-                  <Suspense
-                    fallback={
-                      <div className="text-xs text-gray-500 p-2">Loading…</div>
-                    }
-                  >
-                    <ErrorBoundary title="Tornado chart failed">
-                      <Tornado rows={tornadoRowsOptim} chartId="tornado-optim" />
-                    </ErrorBoundary>
-                  </Suspense>
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-gray-600">
-                No feasible ladder to compare.
-              </div>
-            )}
-          </Section>
-
-          <div className="print-page" aria-hidden="true" />
-          <Section
             id="pocket-price-waterfall"
             title={
               <span className="inline-flex items-center gap-2">
@@ -3705,6 +3765,11 @@ export default function App() {
               <ActionCluster chart="waterfall" id="waterfall-main" csv={true} />
             }
           >
+            <Explanation slot="chart.waterfall">
+              Desktop ChatGPT: write a short walkthrough of list → pocket math, how to narrate promo/volume/payment
+              levers, and when to use channel blend vs. compare-all view. Include guidance on explaining to hiring
+              managers why pocket profit matters more than list profit in certain industries.
+            </Explanation>
             <div className="text-xs grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Controls */}
               <div className="space-y-3">
