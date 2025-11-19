@@ -3035,8 +3035,8 @@ export default function App() {
                 {Math.round((probs.good + probs.better + probs.best) * 100)}%.
               </div>
               <div className="text-xs text-gray-600">
-                Best-price optimum -> <strong>${approx(bestPriceOpt)}</strong>{" "}
-                (profit -> <strong>{fmtUSD(bestProfitOpt)}</strong>). Segments:
+                Best-price optimum -`&gt; <strong>${approx(bestPriceOpt)}</strong>{" "}
+                (profit -`&gt; <strong>{fmtUSD(bestProfitOpt)}</strong>). Segments:
                 Price-sens / Value / Premium.
               </div>
               {optResult && (
@@ -3056,7 +3056,7 @@ export default function App() {
                     fixed.
                   </div>
                   <div>
-                    Pocket price ({waterTier}) -> ${water.pocket.toFixed(2)} from
+                    Pocket price ({waterTier}) -`&gt; ${water.pocket.toFixed(2)} from
                     list ${listForWater.toFixed(2)}.
                   </div>
                   <div>
@@ -3390,7 +3390,7 @@ export default function App() {
                 {optResult ? (
                   <span>
                     Best ladder ${optResult.prices.good}/$
-                    {optResult.prices.better}/${optResult.prices.best} -> Profit
+                    {optResult.prices.better}/${optResult.prices.best} -`&gt; Profit
                     delta ${Math.round(optResult.profit)}
                   </span>
                 ) : (
@@ -3429,7 +3429,7 @@ export default function App() {
 
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
                   <label className="flex items-center gap-2">
-                    <span className="w-28">Gap G->B</span>
+                    <span className="w-28">Gap G-`&gt;B</span>
                     <input
                       type="number"
                       className="border rounded px-2 h-8 flex-1"
@@ -3443,7 +3443,7 @@ export default function App() {
                     />
                   </label>
                   <label className="flex items-center gap-2">
-                    <span className="w-28">Gap B->Best</span>
+                    <span className="w-28">Gap B-`&gt;Best</span>
                     <input
                       type="number"
                       className="border rounded px-2 h-8 flex-1"
