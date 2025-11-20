@@ -5,7 +5,7 @@ function clampPct(x: number) {
   return Math.max(0, Math.min(100, Math.round(x * 100)));
 }
 
-function describeSegment(seg: Segment): string[] {
+export function describeSegment(seg: Segment): string[] {
   const lines: string[] = [];
   const price = Math.abs(seg.betaPrice);
   if (price >= 0.22) {

@@ -34,7 +34,7 @@ import { tornadoProfit } from "./lib/sensitivity";
 
 import { simulateCohort } from "./lib/simCohort";
 import MiniLine from "./components/MiniLine";
-import SegmentCards from "./components/SegmentCards";
+import { describeSegment } from "./components/SegmentCards";
 
 import { pocketCoverage } from "./lib/coverage";
 
@@ -2258,13 +2258,13 @@ export default function App() {
           <Section id="scenario" title="Scenario Panel" className="left-rail-scroll overflow-x-auto">
             <div className="shrink-0 space-y-4">
             </div>
-            <div id="scenarioScroll" className="flex-1 min-h-0 overflow-y-auto pr-2">
+            <div id="scenarioScroll" className="flex-1 min-h-0 overflow-y-auto pr-2 pb-4">
               {(["good", "better", "best"] as const).map((tier) => (
                 <div key={tier} className="space-y-1">
                   <label className="block text-sm font-medium capitalize">
                     {tier} price (${prices[tier].toLocaleString(undefined, { maximumFractionDigits: 2 })})
                   </label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 w-full">
                     <input
                       type="range"
                       min={sliderMin}
@@ -2281,7 +2281,7 @@ export default function App() {
                       onMouseUp={() => commitPriceEdit(tier)}
                       onTouchEnd={() => commitPriceEdit(tier)}
                       onBlur={() => commitPriceEdit(tier)}
-                      className="flex-1"
+                      className="flex-[1.4] min-w-[140px] max-w-[220px]"
                       aria-label={`${tier} price slider`}
                     />
                     <input
@@ -4265,50 +4265,104 @@ export default function App() {
             })()}
           </Section>
 
-          <Section id="segment-stories" title="Segment stories">
-            <SegmentCards segments={segments} />
-          </Section>
+          <Section
+            id="customer-segments"
+            title={
+              <span className="inline-flex items-center gap-2">
+                <span>Customer Segments</span>
+                <InfoTip
+                  id="segments.mix"
+                  ariaLabel="Adjust segment mix and review narratives"
+                  align="right"
+                />
+              </span>
+            }
+            actions={
+              <button
+                className="text-xs border rounded px-2 py-1"
+                onClick={() => setSegments(normalizeWeights(segments))}
+              >
+                Normalize to 100%
+              </button>
+            }
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              {segments.map((seg, i) => {
+                const lines = describeSegment(seg);
+                return (
+                  <div
+                    key={seg.name}
+                    className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 shadow-sm space-y-2"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                          Segment
+                        </div>
+                        <div className="text-base font-semibold text-slate-900">
+                          {seg.name}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[11px] text-slate-500">Weight</div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {Math.round(seg.weight * 100)}%
+                        </div>
+                      </div>
+                    </div>
 
-          <Section id="segments-mix" title="Segments (mix)">
-            <details open className="text-xs">
-              <summary className="cursor-pointer select-none font-medium mb-2">
-                Adjust segment weights
-              </summary>
-              <div className="space-y-2 text-xs">
-                {segments.map((s, i) => (
-                  <div key={s.name} className="flex items-center gap-2">
-                    <div className="w-28">{s.name}</div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={s.weight}
-                      onChange={(e) => {
-                        const w = Number(e.target.value);
-                        const next = segments.map((t, j) =>
-                          j === i ? { ...t, weight: w } : t
-                        );
-                        setSegments(normalizeWeights(next));
-                      }}
-                      className="flex-1"
-                      aria-label={`${s.name} weight`}
-                    />
-                    <div className="w-10 text-right">
-                      {Math.round(s.weight * 100)}%
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={seg.weight}
+                        onChange={(e) => {
+                          const w = Number(e.target.value);
+                          const next = segments.map((t, j) =>
+                            j === i ? { ...t, weight: w } : t
+                          );
+                          setSegments(normalizeWeights(next));
+                        }}
+                        className="flex-1"
+                        aria-label={`${seg.name} weight slider`}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={Math.round(seg.weight * 100)}
+                        onChange={(e) => {
+                          const pct = Number(e.target.value);
+                          if (!Number.isFinite(pct)) return;
+                          const clamped = Math.max(0, Math.min(100, pct));
+                          const w = clamped / 100;
+                          const next = segments.map((t, j) =>
+                            j === i ? { ...t, weight: w } : t
+                          );
+                          setSegments(normalizeWeights(next));
+                        }}
+                        className="w-16 border rounded px-2 py-1 text-right"
+                        aria-label={`${seg.name} weight percent`}
+                      />
+                    </div>
+
+                    <div className="mt-2">
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                        Story
+                      </div>
+                      <ul className="mt-1 space-y-1 list-disc list-inside text-slate-600">
+                        {lines.map((line, idx) => (
+                          <li key={`${seg.name}-line-${idx}`}>{line}</li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
-                ))}
-                <div className="flex justify-end">
-                  <button
-                    className="border rounded px-2 py-1"
-                    onClick={() => setSegments(normalizeWeights(segments))}
-                  >
-                    Normalize
-                  </button>
-                </div>
-              </div>
-            </details>
+                );
+              })}
+            </div>
           </Section>
 
           <Section id="recent-short-links" title="Recent short links">
