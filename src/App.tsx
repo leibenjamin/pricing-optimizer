@@ -2254,8 +2254,18 @@ export default function App() {
 
       <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4 min-h-screen print-grid-1 print:gap-2">
         {/* Left: Scenario Panel */}
-        <div className="col-span-12 lg:col-span-4 xl:col-span-3 2xl:col-span-3 flex flex-col min-h-0 min-w-0 overflow-x-visible">
-          <Section id="scenario" title="Scenario Panel" className="left-rail-scroll overflow-x-auto">
+        <div className="col-span-12 lg:col-span-3 flex flex-col min-h-0 min-w-0 overflow-x-visible">
+          <Section id="preset-scenarios" title="Preset scenarios" className="order-1">
+            <PresetPicker
+              presets={PRESETS}
+              activeId={scenarioPresetId}
+              onApply={applyScenarioPreset}
+              infoId="presets.scenario"
+              className="mt-1"
+            />
+          </Section>
+          
+          <Section id="scenario" title="Scenario Panel" className="left-rail-scroll overflow-x-auto order-2">
             <div className="shrink-0 space-y-4">
             </div>
             <div id="scenarioScroll" className="flex-1 min-h-0 overflow-y-auto pr-2 pb-4">
@@ -2663,14 +2673,207 @@ export default function App() {
             </Modal>
           </Section>
 
-          <Section id="preset-scenarios" title="Preset scenarios">
-            <PresetPicker
-              presets={PRESETS}
-              activeId={scenarioPresetId}
-              onApply={applyScenarioPreset}
-              infoId="presets.scenario"
-              className="mt-1"
-            />
+          <Section
+            id="customer-segments"
+            title={
+              <span className="inline-flex items-center gap-2">
+                <span>Customer Segments</span>
+                <InfoTip
+                  id="segments.mix"
+                  ariaLabel="Adjust segment mix and review narratives"
+                  align="right"
+                />
+              </span>
+            }
+            actions={
+              <button
+                className="text-xs border rounded px-2 py-1"
+                onClick={() => setSegments(normalizeWeights(segments))}
+              >
+                Normalize to 100%
+              </button>
+            }
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              {segments.map((seg, i) => {
+                const lines = describeSegment(seg);
+                return (
+                  <div
+                    key={seg.name}
+                    className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 shadow-sm space-y-2"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                          Segment
+                        </div>
+                        <div className="text-base font-semibold text-slate-900">
+                          {seg.name}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[11px] text-slate-500">Weight</div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {Math.round(seg.weight * 100)}%
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={seg.weight}
+                        onChange={(e) => {
+                          const w = Number(e.target.value);
+                          const next = segments.map((t, j) =>
+                            j === i ? { ...t, weight: w } : t
+                          );
+                          setSegments(normalizeWeights(next));
+                        }}
+                        className="flex-1"
+                        aria-label={`${seg.name} weight slider`}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={Math.round(seg.weight * 100)}
+                        onChange={(e) => {
+                          const pct = Number(e.target.value);
+                          if (!Number.isFinite(pct)) return;
+                          const clamped = Math.max(0, Math.min(100, pct));
+                          const w = clamped / 100;
+                          const next = segments.map((t, j) =>
+                            j === i ? { ...t, weight: w } : t
+                          );
+                          setSegments(normalizeWeights(next));
+                        }}
+                        className="w-16 border rounded px-2 py-1 text-right"
+                        aria-label={`${seg.name} weight percent`}
+                      />
+                    </div>
+
+                    <div className="mt-2">
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                        Story
+                      </div>
+                      <ul className="mt-1 space-y-1 list-disc list-inside text-slate-600">
+                        {lines.map((line, idx) => (
+                          <li key={`${seg.name}-line-${idx}`}>{line}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Section>
+
+          <div className="print-page" aria-hidden="true" />
+          <Section id="compare-board" title="Scenario Compare (A/B/C)">
+            <Explanation slot="chart.compareBoard">
+              Desktop ChatGPT: describe how to position these A/B/C slots during interviews — e.g., “Save current,
+              branch, then reload while screen-sharing.” Mention how KPIs update and how to interpret gaps between
+              saved ladders.
+            </Explanation>
+            <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
+              <span className="text-gray-600">Save current to:</span>
+              {(["A", "B", "C"] as const).map((id) => (
+                <button
+                  key={id}
+                  className="border rounded px-2 py-1 bg-white hover:bg-gray-50"
+                  onClick={() => saveToSlot(id)}
+                >
+                  Save to {id}
+                </button>
+              ))}
+            </div>
+
+            {(() => {
+              // derive KPIs for the board
+              const usePocket = !!optConstraints.usePocketProfit;
+              const curKPIs = kpisFromSnapshot(
+                { prices, costs, features, refPrices, leak, segments },
+                N,
+                usePocket
+              );
+
+              const objA = readSlot("A");
+              const objB = readSlot("B");
+              const objC = readSlot("C");
+
+              const slots: Record<"A" | "B" | "C", SnapshotKPIs | null> = {
+                A: objA
+                  ? {
+                      ...kpisFromSnapshot(
+                        {
+                          prices: objA.prices,
+                          costs: objA.costs,
+                          features: objA.features,
+                          refPrices: objA.refPrices ?? refPrices,
+                          leak: objA.leak ?? leak,
+                          segments, // reuse current mix
+                        },
+                        N,
+                        usePocket
+                      ),
+                      title: "Saved A",
+                    }
+                  : null,
+
+                B: objB
+                  ? {
+                      ...kpisFromSnapshot(
+                        {
+                          prices: objB.prices,
+                          costs: objB.costs,
+                          features: objB.features,
+                          refPrices: objB.refPrices ?? refPrices,
+                          leak: objB.leak ?? leak,
+                          segments,
+                        },
+                        N,
+                        usePocket
+                      ),
+                      title: "Saved B",
+                    }
+                  : null,
+                C: objC
+                  ? {
+                      ...kpisFromSnapshot(
+                        {
+                          prices: objC.prices,
+                          costs: objC.costs,
+                          features: objC.features,
+                          refPrices: objC.refPrices ?? refPrices,
+                          leak: objC.leak ?? leak,
+                          segments,
+                        },
+                        N,
+                        usePocket
+                      ),
+                      title: "Saved C",
+                    }
+                  : null,
+              };
+
+              return (
+                <CompareBoard
+                  slots={slots}
+                  current={curKPIs}
+                  onLoad={(id: "A" | "B" | "C") => loadFromSlot(id)}
+                  onClear={(id: "A" | "B" | "C") => {
+                    clearSlot(id);
+                    toast("info", `Cleared slot ${id}`);
+                    setJournal((j) => [...j]);
+                  }}
+                />
+              );
+            })()}
           </Section>
 
           <Section id="scenario-journal" title="Scenario Journal">
@@ -2729,413 +2932,67 @@ export default function App() {
             </div>
           </Section>
 
-          <Section id="reference-prices" title="Reference prices">
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2 items-center">
-              <label className="text-sm">Good</label>
-              <input
-                type="number"
-                className="col-span-2 border rounded px-2 py-1 h-9 w-full"
-                value={refPrices.good}
-                onChange={(e) =>
-                  setRefPrices((p) => ({ ...p, good: Number(e.target.value) }))
-                }
-              />
-              <label className="text-sm">Better</label>
-              <input
-                type="number"
-                className="col-span-2 border rounded px-2 py-1 h-9 w-full"
-                value={refPrices.better}
-                onChange={(e) =>
-                  setRefPrices((p) => ({
-                    ...p,
-                    better: Number(e.target.value),
-                  }))
-                }
-              />
-              <label className="text-sm">Best</label>
-              <input
-                type="number"
-                className="col-span-2 border rounded px-2 py-1 h-9 w-full"
-                value={refPrices.best}
-                onChange={(e) =>
-                  setRefPrices((p) => ({ ...p, best: Number(e.target.value) }))
-                }
-              />
-            </div>
+          <Section id="recent-short-links" title="Recent short links">
+            <details className="text-xs">
+              <summary className="cursor-pointer select-none font-medium mb-2">
+                Show recents
+              </summary>
 
-            <div className="mt-3">
-              <button
-                className="border rounded-md px-3 py-1.5 text-xs bg-white hover:bg-gray-50"
-                onClick={setRefsFromCurrent}
-              >
-                Set from current prices
-              </button>
-            </div>
-          </Section>
-
-          <Section id="methods" title="Methods">
-            <p className="text-sm text-gray-700 print-tight">
-              MNL: U = β₀(j) + βₚ·price + β_A·featA + β_B·featB; outside option
-              intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
-              ridge regularization.
-            </p>
-            {fitInfo && (
-              <div className="text-xs text-gray-600 mt-2">
-                logLik: {Math.round(fitInfo.logLik)} • iters: {fitInfo.iters} •{" "}
-                {fitInfo.converged ? "converged" : "not converged"}
-              </div>
-            )}
-          </Section>
-        </div>
-
-        {/* Center: Charts */}
-        <div className="col-span-12 md:col-span-6 space-y-4 min-w-0">
-          <Section id="callouts" title="Callouts snapshot">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div className="rounded-xl border border-blue-100 bg-blue-50/40 px-3 py-2">
-                <div className="text-[11px] uppercase text-slate-600">
-                  Profit vs baseline
-                </div>
-                <div className="text-2xl font-semibold text-slate-900">
-                  {explainDelta
-                    ? `${explainDelta.deltaProfit >= 0 ? "+" : "-"}$${Math.abs(
-                        explainDelta.deltaProfit
-                      ).toFixed(0)}`
-                    : "Pin a baseline"}
-                </div>
-                <p className="text-[11px] text-slate-600 mt-1">
-                  {explainDelta
-                    ? `Revenue ${explainDelta.deltaRevenue >= 0 ? "+" : "-"}$${Math.abs(
-                        explainDelta.deltaRevenue
-                      ).toFixed(0)} · Active ${
-                        explainDelta.deltaActive >= 0 ? "+" : "-"
-                      }${Math.abs(explainDelta.deltaActive).toFixed(0)} · ARPU ${
-                        explainDelta.deltaARPU >= 0 ? "+" : "-"
-                      }$${Math.abs(explainDelta.deltaARPU).toFixed(2)}`
-                    : "Use “Set baseline to now” so deltas have context."}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 px-3 py-2">
-                <div className="text-[11px] uppercase text-slate-600">
-                  Main driver
-                </div>
-                <div className="text-sm font-semibold text-slate-900">
-                  {explainDelta?.mainDriver ?? "Drivers appear here once a baseline is set."}
-                </div>
-                <p className="text-[11px] text-slate-600 mt-1">
-                  {explainDelta?.segmentLine ?? "Narrate which segment is winning or losing once deltas are available."}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-purple-100 bg-purple-50/40 px-3 py-2">
-                <div className="text-[11px] uppercase text-slate-600">
-                  Optimizer outlook
-                </div>
-                <div className="text-sm font-semibold text-slate-900">
-                  {optimizerWhyLines.length > 0
-                    ? optimizerWhyLines[0]
-                    : quickOpt.best
-                    ? "Optimizer ready — run to refresh insights."
-                    : "Set ranges & floors, then run the optimizer."}
-                </div>
-                {optimizerWhyLines.length > 1 && (
-                  <p className="text-[11px] text-slate-600 mt-1">
-                    {optimizerWhyLines[1]}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <Explanation slot="callouts.overview">
-              Provide a 2‑3 sentence narrative here that summarizes the current ladder, why the optimizer’s
-              guidance matters, and how a hiring manager should interpret the KPIs before diving into
-              the charts. Desktop ChatGPT: describe the storyline at a “consultant readout” level (what
-              changed, who benefits, which guardrails are binding) and mention how to validate the
-              recommendation (e.g., rerun optimizer, review waterfall, print summary).
-            </Explanation>
-          </Section>
-
-          <Section
-            id="profit-frontier"
-            title="Profit Frontier"
-            className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
-            actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
-          >
-            <Explanation slot="chart.profitFrontier">
-              Desktop ChatGPT: explain how to narrate the profit frontier — what holding Good/Better constant means,
-              how to spot the sweet spot vs. margin floors, and when to use this plot before invoking the optimizer.
-              Mention that each point is a full mixed-logit evaluation, so it is ideal for fast sense-checking of the
-              Best tier and for answering “what if we nudged premium $X?” questions.
-            </Explanation>
-            <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontier… </div>}>
-              <ErrorBoundary title="Frontier chart failed">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-slate-700">Profit frontier</h3>
-                  <InfoTip
-                    className="ml-1"
-                    align="right"
-                    id="chart.frontier"
-                    ariaLabel="What does the Profit Frontier chart show?"
-                  />
-                </div>
-                <FrontierChartReal
-                  chartId="frontier-main"
-                  points={frontier.points}
-                  optimum={frontier.optimum}
-                />
-              </ErrorBoundary>
-            </Suspense>
-          </Section>
-
-          <Section
-            id="take-rate"
-            title="Take-Rate Bars"
-            className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
-            actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
-          >
-            <Explanation slot="chart.takeRate">
-              Desktop ChatGPT: outline how to use take-rate bars to judge conversion mix, what “None” represents,
-              and which inputs (prices, features, reference prices) materially shift these bars. Include guidance on
-              how hiring managers should talk through a mix change (e.g., “Value seekers grew +Xpp when we…”).
-            </Explanation>
-            <Suspense
-              fallback={
-                <div className="text-xs text-gray-500 p-2">Loading bars…</div>
-              }
-            >
-              <ErrorBoundary title="Take-Rate chart failed">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-slate-700">Take-rate mix</h3>
-                  <InfoTip
-                    className="ml-1"
-                    align="right"
-                    id="chart.takeRate"
-                    ariaLabel="How should I read take-rate bars?"
-                  />
-                </div>                
-                <TakeRateChart chartId="takerate-main" data={probs} />
-              </ErrorBoundary>
-            </Suspense>
-          </Section>
-
-          <Section
-            id="cohort-rehearsal"
-            title="Cohort rehearsal (12 months)"
-            actions={<ActionCluster chart="cohort" id="cohort-curve" csv />}
-          >
-            <Explanation slot="chart.cohort">
-              Desktop ChatGPT: describe what the cohort rehearsal simulates (retention slider, pocket margin over a
-              12‑month period) and when a PM should tweak retention vs. pricing. Highlight that this is where to
-              narrate sustainability of profit rather than just one-period lift.
-            </Explanation>
-            {(() => {
-              const probsNow = choiceShares(
-                prices,
-                features,
-                segments,
-                refPrices
-              );
-              const pts = simulateCohort(
-                prices,
-                probsNow,
-                leak,
-                costs,
-                12,
-                retentionPct / 100 // <- slider drives retention
-              );
-
-              return (
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-xs">
-                      <label className="font-medium">Monthly retention</label>
-                      <input
-                        type="range"
-                        min={70}
-                        max={99.9}
-                        step={0.1}
-                        value={retentionPct}
-                        onChange={(e) =>
-                          setRetentionPct(Number(e.target.value))
-                        }
-                      />
-                      <input
-                        type="number"
-                        step={0.1}
-                        min={70}
-                        max={99.9}
-                        value={retentionPct}
-                        onChange={(e) => {
-                          const v = Number(e.target.value);
-                          if (!Number.isFinite(v)) return;
-                          setRetentionPct(Math.min(99.9, Math.max(70, v)));
+              <ul className="text-xs space-y-1">
+                {readRecents().length === 0 ? (
+                  <li className="text-gray-500">None yet</li>
+                ) : (
+                  readRecents().map((r) => (
+                    <li
+                      key={r.id}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <button
+                        className="underline"
+                        title={new Date(r.t).toLocaleString()}
+                        onClick={() => {
+                          const url = `${location.origin}${location.pathname}?s=${r.id}`;
+                          location.assign(url); // reload page with this id
                         }}
-                        className="w-16 h-7 border rounded px-2"
-                      />
-                      <span>%</span>
-                      <span className="text-gray-500 ml-2">
-                        (churn ≈ {(100 - retentionPct).toFixed(1)}%/mo)
-                      </span>
-                    </div>
-
-                  </div>
-
-                  <div className="mt-2">
-                    <MiniLine
-                      title={`Pocket margin by cohort month (retention ${retentionPct.toFixed(
-                        1
-                      )}%)`}
-                      x={pts.map((p) => p.month)}
-                      y={pts.map((p) => p.margin)}
-                      chartId="cohort-curve"
-                      exportKind="cohort"
-                    />
-                  </div>
-                </>
-              );
-            })()}
-          </Section>
-
-          <Section
-            id="tornado"
-            title="Tornado — what moves profit?"
-            className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
-            actions={<ActionCluster chart="tornado" id="tornado-main" csv />}
-          >
-            <Explanation slot="chart.tornado">
-              Desktop ChatGPT: describe how to read a tornado chart for pricing (one factor at a time, impacts on
-              profit) and spell out why switching between Current vs. Optimized helps. Call out when to keep focus on
-              pocket vs. list profit, and mention that the leak bump control stress-tests FX/refund assumptions.
-            </Explanation>
-            <div className="flex flex-wrap items-center gap-3 text-xs mb-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={tornadoPocket}
-                  onChange={(e) => setTornadoPocket(e.target.checked)}
-                />
-                Compute using <span className="font-medium">pocket</span> margin
-              </label>
-
-              <label className="flex items-center gap-1">
-                Range basis
-                <select
-                  className="border rounded px-2 h-7 bg-white"
-                  value={tornadoRangeMode}
-                  onChange={(e) =>
-                    setTornadoRangeMode(
-                      e.target.value as "symmetric" | "data"
-                    )
-                  }
+                      >
+                        {r.id}
+                      </button>
+                      <button
+                        className="border rounded px-2 py-0.5"
+                        onClick={() => {
+                          const url = `${location.origin}${location.pathname}?s=${r.id}`;
+                          navigator.clipboard.writeText(url).catch(() => {});
+                          pushJ(`[${now()}] Copied short link ${r.id}`);
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+              <div className="mt-2">
+                <button
+                  className="text-xs border rounded px-2 py-1"
+                  onClick={() => {
+                    localStorage.removeItem(RECENT_KEY);
+                    pushJ(`[${now()}] Cleared recent short links`);
+                    location.reload();
+                  }}
                 >
-                  <option value="symmetric">±{tornadoPriceBump}% symmetric</option>
-                  <option value="data" disabled={!priceRangeState?.map}>
-                    {dataRangeOptionLabel}
-                  </option>
-                </select>
-              </label>
-
-              {tornadoRangeMode === "symmetric" ? (
-                <label className="flex items-center gap-1">
-                  Span
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="1"
-                    max="40"
-                    className="border rounded px-2 h-7 w-16"
-                    value={tornadoPriceBump}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      if (!Number.isFinite(v)) return;
-                      setTornadoPriceBump(Math.max(1, Math.min(40, v)));
-                    }}
-                  />
-                  <span>%</span>
-                </label>
-              ) : (
-                <div className="text-[11px] text-slate-600 min-w-48">
-                  {dataRangeSummary ??
-                    "No data-driven ranges yet. Import sales data to override the default span."}
-                </div>
-              )}
-
-              <label className="flex items-center gap-1">
-                Leak bump (FX/Refunds/Payment)
-                <input
-                  type="number"
-                  step="0.5"
-                  className="border rounded px-2 h-7 w-16"
-                  value={tornadoPctBump}
-                  onChange={(e) =>
-                    setTornadoPctBump(Number(e.target.value) || 0)
-                  }
-                />
-                <span>pp</span>
-              </label>
-
-              <div className="flex items-center gap-1">
-                <span>View</span>
-                <div className="inline-flex overflow-hidden rounded border">
-                  <button
-                    type="button"
-                    className={`px-2 h-7 ${tornadoView === "current" ? "bg-gray-900 text-white" : "bg-white"}`}
-                    onClick={() => setTornadoView("current")}
-                  >
-                    Current
-                  </button>
-                  <button
-                    type="button"
-                    className={`px-2 h-7 ${
-                      tornadoView === "optimized" && hasOptimizedTornado
-                        ? "bg-gray-900 text-white"
-                        : "bg-white"
-                    } ${!hasOptimizedTornado ? "opacity-50 cursor-not-allowed" : ""}`}
-                    onClick={() => hasOptimizedTornado && setTornadoView("optimized")}
-                    disabled={!hasOptimizedTornado}
-                  >
-                    Optimized
-                  </button>
-                </div>
+                  Clear recents
+                </button>
               </div>
-            </div>
-
-            <div className="text-[11px] text-slate-600 mb-2">
-              {tornadoView === "optimized" && !hasOptimizedTornado
-                ? "Run the optimizer to enable the Optimized view and compare driver magnitudes."
-                : "Use the controls above to test pocket/list assumptions and to resize the span used for each driver."}
-            </div>
-
-            <div className="flex items-center justify-between mb-2 text-xs text-slate-600">
-              <span>Showing: {tornadoViewLabel} ladder</span>
-              <InfoTip
-                className="ml-1"
-                align="right"
-                id="chart.tornado"
-                ariaLabel="How should I use the tornado sensitivity chart?"
-              />
-            </div>
-
-            <Suspense
-              fallback={
-                <div className="text-xs text-gray-500 p-2">
-                  Loading tornado…
-                </div>
-              }
-            >
-              <ErrorBoundary title="Tornado chart failed">
-                <Tornado
-                  chartId="tornado-main"
-                  title={`Tornado: ${tornadoViewLabel} profit sensitivity`}
-                  rows={activeTornadoRows}
-                />
-              </ErrorBoundary>
-            </Suspense>
+            </details>
           </Section>
 
           
+        </div>
 
+        {/* Center: Optimizer */}
+        <div
+          className="col-span-12 lg:col-span-3 space-y-3 md:space-y-4 min-w-0 self-start md:text-[13px] pr-1"
+        >
           <Section id="current-vs-optimized" title="Current vs Optimized">
             <Explanation slot="chart.currentOptimized">
               Desktop ChatGPT: explain how to use this card stack to narrate “before vs after” ladder economics, when
@@ -3644,107 +3501,62 @@ export default function App() {
             </div>
           </Section>
 
-          <div className="print-page" aria-hidden="true" />
-          <Section id="compare-board" title="Scenario Compare (A/B/C)">
-            <Explanation slot="chart.compareBoard">
-              Desktop ChatGPT: describe how to position these A/B/C slots during interviews — e.g., “Save current,
-              branch, then reload while screen-sharing.” Mention how KPIs update and how to interpret gaps between
-              saved ladders.
-            </Explanation>
-            <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
-              <span className="text-gray-600">Save current to:</span>
-              {(["A", "B", "C"] as const).map((id) => (
-                <button
-                  key={id}
-                  className="border rounded px-2 py-1 bg-white hover:bg-gray-50"
-                  onClick={() => saveToSlot(id)}
-                >
-                  Save to {id}
-                </button>
-              ))}
+          <Section id="reference-prices" title="Reference prices">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2 items-center">
+              <label className="text-sm">Good</label>
+              <input
+                type="number"
+                className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                value={refPrices.good}
+                onChange={(e) =>
+                  setRefPrices((p) => ({ ...p, good: Number(e.target.value) }))
+                }
+              />
+              <label className="text-sm">Better</label>
+              <input
+                type="number"
+                className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                value={refPrices.better}
+                onChange={(e) =>
+                  setRefPrices((p) => ({
+                    ...p,
+                    better: Number(e.target.value),
+                  }))
+                }
+              />
+              <label className="text-sm">Best</label>
+              <input
+                type="number"
+                className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                value={refPrices.best}
+                onChange={(e) =>
+                  setRefPrices((p) => ({ ...p, best: Number(e.target.value) }))
+                }
+              />
             </div>
 
-            {(() => {
-              // derive KPIs for the board
-              const usePocket = !!optConstraints.usePocketProfit;
-              const curKPIs = kpisFromSnapshot(
-                { prices, costs, features, refPrices, leak, segments },
-                N,
-                usePocket
-              );
+            <div className="mt-3">
+              <button
+                className="border rounded-md px-3 py-1.5 text-xs bg-white hover:bg-gray-50"
+                onClick={setRefsFromCurrent}
+              >
+                Set from current prices
+              </button>
+            </div>
+          </Section>
 
-              const objA = readSlot("A");
-              const objB = readSlot("B");
-              const objC = readSlot("C");
-
-              const slots: Record<"A" | "B" | "C", SnapshotKPIs | null> = {
-                A: objA
-                  ? {
-                      ...kpisFromSnapshot(
-                        {
-                          prices: objA.prices,
-                          costs: objA.costs,
-                          features: objA.features,
-                          refPrices: objA.refPrices ?? refPrices,
-                          leak: objA.leak ?? leak,
-                          segments, // reuse current mix
-                        },
-                        N,
-                        usePocket
-                      ),
-                      title: "Saved A",
-                    }
-                  : null,
-
-                B: objB
-                  ? {
-                      ...kpisFromSnapshot(
-                        {
-                          prices: objB.prices,
-                          costs: objB.costs,
-                          features: objB.features,
-                          refPrices: objB.refPrices ?? refPrices,
-                          leak: objB.leak ?? leak,
-                          segments,
-                        },
-                        N,
-                        usePocket
-                      ),
-                      title: "Saved B",
-                    }
-                  : null,
-                C: objC
-                  ? {
-                      ...kpisFromSnapshot(
-                        {
-                          prices: objC.prices,
-                          costs: objC.costs,
-                          features: objC.features,
-                          refPrices: objC.refPrices ?? refPrices,
-                          leak: objC.leak ?? leak,
-                          segments,
-                        },
-                        N,
-                        usePocket
-                      ),
-                      title: "Saved C",
-                    }
-                  : null,
-              };
-
-              return (
-                <CompareBoard
-                  slots={slots}
-                  current={curKPIs}
-                  onLoad={(id: "A" | "B" | "C") => loadFromSlot(id)}
-                  onClear={(id: "A" | "B" | "C") => {
-                    clearSlot(id);
-                    toast("info", `Cleared slot ${id}`);
-                    setJournal((j) => [...j]);
-                  }}
-                />
-              );
-            })()}
+          <Section id="methods" title="Methods">
+            <p className="text-sm text-gray-700 print-tight">
+              MNL: U = β₀(j) + βₚ·price + β_A·featA + β_B·featB; outside option
+              intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
+              ridge regularization.
+            </p>
+            {fitInfo && (
+              <div className="text-xs text-gray-600 mt-2">
+                logLik: {Math.round(fitInfo.logLik)} • iters: {fitInfo.iters} •{" "}
+                {fitInfo.converged ? "converged" : "not converged"}
+              </div>
+            )}
           </Section>
 
           <Section
@@ -4151,11 +3963,74 @@ export default function App() {
           </Section>
         </div>
 
-        {/* Right: Support cards */}
-        <div
-          className="col-span-12 md:col-span-3 space-y-3 md:space-y-4 min-w-0 self-start md:text-[13px] pr-1"
-        >
-          
+        {/* Right: Charts */}
+        <div className="col-span-12 lg:col-span-6 space-y-4 min-w-0">
+          <Section id="callouts" title="Callouts snapshot">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="rounded-xl border border-blue-100 bg-blue-50/40 px-3 py-2">
+                <div className="text-[11px] uppercase text-slate-600">
+                  Profit vs baseline
+                </div>
+                <div className="text-2xl font-semibold text-slate-900">
+                  {explainDelta
+                    ? `${explainDelta.deltaProfit >= 0 ? "+" : "-"}$${Math.abs(
+                        explainDelta.deltaProfit
+                      ).toFixed(0)}`
+                    : "Pin a baseline"}
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1">
+                  {explainDelta
+                    ? `Revenue ${explainDelta.deltaRevenue >= 0 ? "+" : "-"}$${Math.abs(
+                        explainDelta.deltaRevenue
+                      ).toFixed(0)} · Active ${
+                        explainDelta.deltaActive >= 0 ? "+" : "-"
+                      }${Math.abs(explainDelta.deltaActive).toFixed(0)} · ARPU ${
+                        explainDelta.deltaARPU >= 0 ? "+" : "-"
+                      }$${Math.abs(explainDelta.deltaARPU).toFixed(2)}`
+                    : "Use “Set baseline to now” so deltas have context."}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 px-3 py-2">
+                <div className="text-[11px] uppercase text-slate-600">
+                  Main driver
+                </div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {explainDelta?.mainDriver ?? "Drivers appear here once a baseline is set."}
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1">
+                  {explainDelta?.segmentLine ?? "Narrate which segment is winning or losing once deltas are available."}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-purple-100 bg-purple-50/40 px-3 py-2">
+                <div className="text-[11px] uppercase text-slate-600">
+                  Optimizer outlook
+                </div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {optimizerWhyLines.length > 0
+                    ? optimizerWhyLines[0]
+                    : quickOpt.best
+                    ? "Optimizer ready — run to refresh insights."
+                    : "Set ranges & floors, then run the optimizer."}
+                </div>
+                {optimizerWhyLines.length > 1 && (
+                  <p className="text-[11px] text-slate-600 mt-1">
+                    {optimizerWhyLines[1]}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <Explanation slot="callouts.overview">
+              Provide a 2‑3 sentence narrative here that summarizes the current ladder, why the optimizer’s
+              guidance matters, and how a hiring manager should interpret the KPIs before diving into
+              the charts. Desktop ChatGPT: describe the storyline at a “consultant readout” level (what
+              changed, who benefits, which guardrails are binding) and mention how to validate the
+              recommendation (e.g., rerun optimizer, review waterfall, print summary).
+            </Explanation>
+          </Section>
+
           <Section
             id="kpi-pocket-coverage"
             title="KPI — Pocket floor coverage"
@@ -4266,157 +4141,281 @@ export default function App() {
           </Section>
 
           <Section
-            id="customer-segments"
-            title={
-              <span className="inline-flex items-center gap-2">
-                <span>Customer Segments</span>
-                <InfoTip
-                  id="segments.mix"
-                  ariaLabel="Adjust segment mix and review narratives"
-                  align="right"
-                />
-              </span>
-            }
-            actions={
-              <button
-                className="text-xs border rounded px-2 py-1"
-                onClick={() => setSegments(normalizeWeights(segments))}
-              >
-                Normalize to 100%
-              </button>
-            }
+            id="profit-frontier"
+            title="Profit Frontier"
+            className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
+            actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              {segments.map((seg, i) => {
-                const lines = describeSegment(seg);
-                return (
-                  <div
-                    key={seg.name}
-                    className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 shadow-sm space-y-2"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-[11px] uppercase tracking-wide text-slate-500">
-                          Segment
-                        </div>
-                        <div className="text-base font-semibold text-slate-900">
-                          {seg.name}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[11px] text-slate-500">Weight</div>
-                        <div className="text-sm font-semibold text-slate-900">
-                          {Math.round(seg.weight * 100)}%
-                        </div>
-                      </div>
-                    </div>
+            <Explanation slot="chart.profitFrontier">
+              Desktop ChatGPT: explain how to narrate the profit frontier — what holding Good/Better constant means,
+              how to spot the sweet spot vs. margin floors, and when to use this plot before invoking the optimizer.
+              Mention that each point is a full mixed-logit evaluation, so it is ideal for fast sense-checking of the
+              Best tier and for answering “what if we nudged premium $X?” questions.
+            </Explanation>
+            <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontier… </div>}>
+              <ErrorBoundary title="Frontier chart failed">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-slate-700">Profit frontier</h3>
+                  <InfoTip
+                    className="ml-1"
+                    align="right"
+                    id="chart.frontier"
+                    ariaLabel="What does the Profit Frontier chart show?"
+                  />
+                </div>
+                <FrontierChartReal
+                  chartId="frontier-main"
+                  points={frontier.points}
+                  optimum={frontier.optimum}
+                />
+              </ErrorBoundary>
+            </Suspense>
+          </Section>
 
-                    <div className="flex items-center gap-2">
+          <Section
+            id="take-rate"
+            title="Take-Rate Bars"
+            className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
+            actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
+          >
+            <Explanation slot="chart.takeRate">
+              Desktop ChatGPT: outline how to use take-rate bars to judge conversion mix, what “None” represents,
+              and which inputs (prices, features, reference prices) materially shift these bars. Include guidance on
+              how hiring managers should talk through a mix change (e.g., “Value seekers grew +Xpp when we…”).
+            </Explanation>
+            <Suspense
+              fallback={
+                <div className="text-xs text-gray-500 p-2">Loading bars…</div>
+              }
+            >
+              <ErrorBoundary title="Take-Rate chart failed">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-slate-700">Take-rate mix</h3>
+                  <InfoTip
+                    className="ml-1"
+                    align="right"
+                    id="chart.takeRate"
+                    ariaLabel="How should I read take-rate bars?"
+                  />
+                </div>                
+                <TakeRateChart chartId="takerate-main" data={probs} />
+              </ErrorBoundary>
+            </Suspense>
+          </Section>
+
+          <Section
+            id="cohort-rehearsal"
+            title="Cohort rehearsal (12 months)"
+            actions={<ActionCluster chart="cohort" id="cohort-curve" csv />}
+          >
+            <Explanation slot="chart.cohort">
+              Desktop ChatGPT: describe what the cohort rehearsal simulates (retention slider, pocket margin over a
+              12‑month period) and when a PM should tweak retention vs. pricing. Highlight that this is where to
+              narrate sustainability of profit rather than just one-period lift.
+            </Explanation>
+            {(() => {
+              const probsNow = choiceShares(
+                prices,
+                features,
+                segments,
+                refPrices
+              );
+              const pts = simulateCohort(
+                prices,
+                probsNow,
+                leak,
+                costs,
+                12,
+                retentionPct / 100 // <- slider drives retention
+              );
+
+              return (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs">
+                      <label className="font-medium">Monthly retention</label>
                       <input
                         type="range"
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        value={seg.weight}
-                        onChange={(e) => {
-                          const w = Number(e.target.value);
-                          const next = segments.map((t, j) =>
-                            j === i ? { ...t, weight: w } : t
-                          );
-                          setSegments(normalizeWeights(next));
-                        }}
-                        className="flex-1"
-                        aria-label={`${seg.name} weight slider`}
+                        min={70}
+                        max={99.9}
+                        step={0.1}
+                        value={retentionPct}
+                        onChange={(e) =>
+                          setRetentionPct(Number(e.target.value))
+                        }
                       />
                       <input
                         type="number"
-                        min={0}
-                        max={100}
-                        step={1}
-                        value={Math.round(seg.weight * 100)}
+                        step={0.1}
+                        min={70}
+                        max={99.9}
+                        value={retentionPct}
                         onChange={(e) => {
-                          const pct = Number(e.target.value);
-                          if (!Number.isFinite(pct)) return;
-                          const clamped = Math.max(0, Math.min(100, pct));
-                          const w = clamped / 100;
-                          const next = segments.map((t, j) =>
-                            j === i ? { ...t, weight: w } : t
-                          );
-                          setSegments(normalizeWeights(next));
+                          const v = Number(e.target.value);
+                          if (!Number.isFinite(v)) return;
+                          setRetentionPct(Math.min(99.9, Math.max(70, v)));
                         }}
-                        className="w-16 border rounded px-2 py-1 text-right"
-                        aria-label={`${seg.name} weight percent`}
+                        className="w-16 h-7 border rounded px-2"
                       />
+                      <span>%</span>
+                      <span className="text-gray-500 ml-2">
+                        (churn ≈ {(100 - retentionPct).toFixed(1)}%/mo)
+                      </span>
                     </div>
 
-                    <div className="mt-2">
-                      <div className="text-[11px] uppercase tracking-wide text-slate-500">
-                        Story
-                      </div>
-                      <ul className="mt-1 space-y-1 list-disc list-inside text-slate-600">
-                        {lines.map((line, idx) => (
-                          <li key={`${seg.name}-line-${idx}`}>{line}</li>
-                        ))}
-                      </ul>
-                    </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  <div className="mt-2">
+                    <MiniLine
+                      title={`Pocket margin by cohort month (retention ${retentionPct.toFixed(
+                        1
+                      )}%)`}
+                      x={pts.map((p) => p.month)}
+                      y={pts.map((p) => p.margin)}
+                      chartId="cohort-curve"
+                      exportKind="cohort"
+                    />
+                  </div>
+                </>
+              );
+            })()}
           </Section>
 
-          <Section id="recent-short-links" title="Recent short links">
-            <details className="text-xs">
-              <summary className="cursor-pointer select-none font-medium mb-2">
-                Show recents
-              </summary>
+          <Section
+            id="tornado"
+            title="Tornado — what moves profit?"
+            className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
+            actions={<ActionCluster chart="tornado" id="tornado-main" csv />}
+          >
+            <Explanation slot="chart.tornado">
+              Desktop ChatGPT: describe how to read a tornado chart for pricing (one factor at a time, impacts on
+              profit) and spell out why switching between Current vs. Optimized helps. Call out when to keep focus on
+              pocket vs. list profit, and mention that the leak bump control stress-tests FX/refund assumptions.
+            </Explanation>
+            <div className="flex flex-wrap items-center gap-3 text-xs mb-2">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={tornadoPocket}
+                  onChange={(e) => setTornadoPocket(e.target.checked)}
+                />
+                Compute using <span className="font-medium">pocket</span> margin
+              </label>
 
-              <ul className="text-xs space-y-1">
-                {readRecents().length === 0 ? (
-                  <li className="text-gray-500">None yet</li>
-                ) : (
-                  readRecents().map((r) => (
-                    <li
-                      key={r.id}
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <button
-                        className="underline"
-                        title={new Date(r.t).toLocaleString()}
-                        onClick={() => {
-                          const url = `${location.origin}${location.pathname}?s=${r.id}`;
-                          location.assign(url); // reload page with this id
-                        }}
-                      >
-                        {r.id}
-                      </button>
-                      <button
-                        className="border rounded px-2 py-0.5"
-                        onClick={() => {
-                          const url = `${location.origin}${location.pathname}?s=${r.id}`;
-                          navigator.clipboard.writeText(url).catch(() => {});
-                          pushJ(`[${now()}] Copied short link ${r.id}`);
-                        }}
-                      >
-                        Copy
-                      </button>
-                    </li>
-                  ))
-                )}
-              </ul>
-              <div className="mt-2">
-                <button
-                  className="text-xs border rounded px-2 py-1"
-                  onClick={() => {
-                    localStorage.removeItem(RECENT_KEY);
-                    pushJ(`[${now()}] Cleared recent short links`);
-                    location.reload();
-                  }}
+              <label className="flex items-center gap-1">
+                Range basis
+                <select
+                  className="border rounded px-2 h-7 bg-white"
+                  value={tornadoRangeMode}
+                  onChange={(e) =>
+                    setTornadoRangeMode(
+                      e.target.value as "symmetric" | "data"
+                    )
+                  }
                 >
-                  Clear recents
-                </button>
+                  <option value="symmetric">±{tornadoPriceBump}% symmetric</option>
+                  <option value="data" disabled={!priceRangeState?.map}>
+                    {dataRangeOptionLabel}
+                  </option>
+                </select>
+              </label>
+
+              {tornadoRangeMode === "symmetric" ? (
+                <label className="flex items-center gap-1">
+                  Span
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="1"
+                    max="40"
+                    className="border rounded px-2 h-7 w-16"
+                    value={tornadoPriceBump}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (!Number.isFinite(v)) return;
+                      setTornadoPriceBump(Math.max(1, Math.min(40, v)));
+                    }}
+                  />
+                  <span>%</span>
+                </label>
+              ) : (
+                <div className="text-[11px] text-slate-600 min-w-48">
+                  {dataRangeSummary ??
+                    "No data-driven ranges yet. Import sales data to override the default span."}
+                </div>
+              )}
+
+              <label className="flex items-center gap-1">
+                Leak bump (FX/Refunds/Payment)
+                <input
+                  type="number"
+                  step="0.5"
+                  className="border rounded px-2 h-7 w-16"
+                  value={tornadoPctBump}
+                  onChange={(e) =>
+                    setTornadoPctBump(Number(e.target.value) || 0)
+                  }
+                />
+                <span>pp</span>
+              </label>
+
+              <div className="flex items-center gap-1">
+                <span>View</span>
+                <div className="inline-flex overflow-hidden rounded border">
+                  <button
+                    type="button"
+                    className={`px-2 h-7 ${tornadoView === "current" ? "bg-gray-900 text-white" : "bg-white"}`}
+                    onClick={() => setTornadoView("current")}
+                  >
+                    Current
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-2 h-7 ${
+                      tornadoView === "optimized" && hasOptimizedTornado
+                        ? "bg-gray-900 text-white"
+                        : "bg-white"
+                    } ${!hasOptimizedTornado ? "opacity-50 cursor-not-allowed" : ""}`}
+                    onClick={() => hasOptimizedTornado && setTornadoView("optimized")}
+                    disabled={!hasOptimizedTornado}
+                  >
+                    Optimized
+                  </button>
+                </div>
               </div>
-            </details>
+            </div>
+
+            <div className="text-[11px] text-slate-600 mb-2">
+              {tornadoView === "optimized" && !hasOptimizedTornado
+                ? "Run the optimizer to enable the Optimized view and compare driver magnitudes."
+                : "Use the controls above to test pocket/list assumptions and to resize the span used for each driver."}
+            </div>
+
+            <div className="flex items-center justify-between mb-2 text-xs text-slate-600">
+              <span>Showing: {tornadoViewLabel} ladder</span>
+              <InfoTip
+                className="ml-1"
+                align="right"
+                id="chart.tornado"
+                ariaLabel="How should I use the tornado sensitivity chart?"
+              />
+            </div>
+
+            <Suspense
+              fallback={
+                <div className="text-xs text-gray-500 p-2">
+                  Loading tornado…
+                </div>
+              }
+            >
+              <ErrorBoundary title="Tornado chart failed">
+                <Tornado
+                  chartId="tornado-main"
+                  title={`Tornado: ${tornadoViewLabel} profit sensitivity`}
+                  rows={activeTornadoRows}
+                />
+              </ErrorBoundary>
+            </Suspense>
           </Section>
         </div>
       </main>
