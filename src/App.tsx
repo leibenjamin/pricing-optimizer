@@ -2255,7 +2255,7 @@ export default function App() {
       <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4 min-h-screen print-grid-1 print:gap-2">
         {/* Left: Scenario Panel */}
         <div className="col-span-12 lg:col-span-3 flex flex-col min-h-0 min-w-0 overflow-x-visible">
-          <Section id="preset-scenarios" title="Preset scenarios" className="order-1">
+          <Section id="preset-scenarios" title="Preset scenarios" className="order-0">
             <PresetPicker
               presets={PRESETS}
               activeId={scenarioPresetId}
@@ -2265,7 +2265,7 @@ export default function App() {
             />
           </Section>
           
-          <Section id="scenario" title="Scenario Panel" className="left-rail-scroll overflow-x-auto order-2">
+          <Section id="scenario" title="Scenario Panel" className="left-rail-scroll overflow-x-auto order-1">
             <div className="shrink-0 space-y-4">
             </div>
             <div id="scenarioScroll" className="flex-1 min-h-0 overflow-y-auto pr-2 pb-4">
@@ -2692,7 +2692,8 @@ export default function App() {
               >
                 Normalize to 100%
               </button>
-            }
+            } 
+            className="order-2"
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               {segments.map((seg, i) => {
@@ -2774,7 +2775,7 @@ export default function App() {
           </Section>
 
           <div className="print-page" aria-hidden="true" />
-          <Section id="compare-board" title="Scenario Compare (A/B/C)">
+          <Section id="compare-board" title="Scenario Compare (A/B/C)" className="order-3">
             <Explanation slot="chart.compareBoard">
               Desktop ChatGPT: describe how to position these A/B/C slots during interviews — e.g., “Save current,
               branch, then reload while screen-sharing.” Mention how KPIs update and how to interpret gaps between
@@ -2876,7 +2877,7 @@ export default function App() {
             })()}
           </Section>
 
-          <Section id="scenario-journal" title="Scenario Journal">
+          <Section id="scenario-journal" title="Scenario Journal" className="order-4">
             <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
               {journal.length === 0 ? (
                 <li className="text-gray-400">
@@ -2932,7 +2933,7 @@ export default function App() {
             </div>
           </Section>
 
-          <Section id="recent-short-links" title="Recent short links">
+          <Section id="recent-short-links" title="Recent short links" className="order-5">
             <details className="text-xs">
               <summary className="cursor-pointer select-none font-medium mb-2">
                 Show recents
@@ -2984,180 +2985,13 @@ export default function App() {
                 </button>
               </div>
             </details>
-          </Section>
-
-          
+          </Section>          
         </div>
 
         {/* Center: Optimizer */}
         <div
           className="col-span-12 lg:col-span-3 space-y-3 md:space-y-4 min-w-0 self-start md:text-[13px] pr-1"
         >
-          <Section id="current-vs-optimized" title="Current vs Optimized">
-            <Explanation slot="chart.currentOptimized">
-              Desktop ChatGPT: explain how to use this card stack to narrate “before vs after” ladder economics, when
-              to trust the quick optimizer, and how to talk through the Delta card plus Undo button in demos.
-            </Explanation>
-            {(() => {
-              const curProfit = optConstraints.usePocketProfit
-                ? // pocket profit using current prices
-                  (() => {
-                    const probs = choiceShares(
-                      prices,
-                      features,
-                      segments,
-                      refPrices
-                    );
-                    const take = {
-                      good: Math.round(N * probs.good),
-                      better: Math.round(N * probs.better),
-                      best: Math.round(N * probs.best),
-                    };
-                    const pG = computePocketPrice(
-                      prices.good,
-                      "good",
-                      leak
-                    ).pocket;
-                    const pB = computePocketPrice(
-                      prices.better,
-                      "better",
-                      leak
-                    ).pocket;
-                    const pH = computePocketPrice(
-                      prices.best,
-                      "best",
-                      leak
-                    ).pocket;
-                    return (
-                      take.good * (pG - costs.good) +
-                      take.better * (pB - costs.better) +
-                      take.best * (pH - costs.best)
-                    );
-                  })()
-                : // list profit
-                  (() => {
-                    const probs = choiceShares(
-                      prices,
-                      features,
-                      segments,
-                      refPrices
-                    );
-                    const take = {
-                      good: Math.round(N * probs.good),
-                      better: Math.round(N * probs.better),
-                      best: Math.round(N * probs.best),
-                    };
-                    return (
-                      take.good * (prices.good - costs.good) +
-                      take.better * (prices.better - costs.better) +
-                      take.best * (prices.best - costs.best)
-                    );
-                  })();
-
-              const best = quickOpt.best;
-              const bestProfit = quickOpt.profit;
-
-              if (!best)
-                return (
-                  <div className="text-xs text-gray-600">
-                    No feasible ladder in the current ranges & floors.
-                  </div>
-                );
-
-              return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                  <div className="rounded border p-3">
-                    <div className="font-semibold mb-1">Current</div>
-                    <div>Good: ${prices.good}</div>
-                    <div>Better: ${prices.better}</div>
-                    <div>Best: ${prices.best}</div>
-                    <div className="mt-2 text-xs text-gray-600">
-                      Profit: ${Math.round(curProfit).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="rounded border p-3">
-                    <div className="font-semibold mb-1">Optimized</div>
-                    <div>Good: ${best.good}</div>
-                    <div>Better: ${best.better}</div>
-                    <div>Best: ${best.best}</div>
-                    <div className="mt-2 text-xs text-gray-600">
-                      Profit: ${Math.round(bestProfit).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="rounded border p-3 flex flex-col gap-2">
-                    <div className="font-semibold">Delta</div>
-                    <div>
-                      Δ Profit:{" "}
-                      <span className="font-medium">
-                        ${Math.round(bestProfit - curProfit).toLocaleString()}
-                      </span>
-                    </div>
-                    <button
-                      className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
-                      onClick={() => {
-                        lastAppliedPricesRef.current = { ...prices }; // stash
-                        setPrices(best); // apply
-                        pushJ?.(
-                          `Applied optimized ladder: ${best.good}/${best.better}/${best.best}`
-                        );
-                      }}
-                    >
-                      Apply optimized ladder
-                    </button>
-                  </div>
-                  <div className="mt-2">
-                    <button
-                      className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50 disabled:opacity-50"
-                      disabled={!lastAppliedPricesRef.current}
-                      onClick={() => {
-                        const prev = lastAppliedPricesRef.current;
-                        if (!prev) return;
-                        setPrices(prev);
-                        lastAppliedPricesRef.current = null;
-                        pushJ?.("Undo: restored ladder to previous prices");
-                      }}
-                    >
-                      Undo apply ladder
-                    </button>
-                  </div>
-                  <div className="mt-3 text-xs">
-                    <div className="font-medium mb-1">
-                      Why this recommendation?
-                    </div>
-                    <ul className="list-disc ml-5 space-y-1">
-                      {(() => {
-                        const binds = explainGaps(best, {
-                          gapGB: optConstraints.gapGB,
-                          gapBB: optConstraints.gapBB,
-                        });
-                        return binds.length ? (
-                          binds.map((b, i) => <li key={i}>{b}</li>)
-                        ) : (
-                          <li>No gap constraints binding.</li>
-                        );
-                      })()}
-                      {(() => {
-                        const td = topDriver(tornadoRowsOptim);
-                        return (
-                          <li>
-                            Largest profit driver near optimum: {td ?? "n/a"}
-                          </li>
-                        );
-                      })()}
-                      <li>
-                        Floors: pocket margin ≥{" "}
-                        {Math.round(optConstraints.marginFloor.good * 100)}% /{" "}
-                        {Math.round(optConstraints.marginFloor.better * 100)}% /{" "}
-                        {Math.round(optConstraints.marginFloor.best * 100)}%
-                        (G/B/Best).
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              );
-            })()}
-          </Section>
-
           <Section id="global-optimizer" title="Global Optimizer">
             <Explanation slot="chart.optimizer">
               Desktop ChatGPT: provide copy that frames this as the “decision cockpit” — explain ranges, steps,
@@ -3543,6 +3377,171 @@ export default function App() {
                 Set from current prices
               </button>
             </div>
+          </Section>
+
+          <Section id="current-vs-optimized" title="Current vs Optimized">
+            <Explanation slot="chart.currentOptimized">
+              Desktop ChatGPT: explain how to use this card stack to narrate “before vs after” ladder economics, when
+              to trust the quick optimizer, and how to talk through the Delta card plus Undo button in demos.
+            </Explanation>
+            {(() => {
+              const curProfit = optConstraints.usePocketProfit
+                ? // pocket profit using current prices
+                  (() => {
+                    const probs = choiceShares(
+                      prices,
+                      features,
+                      segments,
+                      refPrices
+                    );
+                    const take = {
+                      good: Math.round(N * probs.good),
+                      better: Math.round(N * probs.better),
+                      best: Math.round(N * probs.best),
+                    };
+                    const pG = computePocketPrice(
+                      prices.good,
+                      "good",
+                      leak
+                    ).pocket;
+                    const pB = computePocketPrice(
+                      prices.better,
+                      "better",
+                      leak
+                    ).pocket;
+                    const pH = computePocketPrice(
+                      prices.best,
+                      "best",
+                      leak
+                    ).pocket;
+                    return (
+                      take.good * (pG - costs.good) +
+                      take.better * (pB - costs.better) +
+                      take.best * (pH - costs.best)
+                    );
+                  })()
+                : // list profit
+                  (() => {
+                    const probs = choiceShares(
+                      prices,
+                      features,
+                      segments,
+                      refPrices
+                    );
+                    const take = {
+                      good: Math.round(N * probs.good),
+                      better: Math.round(N * probs.better),
+                      best: Math.round(N * probs.best),
+                    };
+                    return (
+                      take.good * (prices.good - costs.good) +
+                      take.better * (prices.better - costs.better) +
+                      take.best * (prices.best - costs.best)
+                    );
+                  })();
+
+              const best = quickOpt.best;
+              const bestProfit = quickOpt.profit;
+
+              if (!best)
+                return (
+                  <div className="text-xs text-gray-600">
+                    No feasible ladder in the current ranges & floors.
+                  </div>
+                );
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                  <div className="rounded border p-3">
+                    <div className="font-semibold mb-1">Current</div>
+                    <div>Good: ${prices.good}</div>
+                    <div>Better: ${prices.better}</div>
+                    <div>Best: ${prices.best}</div>
+                    <div className="mt-2 text-xs text-gray-600">
+                      Profit: ${Math.round(curProfit).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="rounded border p-3">
+                    <div className="font-semibold mb-1">Optimized</div>
+                    <div>Good: ${best.good}</div>
+                    <div>Better: ${best.better}</div>
+                    <div>Best: ${best.best}</div>
+                    <div className="mt-2 text-xs text-gray-600">
+                      Profit: ${Math.round(bestProfit).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="rounded border p-3 flex flex-col gap-2">
+                    <div className="font-semibold">Delta</div>
+                    <div>
+                      Δ Profit:{" "}
+                      <span className="font-medium">
+                        ${Math.round(bestProfit - curProfit).toLocaleString()}
+                      </span>
+                    </div>
+                    <button
+                      className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
+                      onClick={() => {
+                        lastAppliedPricesRef.current = { ...prices }; // stash
+                        setPrices(best); // apply
+                        pushJ?.(
+                          `Applied optimized ladder: ${best.good}/${best.better}/${best.best}`
+                        );
+                      }}
+                    >
+                      Apply optimized ladder
+                    </button>
+                  </div>
+                  <div className="mt-2">
+                    <button
+                      className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50 disabled:opacity-50"
+                      disabled={!lastAppliedPricesRef.current}
+                      onClick={() => {
+                        const prev = lastAppliedPricesRef.current;
+                        if (!prev) return;
+                        setPrices(prev);
+                        lastAppliedPricesRef.current = null;
+                        pushJ?.("Undo: restored ladder to previous prices");
+                      }}
+                    >
+                      Undo apply ladder
+                    </button>
+                  </div>
+                  <div className="mt-3 text-xs">
+                    <div className="font-medium mb-1">
+                      Why this recommendation?
+                    </div>
+                    <ul className="list-disc ml-5 space-y-1">
+                      {(() => {
+                        const binds = explainGaps(best, {
+                          gapGB: optConstraints.gapGB,
+                          gapBB: optConstraints.gapBB,
+                        });
+                        return binds.length ? (
+                          binds.map((b, i) => <li key={i}>{b}</li>)
+                        ) : (
+                          <li>No gap constraints binding.</li>
+                        );
+                      })()}
+                      {(() => {
+                        const td = topDriver(tornadoRowsOptim);
+                        return (
+                          <li>
+                            Largest profit driver near optimum: {td ?? "n/a"}
+                          </li>
+                        );
+                      })()}
+                      <li>
+                        Floors: pocket margin ≥{" "}
+                        {Math.round(optConstraints.marginFloor.good * 100)}% /{" "}
+                        {Math.round(optConstraints.marginFloor.better * 100)}% /{" "}
+                        {Math.round(optConstraints.marginFloor.best * 100)}%
+                        (G/B/Best).
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              );
+            })()}
           </Section>
 
           <Section id="methods" title="Methods">
