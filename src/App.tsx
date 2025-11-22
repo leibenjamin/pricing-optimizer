@@ -1,4 +1,4 @@
-// src/App.tsx
+﻿// src/App.tsx
 
 import { Suspense, lazy, type ReactNode } from "react";
 // replace direct imports:
@@ -166,14 +166,16 @@ function Section({
 function Explanation({
   slot,
   children,
+  className = "",
 }: {
   slot: string;
   children: ReactNode;
+  className?: string;
 }) {
   return (
     <div
       data-copy-slot={slot}
-      className="rounded border border-dashed border-slate-300 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-600 leading-relaxed"
+      className={`rounded border border-dashed border-slate-300 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-600 leading-relaxed ${className}`}
     >
       {children}
     </div>
@@ -294,7 +296,7 @@ export default function App() {
   const [journal, setJournal] = useState<string[]>([]);
   const [showSalesImport, setShowSalesImport] = useState(false);
 
-  // Baseline KPIs for the “Tell me what changed” panel
+  // Baseline KPIs for the â€œTell me what changedâ€ panel
   const [baselineKPIs, setBaselineKPIs] = useState<SnapshotKPIs | null>(null);
 
   // --- Toasts ---
@@ -333,10 +335,10 @@ export default function App() {
               <div className="flex items-start gap-2">
                 <div className="mt-0.5">
                   {t.kind === "error"
-                    ? "⚠️"
+                    ? "âš ï¸"
                     : t.kind === "success"
-                    ? "✅"
-                    : "ℹ️"}
+                    ? "âœ…"
+                    : "â„¹ï¸"}
                 </div>
                 <div className="flex-1">{t.msg}</div>
                 <button
@@ -346,7 +348,7 @@ export default function App() {
                     setToasts((ts) => ts.filter((x) => x.id !== t.id))
                   }
                 >
-                  ✕
+                  âœ•
                 </button>
               </div>
             </div>
@@ -392,7 +394,7 @@ export default function App() {
     // Keyboard shortcuts (Alt+1..4 = PNG, Shift+Alt+1..4 = CSV, Ctrl/Cmd+P = print)
     useEffect(() => {
       const onKey = (e: KeyboardEvent) => {
-        // Respect native print with Ctrl/Cmd+P (don’t intercept)
+        // Respect native print with Ctrl/Cmd+P (donâ€™t intercept)
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") return;
 
         const idx = Number(e.key) - 1; // '1' -> 0
@@ -449,7 +451,7 @@ export default function App() {
                   key={g.chartId}
                   className="flex items-center gap-1 border rounded-md px-1 py-0.5"
                   aria-label={g.aria}
-                  title={`${g.label} • Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
+                  title={`${g.label} â€¢ Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
                 >
                   {/* Chip label scrolls to the section */}
                   <button
@@ -1140,9 +1142,9 @@ export default function App() {
         if (runIdRef.current !== runId) return;
         setOptResult({ prices: out.prices, profit: out.profit });
         pushJ(
-          `[${now()}] Optimizer ✓ best ladder $${out.prices.good}/$${
+          `[${now()}] Optimizer âœ“ best ladder $${out.prices.good}/$${
             out.prices.better
-          }/$${out.prices.best} (profit≈$${Math.round(out.profit)})`
+          }/$${out.prices.best} (profitâ‰ˆ$${Math.round(out.profit)})`
         );
         toast("success", "Optimizer finished");
       })
@@ -1356,7 +1358,7 @@ export default function App() {
   const profitPerCustomer = profit / N;
   const grossMarginPct = revenue > 0 ? profit / revenue : 0;
 
-  // Light-weight KPI bundle used by Compare Board and the “What changed” panel
+  // Light-weight KPI bundle used by Compare Board and the â€œWhat changedâ€ panel
   const currentKPIs = useMemo(
     () =>
       kpisFromSnapshot(
@@ -1429,7 +1431,7 @@ export default function App() {
       Math.abs(seg.betaPrice) > Math.abs(best.betaPrice) ? seg : best
     , segments[0]);
 
-    const segmentLine = `Most price-sensitive segment right now: “${mostPriceSensitive.name}” (β_price = ${mostPriceSensitive.betaPrice.toFixed(
+    const segmentLine = `Most price-sensitive segment right now: â€œ${mostPriceSensitive.name}â€ (Î²_price = ${mostPriceSensitive.betaPrice.toFixed(
       2
     )}). Price moves that help or hurt them will have outsized impact.`;
 
@@ -1437,11 +1439,11 @@ export default function App() {
     let suggestion: string;
     if (Math.abs(deltaProfit) < 1e-2) {
       suggestion =
-        "You’re right on top of your baseline. Try a small $1–$2 nudge to the Better tier to explore profit vs. conversion trade-offs.";
+        "Youâ€™re right on top of your baseline. Try a small $1â€“$2 nudge to the Better tier to explore profit vs. conversion trade-offs.";
     } else if (deltaProfit > 0) {
-      suggestion = `You’re ahead of baseline. If you’re comfortable with the current active-customer level, consider testing a slightly higher price for the ${main.tier} tier to see if profit can rise further without losing too many buyers.`;
+      suggestion = `Youâ€™re ahead of baseline. If youâ€™re comfortable with the current active-customer level, consider testing a slightly higher price for the ${main.tier} tier to see if profit can rise further without losing too many buyers.`;
     } else {
-      suggestion = `Profit is below baseline. Consider nudging the ${main.tier} tier back toward the baseline price, or improving its features, to regain mix from “None” or lower tiers.`;
+      suggestion = `Profit is below baseline. Consider nudging the ${main.tier} tier back toward the baseline price, or improving its features, to regain mix from â€œNoneâ€ or lower tiers.`;
     }
 
     return {
@@ -1525,7 +1527,7 @@ export default function App() {
       if (!stats) return `${label} --`;
       return `${label} $${stats.min.toFixed(2)}-$${stats.max.toFixed(2)}`;
     });
-    return `${prefix}: ${rows.join(" · " )}`;
+    return `${prefix}: ${rows.join(" Â· " )}`;
   }, [priceRangeState]);
 
   const dataRangeOptionLabel =
@@ -1795,7 +1797,7 @@ export default function App() {
 
   async function saveScenarioShortLink() {
     try {
-      // 1) Cheap warmup — if it fails, we continue anyway
+      // 1) Cheap warmup â€” if it fails, we continue anyway
       const ok = await preflight("/api/get?s=ping");
       if (!ok) {
         pushJ(`[${now()}] Preflight failed (continuing to save)`);
@@ -1847,7 +1849,7 @@ export default function App() {
         try {
           const bodyUnknown: unknown = await res.json();
           if (isSaveError(bodyUnknown)) {
-            if (bodyUnknown.error) detail += ` — ${bodyUnknown.error}`;
+            if (bodyUnknown.error) detail += ` â€” ${bodyUnknown.error}`;
             if (Array.isArray(bodyUnknown.issues) && bodyUnknown.issues.length) {
               const i0 = bodyUnknown.issues[0];
               const at = i0?.path ? ` at ${i0.path.join(".")}` : "";
@@ -1986,12 +1988,12 @@ export default function App() {
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h1 className="text-xl font-semibold">Pricing Optimizer</h1>
                 <span className="text-xs text-gray-500">
-                  v0.3 • Latent-class choice model (3 segments)
+                  v0.3 â€¢ Latent-class choice model (3 segments)
                 </span>
               </div>
               <p className="mt-1 text-sm text-slate-600">
-                Good/Better/Best ladder • pocket price waterfall • profit frontier •
-                tornado sensitivity • cohorts
+                Good/Better/Best ladder â€¢ pocket price waterfall â€¢ profit frontier â€¢
+                tornado sensitivity â€¢ cohorts
               </p>
               <div className="no-print mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
                 <button
@@ -2003,7 +2005,7 @@ export default function App() {
                   Take tour
                 </button>
                 <span className="text-xs text-slate-500">
-                  4 steps · highlights each key section
+                  4 steps Â· highlights each key section
                 </span>
               </div>
             </div>
@@ -2177,7 +2179,7 @@ export default function App() {
                   </span>
                   {/* Keep the quick Profit delta visible in both open/closed states */}
                   <span className="text-[10px] text-slate-500">
-                    Profit Δ {explainDelta.deltaProfit >= 0 ? "+" : "−"}$
+                    Profit Î” {explainDelta.deltaProfit >= 0 ? "+" : "âˆ’"}$
                     {Math.abs(explainDelta.deltaProfit).toFixed(0)}
                   </span>
                 </summary>
@@ -2187,13 +2189,13 @@ export default function App() {
                     <div className="text-[11px]">
                       <span className="font-medium">Profit</span>{" "}
                       <span>
-                        {explainDelta.deltaProfit >= 0 ? "▲" : "▼"} $
+                        {explainDelta.deltaProfit >= 0 ? "â–²" : "â–¼"} $
                         {Math.abs(explainDelta.deltaProfit).toFixed(0)} vs. baseline
                       </span>
                     </div>
                     <div className="text-[11px] text-slate-600">
-                      Revenue Δ ${explainDelta.deltaRevenue.toFixed(0)} · Active
-                      customers Δ {explainDelta.deltaActive.toFixed(0)} · ARPU Δ $
+                      Revenue Î” ${explainDelta.deltaRevenue.toFixed(0)} Â· Active
+                      customers Î” {explainDelta.deltaActive.toFixed(0)} Â· ARPU Î” $
                       {explainDelta.deltaARPU.toFixed(2)}
                     </div>
                   </div>
@@ -2235,7 +2237,7 @@ export default function App() {
 
                 <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500">
                   <span className="max-w-xl">
-                    Baseline stays fixed until you reset it. Handy when you’re
+                    Baseline stays fixed until you reset it. Handy when youâ€™re
                     exploring multiple what-if scenarios.
                   </span>
                   <button
@@ -2404,7 +2406,7 @@ export default function App() {
                   } catch {
                     toast?.(
                       "error",
-                      "Copy failed—select and copy the address bar"
+                      "Copy failedâ€”select and copy the address bar"
                     );
                   }
                 }}
@@ -2630,7 +2632,7 @@ export default function App() {
               footer={
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-gray-600">
-                    The estimator runs in a Web Worker and won’t block the UI. Your CSV never leaves the browser.
+                    The estimator runs in a Web Worker and wonâ€™t block the UI. Your CSV never leaves the browser.
                   </p>
                   <button
                     className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
@@ -2642,7 +2644,7 @@ export default function App() {
               }
             >
               <div className="text-xs text-gray-700 mb-2">
-                1) Upload your sales CSV &nbsp;→&nbsp; 2) Map columns &nbsp;→&nbsp; 3) Estimate.  
+                1) Upload your sales CSV &nbsp;â†’&nbsp; 2) Map columns &nbsp;â†’&nbsp; 3) Estimate.  
                 Use compact column names if possible; unknowns can be left blank.
               </div>
               <SalesImport
@@ -2777,8 +2779,8 @@ export default function App() {
           <div className="print-page" aria-hidden="true" />
           <Section id="compare-board" title="Scenario Compare (A/B/C)" className="order-3">
             <Explanation slot="chart.compareBoard">
-              Desktop ChatGPT: describe how to position these A/B/C slots during interviews — e.g., “Save current,
-              branch, then reload while screen-sharing.” Mention how KPIs update and how to interpret gaps between
+              Desktop ChatGPT: describe how to position these A/B/C slots during interviews â€” e.g., â€œSave current,
+              branch, then reload while screen-sharing.â€ Mention how KPIs update and how to interpret gaps between
               saved ladders.
             </Explanation>
             <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
@@ -2881,7 +2883,7 @@ export default function App() {
             <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
               {journal.length === 0 ? (
                 <li className="text-gray-400">
-                  Adjust sliders/toggles to log changes…
+                  Adjust sliders/toggles to log changesâ€¦
                 </li>
               ) : (
                 journal.map((line, i) => <li key={i}>{line}</li>)
@@ -2994,7 +2996,7 @@ export default function App() {
         >
           <Section id="global-optimizer" title="Global Optimizer">
             <Explanation slot="chart.optimizer">
-              Desktop ChatGPT: provide copy that frames this as the “decision cockpit” — explain ranges, steps,
+              Desktop ChatGPT: provide copy that frames this as the â€œdecision cockpitâ€ â€” explain ranges, steps,
               charm-ending toggle, and pocket-vs-list guardrails. Call out how to cite binding constraints and what
               to say when the optimizer fails or returns no feasible ladder.
             </Explanation>
@@ -3315,19 +3317,19 @@ export default function App() {
                   className="space-y-2 text-slate-600 mt-2"
                 >
                   <div>
-                    <span className="font-semibold">Tier discounts</span>: TODO — describe how promo vs. volume knobs
+                    <span className="font-semibold">Tier discounts</span>: TODO â€” describe how promo vs. volume knobs
                     affect list-to-pocket math and when to prioritize each tier.
                   </div>
                   <div>
-                    <span className="font-semibold">Global leakages</span>: TODO — explain processor %, fixed fees, FX,
+                    <span className="font-semibold">Global leakages</span>: TODO â€” explain processor %, fixed fees, FX,
                     and refunds along with the types of businesses that feel each leakage the most.
                   </div>
                   <div>
-                    <span className="font-semibold">Compare all tiers</span>: TODO — narrative on using the mini
+                    <span className="font-semibold">Compare all tiers</span>: TODO â€” narrative on using the mini
                     waterfalls to defend Good/Better/Best deltas.
                   </div>
                   <div>
-                    <span className="font-semibold">Channel blend</span>: TODO — instructions for blending Stripe vs.
+                    <span className="font-semibold">Channel blend</span>: TODO â€” instructions for blending Stripe vs.
                     marketplaces and how to talk about the resulting composite leak profile.
                   </div>
                 </div>
@@ -3335,7 +3337,7 @@ export default function App() {
             </div>
           </Section>
 
-          <Section id="reference-prices" title="Reference prices">
+          <Section id="reference-prices" title="Reference prices for Optimizer">
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2 items-center">
               <label className="text-sm">Good</label>
               <input
@@ -3380,162 +3382,116 @@ export default function App() {
           </Section>
 
           <Section id="current-vs-optimized" title="Current vs Optimized">
-            <Explanation slot="chart.currentOptimized">
-              Desktop ChatGPT: explain how to use this card stack to narrate “before vs after” ladder economics, when
-              to trust the quick optimizer, and how to talk through the Delta card plus Undo button in demos.
-            </Explanation>
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-slate-900 text-sm">How to read this card</span>
+                <span className="text-[10px] uppercase tracking-wide text-slate-500">Demo aid</span>
+              </div>
+              <p className="mt-1 leading-snug">
+                Use this to narrate â€œbefore vs after.â€ Apply the optimized ladder to push prices back to Scenario Panel,
+                undo to revert, then call out the delta and which constraints or drivers mattered most.
+              </p>
+            </div>
             {(() => {
               const curProfit = optConstraints.usePocketProfit
-                ? // pocket profit using current prices
-                  (() => {
-                    const probs = choiceShares(
-                      prices,
-                      features,
-                      segments,
-                      refPrices
-                    );
+                ? (() => {
+                    const probs = choiceShares(prices, features, segments, refPrices);
                     const take = {
                       good: Math.round(N * probs.good),
                       better: Math.round(N * probs.better),
                       best: Math.round(N * probs.best),
                     };
-                    const pG = computePocketPrice(
-                      prices.good,
-                      "good",
-                      leak
-                    ).pocket;
-                    const pB = computePocketPrice(
-                      prices.better,
-                      "better",
-                      leak
-                    ).pocket;
-                    const pH = computePocketPrice(
-                      prices.best,
-                      "best",
-                      leak
-                    ).pocket;
-                    return (
-                      take.good * (pG - costs.good) +
-                      take.better * (pB - costs.better) +
-                      take.best * (pH - costs.best)
-                    );
+                    const pG = computePocketPrice(prices.good, "good", leak).pocket;
+                    const pB = computePocketPrice(prices.better, "better", leak).pocket;
+                    const pH = computePocketPrice(prices.best, "best", leak).pocket;
+                    return take.good * (pG - costs.good) + take.better * (pB - costs.better) + take.best * (pH - costs.best);
                   })()
-                : // list profit
-                  (() => {
-                    const probs = choiceShares(
-                      prices,
-                      features,
-                      segments,
-                      refPrices
-                    );
+                : (() => {
+                    const probs = choiceShares(prices, features, segments, refPrices);
                     const take = {
                       good: Math.round(N * probs.good),
                       better: Math.round(N * probs.better),
                       best: Math.round(N * probs.best),
                     };
-                    return (
-                      take.good * (prices.good - costs.good) +
-                      take.better * (prices.better - costs.better) +
-                      take.best * (prices.best - costs.best)
-                    );
+                    return take.good * (prices.good - costs.good) + take.better * (prices.better - costs.better) + take.best * (prices.best - costs.best);
                   })();
 
               const best = quickOpt.best;
               const bestProfit = quickOpt.profit;
 
               if (!best)
-                return (
-                  <div className="text-xs text-gray-600">
-                    No feasible ladder in the current ranges & floors.
-                  </div>
-                );
+                return <div className="text-xs text-gray-600">No feasible ladder in the current ranges & floors.</div>;
 
               return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                  <div className="rounded border p-3">
-                    <div className="font-semibold mb-1">Current</div>
-                    <div>Good: ${prices.good}</div>
-                    <div>Better: ${prices.better}</div>
-                    <div>Best: ${prices.best}</div>
-                    <div className="mt-2 text-xs text-gray-600">
-                      Profit: ${Math.round(curProfit).toLocaleString()}
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                      <div className="font-semibold mb-1">Current</div>
+                      <div>Good: ${prices.good}</div>
+                      <div>Better: ${prices.better}</div>
+                      <div>Best: ${prices.best}</div>
+                      <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(curProfit).toLocaleString()}</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                      <div className="font-semibold mb-1">Optimized</div>
+                      <div>Good: ${best.good}</div>
+                      <div>Better: ${best.better}</div>
+                      <div>Best: ${best.best}</div>
+                      <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(bestProfit).toLocaleString()}</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
+                      <div className="font-semibold">Delta</div>
+                      <div className="text-lg font-bold leading-tight">
+                        {bestProfit - curProfit >= 0 ? "+" : "-"}${Math.abs(Math.round(bestProfit - curProfit)).toLocaleString()}
+                      </div>
+                      <div className="text-[11px] text-slate-600">vs current profit</div>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          className="w-full border rounded px-3 py-2 text-sm font-semibold bg-white hover:bg-gray-50"
+                          onClick={() => {
+                            lastAppliedPricesRef.current = { ...prices };
+                            setPrices(best);
+                            pushJ?.(`Applied optimized ladder: ${best.good}/${best.better}/${best.best}`);
+                          }}
+                        >
+                          Apply optimized ladder
+                        </button>
+                        <button
+                          className="w-full text-sm border rounded px-3 py-2 bg-white hover:bg-gray-50 disabled:opacity-50"
+                          disabled={!lastAppliedPricesRef.current}
+                          onClick={() => {
+                            const prev = lastAppliedPricesRef.current;
+                            if (!prev) return;
+                            setPrices(prev);
+                            lastAppliedPricesRef.current = null;
+                            pushJ?.("Undo: restored ladder to previous prices");
+                          }}
+                        >
+                          Undo apply ladder
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div className="rounded border p-3">
-                    <div className="font-semibold mb-1">Optimized</div>
-                    <div>Good: ${best.good}</div>
-                    <div>Better: ${best.better}</div>
-                    <div>Best: ${best.best}</div>
-                    <div className="mt-2 text-xs text-gray-600">
-                      Profit: ${Math.round(bestProfit).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="rounded border p-3 flex flex-col gap-2">
-                    <div className="font-semibold">Delta</div>
-                    <div>
-                      Δ Profit:{" "}
-                      <span className="font-medium">
-                        ${Math.round(bestProfit - curProfit).toLocaleString()}
-                      </span>
-                    </div>
-                    <button
-                      className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
-                      onClick={() => {
-                        lastAppliedPricesRef.current = { ...prices }; // stash
-                        setPrices(best); // apply
-                        pushJ?.(
-                          `Applied optimized ladder: ${best.good}/${best.better}/${best.best}`
-                        );
-                      }}
-                    >
-                      Apply optimized ladder
-                    </button>
-                  </div>
-                  <div className="mt-2">
-                    <button
-                      className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50 disabled:opacity-50"
-                      disabled={!lastAppliedPricesRef.current}
-                      onClick={() => {
-                        const prev = lastAppliedPricesRef.current;
-                        if (!prev) return;
-                        setPrices(prev);
-                        lastAppliedPricesRef.current = null;
-                        pushJ?.("Undo: restored ladder to previous prices");
-                      }}
-                    >
-                      Undo apply ladder
-                    </button>
-                  </div>
-                  <div className="mt-3 text-xs">
-                    <div className="font-medium mb-1">
+
+                  <div className="mt-1 text-xs max-w-md space-y-1">
+                    <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
                       Why this recommendation?
                     </div>
-                    <ul className="list-disc ml-5 space-y-1">
+                    <ul className="list-disc ml-4 space-y-1 text-slate-700 leading-snug">
                       {(() => {
                         const binds = explainGaps(best, {
                           gapGB: optConstraints.gapGB,
                           gapBB: optConstraints.gapBB,
                         });
-                        return binds.length ? (
-                          binds.map((b, i) => <li key={i}>{b}</li>)
-                        ) : (
-                          <li>No gap constraints binding.</li>
-                        );
+                        return binds.length ? binds.map((b, i) => <li key={i}>{b}</li>) : <li>No gap constraints binding.</li>;
                       })()}
                       {(() => {
                         const td = topDriver(tornadoRowsOptim);
-                        return (
-                          <li>
-                            Largest profit driver near optimum: {td ?? "n/a"}
-                          </li>
-                        );
+                        return <li>Largest profit driver near optimum: {td ?? "n/a"}</li>;
                       })()}
                       <li>
-                        Floors: pocket margin ≥{" "}
-                        {Math.round(optConstraints.marginFloor.good * 100)}% /{" "}
-                        {Math.round(optConstraints.marginFloor.better * 100)}% /{" "}
-                        {Math.round(optConstraints.marginFloor.best * 100)}%
-                        (G/B/Best).
+                        Floors: pocket margin â‰¥ {Math.round(optConstraints.marginFloor.good * 100)}% /{" "}
+                        {Math.round(optConstraints.marginFloor.better * 100)}% / {Math.round(optConstraints.marginFloor.best * 100)}% (G/B/Best).
                       </li>
                     </ul>
                   </div>
@@ -3546,13 +3502,13 @@ export default function App() {
 
           <Section id="methods" title="Methods">
             <p className="text-sm text-gray-700 print-tight">
-              MNL: U = β₀(j) + βₚ·price + β_A·featA + β_B·featB; outside option
+              MNL: U = Î²â‚€(j) + Î²â‚šÂ·price + Î²_AÂ·featA + Î²_BÂ·featB; outside option
               intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
               ridge regularization.
             </p>
             {fitInfo && (
               <div className="text-xs text-gray-600 mt-2">
-                logLik: {Math.round(fitInfo.logLik)} • iters: {fitInfo.iters} •{" "}
+                logLik: {Math.round(fitInfo.logLik)} â€¢ iters: {fitInfo.iters} â€¢{" "}
                 {fitInfo.converged ? "converged" : "not converged"}
               </div>
             )}
@@ -3576,21 +3532,21 @@ export default function App() {
               <ActionCluster chart="waterfall" id="waterfall-main" csv={true} />
             }
           >
-            <Explanation slot="chart.waterfall">
-              Desktop ChatGPT: write a short walkthrough of list → pocket math, how to narrate promo/volume/payment
+            <Explanation slot="chart.waterfall" className="px-3 py-1.5 text-[11px] leading-snug">
+              Desktop ChatGPT: write a short walkthrough of list plus pocket math, how to narrate promo/volume/payment
               levers, and when to use channel blend vs. compare-all view. Include guidance on explaining to hiring
               managers why pocket profit matters more than list profit in certain industries.
             </Explanation>
-            <div className="text-xs grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid gap-4 md:grid-cols-2 items-start text-xs">
               {/* Controls */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <label className="w-28 text-xs text-gray-700">
-                    Choose preset
-                  </label>                  
-                  <InfoTip className="ml-1" align="right" id="presets.waterfall" ariaLabel="About leak presets" />
+              <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1 text-xs font-semibold text-slate-800">
+                    <span>Choose preset</span>
+                    <InfoTip className="ml-1" align="right" id="presets.waterfall" ariaLabel="About leak presets" />
+                  </div>
                   <select
-                    className="border rounded px-2 h-9 w-full md:w-64 bg-white"
+                    className="h-9 w-full border rounded px-2 bg-white"
                     value={presetSel}
                     onChange={(e) => {
                       const v = e.target.value;
@@ -3599,7 +3555,7 @@ export default function App() {
                     }}
                   >
                     <option value="" disabled>
-                      Choose preset…
+                      Choose preset...
                     </option>
                     {Object.keys(LEAK_PRESETS).map((k) => (
                       <option key={k} value={k}>
@@ -3609,73 +3565,72 @@ export default function App() {
                   </select>
                 </div>
 
-                {/* Chart scope + quick help */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">Chart shows tier:</span>
+                <div className="space-y-1">
+                  <span className="font-semibold text-slate-800">Chart shows tier</span>
                   <div className="inline-flex overflow-hidden rounded border">
                     {(["good", "better", "best"] as const).map((t) => (
                       <button
                         key={t}
-                        className={`px-2 py-1 capitalize ${
-                          waterTier === t
-                            ? "bg-gray-900 text-white"
-                            : "bg-white"
-                        }`}
+                        className={`px-3 py-1 capitalize ${waterTier === t ? "bg-gray-900 text-white" : "bg-white"}`}
                         onClick={() => setWaterTier(t)}
                       >
                         {t}
                       </button>
                     ))}
                   </div>
+                  <p className="text-[11px] text-gray-600 leading-snug">
+                    Tier discounts are per-tier (affect the selected tier's chart). Global leakages (payment, FX, refunds) apply to all tiers.
+                  </p>
                 </div>
-                <p className="text-[11px] text-gray-600 print-tight">
-                  Tier discounts are per-tier (affect the selected tier’s
-                  chart). Global leakages (payment, FX, refunds) apply to all
-                  tiers.
-                </p>
 
-                <div className="font-semibold mt-2">Tier discounts (%)</div>
-                {(["good", "better", "best"] as const).map((t) => (
-                  <div key={t} className="flex items-center gap-2">
-                    <span className="w-20 capitalize">{t} promo</span>
-                    <input
-                      type="number"
-                      step={0.01}
-                      className="border rounded px-1 py-0.5 w-20"
-                      value={leak.promo[t]}
-                      onChange={(e) =>
-                        setLeak((L) => ({
-                          ...L,
-                          promo: {
-                            ...L.promo,
-                            [t]: clamp01(Number(e.target.value)),
-                          },
-                        }))
-                      }
-                    />
-                    <span className="w-20">volume</span>
-                    <input
-                      type="number"
-                      step={0.01}
-                      className="border rounded px-1 py-0.5 w-20"
-                      value={leak.volume[t]}
-                      onChange={(e) =>
-                        setLeak((L) => ({
-                          ...L,
-                          volume: {
-                            ...L.volume,
-                            [t]: clamp01(Number(e.target.value)),
-                          },
-                        }))
-                      }
-                    />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-slate-800">Tier discounts (%)</span>
+                    <span className="text-[11px] text-slate-500">Per selected tier</span>
                   </div>
-                ))}
+                  <div className="space-y-1">
+                    {(["good", "better", "best"] as const).map((t) => (
+                      <div key={t} className="grid grid-cols-2 gap-2 sm:grid-cols-4 items-center">
+                        <span className="capitalize text-slate-700">{t} promo</span>
+                        <input
+                          type="number"
+                          step={0.01}
+                          className="h-9 w-full border rounded px-2 bg-white"
+                          value={leak.promo[t]}
+                          onChange={(e) =>
+                            setLeak((L) => ({
+                              ...L,
+                              promo: {
+                                ...L.promo,
+                                [t]: clamp01(Number(e.target.value)),
+                              },
+                            }))
+                          }
+                        />
+                        <span className="text-slate-700">Volume</span>
+                        <input
+                          type="number"
+                          step={0.01}
+                          className="h-9 w-full border rounded px-2 bg-white"
+                          value={leak.volume[t]}
+                          onChange={(e) =>
+                            setLeak((L) => ({
+                              ...L,
+                              volume: {
+                                ...L.volume,
+                                [t]: clamp01(Number(e.target.value)),
+                              },
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-                {/* Copy helper */}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
-                    className="border rounded px-2 py-1"
+                    className="w-full md:w-auto border rounded px-3 py-2 bg-white hover:bg-gray-50"
                     onClick={() =>
                       setLeak((L) => {
                         const t = waterTier;
@@ -3694,270 +3649,263 @@ export default function App() {
                         };
                       })
                     }
-                    title="Copy the selected tier’s promo/volume to the other tiers"
+                    title="Copy the selected tier's promo/volume to the other tiers"
                   >
-                    Copy this tier → others
+                    Copy this tier to others
                   </button>
                 </div>
 
-                {/* Global leakages */}
-                <div className="font-semibold mt-2">Global leakages</div>
-                <div className="flex items-center gap-2">
-                  <span className="w-32">Payment %</span>
-                  <input
-                    type="number"
-                    step={0.001}
-                    className="border rounded px-1 py-0.5 w-24"
-                    value={leak.paymentPct}
-                    onChange={(e) =>
-                      setLeak((L) => ({
-                        ...L,
-                        paymentPct: clamp01(Number(e.target.value)),
-                      }))
-                    }
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-32">Payment $</span>
-                  <input
-                    type="number"
-                    step={0.01}
-                    className="border rounded px-1 py-0.5 w-24"
-                    value={leak.paymentFixed}
-                    onChange={(e) =>
-                      setLeak((L) => ({
-                        ...L,
-                        paymentFixed: Math.max(0, Number(e.target.value)),
-                      }))
-                    }
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-32">FX %</span>
-                  <input
-                    type="number"
-                    step={0.001}
-                    className="border rounded px-1 py-0.5 w-24"
-                    value={leak.fxPct}
-                    onChange={(e) =>
-                      setLeak((L) => ({
-                        ...L,
-                        fxPct: clamp01(Number(e.target.value)),
-                      }))
-                    }
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-32">Refunds %</span>
-                  <input
-                    type="number"
-                    step={0.001}
-                    className="border rounded px-1 py-0.5 w-24"
-                    value={leak.refundsPct}
-                    onChange={(e) =>
-                      setLeak((L) => ({
-                        ...L,
-                        refundsPct: clamp01(Number(e.target.value)),
-                      }))
-                    }
-                  />
+                <div className="space-y-2">
+                  <div className="font-semibold text-slate-800">Global leakages</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex flex-col gap-1 font-semibold text-slate-800">
+                      <span>Payment %</span>
+                      <input
+                        type="number"
+                        step={0.001}
+                        className="h-9 w-full border rounded px-2 bg-white"
+                        value={leak.paymentPct}
+                        onChange={(e) =>
+                          setLeak((L) => ({
+                            ...L,
+                            paymentPct: clamp01(Number(e.target.value)),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 font-semibold text-slate-800">
+                      <span>Payment $</span>
+                      <input
+                        type="number"
+                        step={0.01}
+                        className="h-9 w-full border rounded px-2 bg-white"
+                        value={leak.paymentFixed}
+                        onChange={(e) =>
+                          setLeak((L) => ({
+                            ...L,
+                            paymentFixed: Math.max(0, Number(e.target.value)),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 font-semibold text-slate-800">
+                      <span>FX %</span>
+                      <input
+                        type="number"
+                        step={0.001}
+                        className="h-9 w-full border rounded px-2 bg-white"
+                        value={leak.fxPct}
+                        onChange={(e) =>
+                          setLeak((L) => ({
+                            ...L,
+                            fxPct: clamp01(Number(e.target.value)),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 font-semibold text-slate-800">
+                      <span>Refunds %</span>
+                      <input
+                        type="number"
+                        step={0.001}
+                        className="h-9 w-full border rounded px-2 bg-white"
+                        value={leak.refundsPct}
+                        onChange={(e) =>
+                          setLeak((L) => ({
+                            ...L,
+                            refundsPct: clamp01(Number(e.target.value)),
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
 
-              {/* Chart */}
-              <div className="min-w-0">
+              {/* Chart + optional views */}
+              <div className="space-y-3 min-w-0">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-700">Pocket Price Waterfall</div>
+                    <div className="text-[11px] text-slate-600">
+                      Showing {waterTier} tier - list ${listForWater.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-600">
+                    {WATERFALL_LEGEND.map((entry) => (
+                      <span
+                        key={entry.key}
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1"
+                        aria-label={`${entry.label} legend item`}
+                      >
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: entry.color }}
+                          aria-hidden="true"
+                        />
+                        <span className="font-semibold text-slate-800">{entry.label}</span>
+                        <InfoTip
+                          id={entry.infoId}
+                          ariaLabel={entry.aria}
+                          align="left"
+                          className="text-slate-500"
+                        />
+                      </span>
+                    ))}
+                  </div>
+                </div>
                 <Suspense
                   fallback={
                     <div className="text-xs text-gray-500 p-2">
-                      Loading waterfall…
+                      Loading waterfall...
                     </div>
                   }
                 >
                   <ErrorBoundary title="Waterfall chart failed">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm font-semibold text-slate-700">Pocket Price Waterfall</h3>
-                    </div>
                     <Waterfall
                       chartId="waterfall-main"
                       title="Pocket Price Waterfall"
-                      subtitle={`${waterTier} • list $${listForWater.toFixed(2)}`}
+                      subtitle={`${waterTier} - list $${listForWater.toFixed(2)}`}
                       listPrice={listForWater}
                       steps={water.steps}
                       colorMap={WATERFALL_COLOR_MAP}
                     />
-                    <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-slate-600">
-                      {WATERFALL_LEGEND.map((entry) => (
-                        <span
-                          key={entry.key}
-                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1"
-                          aria-label={`${entry.label} legend item`}
-                        >
-                          <span
-                            className="h-2 w-2 rounded-full"
-                            style={{ backgroundColor: entry.color }}
-                            aria-hidden="true"
-                          />
-                          <span className="font-semibold text-slate-800">{entry.label}</span>
-                          <InfoTip
-                            id={entry.infoId}
-                            ariaLabel={entry.aria}
-                            align="left"
-                            className="text-slate-500"
-                          />
-                        </span>
-                      ))}
-                    </div>
                   </ErrorBoundary>
                 </Suspense>
-              </div>
 
-              {/* ---- Compare all tiers (small multiples) ---- */}
-              <details className="mt-3">
-                <summary className="cursor-pointer select-none text-xs font-medium">
-                  Compare all tiers
-                </summary>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
-                  {(["good", "better", "best"] as const).map((t) => {
-                    const list =
-                      t === "good"
-                        ? prices.good
-                        : t === "better"
-                        ? prices.better
-                        : prices.best;
-                    const wf = computePocketPrice(list, t, leak);
-                    return (
-                      <div key={t} className="min-w-0 h-56 overflow-hidden print:h-48">
-                        {" "}
-                        {/* added overflow-hidden */}
-                        <Suspense
-                          fallback={
-                            <div className="text-xs text-gray-500 p-2">
-                              Loading…
-                            </div>
+                {/* ---- Compare all tiers (small multiples) ---- */}
+                <details className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
+                  <summary className="cursor-pointer select-none text-xs font-semibold">
+                    Compare all tiers
+                  </summary>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
+                    {(["good", "better", "best"] as const).map((t) => {
+                      const list =
+                        t === "good"
+                          ? prices.good
+                          : t === "better"
+                          ? prices.better
+                          : prices.best;
+                      const wf = computePocketPrice(list, t, leak);
+                      return (
+                        <div key={t} className="min-w-0 h-56 overflow-hidden print:h-48">
+                          <Suspense
+                            fallback={
+                              <div className="text-xs text-gray-500 p-2">
+                                Loading...
+                              </div>
+                            }
+                          >
+                            <ErrorBoundary title="Waterfall mini chart failed">
+                              <Waterfall
+                                title={t}
+                                subtitle={`list $${list.toFixed(2)}`}
+                                listPrice={list}
+                                steps={wf.steps}
+                                variant="mini"
+                                colorMap={WATERFALL_COLOR_MAP}
+                              />
+                            </ErrorBoundary>
+                          </Suspense>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+
+                {/* ---- Channel blend (optional) ---- */}
+                <details className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
+                  <summary className="cursor-pointer select-none text-xs font-semibold">
+                    Channel blend (optional)
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    {channelMix.map((row, i) => (
+                      <div key={i} className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2">
+                        <span className="text-[11px] text-slate-600">Row {i + 1}</span>
+                        <div className="inline-flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            className="border rounded px-2 h-8 w-20"
+                            value={row.w}
+                            onChange={(e) => {
+                              const v = Math.max(0, Math.min(100, Number(e.target.value)));
+                              setChannelMix((cur) => cur.map((r, j) => (j === i ? { ...r, w: v } : r)));
+                            }}
+                          />
+                          <span>%</span>
+                        </div>
+                        <select
+                          className="border rounded px-2 h-8 w-full"
+                          value={row.preset}
+                          onChange={(e) =>
+                            setChannelMix((cur) =>
+                              cur.map((r, j) => (j === i ? { ...r, preset: e.target.value } : r))
+                            )
                           }
                         >
-                          <ErrorBoundary title="Waterfal mini chart failed">
-                            <Waterfall
-                              title={t}
-                              subtitle={`list $${list.toFixed(2)}`}
-                              listPrice={list}
-                              steps={wf.steps}
-                              variant="mini"
-                              colorMap={WATERFALL_COLOR_MAP}
-                            />
-                          </ErrorBoundary>
-                        </Suspense>
+                          {Object.keys(LEAK_PRESETS).map((k) => (
+                            <option key={k} value={k}>
+                              {k}
+                            </option>
+                          ))}
+                        </select>
+
+                        <button
+                          className="border rounded px-2 h-8 bg-white hover:bg-gray-50"
+                          onClick={() => setChannelMix((cur) => cur.filter((_, j) => j !== i))}
+                        >
+                          Remove
+                        </button>
                       </div>
-                    );
-                  })}
-                </div>
-              </details>
+                    ))}
 
-              {/* ---- Channel blend (optional) ---- */}
-              <details className="mt-3">
-                <summary className="cursor-pointer select-none text-xs font-medium">
-                  Channel blend (optional)
-                </summary>
-                <div className="mt-2 text-xs space-y-2">
-                  {channelMix.map((row, i) => (
-                    <div key={i} className="flex flex-wrap items-center gap-2">
-                      <span className="w-16">Row {i + 1}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        className="border rounded px-2 h-8 w-20"
-                        value={row.w}
-                        onChange={(e) => {
-                          const v = Math.max(
-                            0,
-                            Math.min(100, Number(e.target.value))
-                          );
-                          setChannelMix((cur) =>
-                            cur.map((r, j) => (j === i ? { ...r, w: v } : r))
-                          );
-                        }}
-                      />
-                      <span>%</span>
-                      <select
-                        className="border rounded px-2 h-8"
-                        value={row.preset}
-                        onChange={(e) =>
-                          setChannelMix((cur) =>
-                            cur.map((r, j) =>
-                              j === i ? { ...r, preset: e.target.value } : r
-                            )
-                          )
-                        }
-                      >
-                        {Object.keys(LEAK_PRESETS).map((k) => (
-                          <option key={k} value={k}>
-                            {k}
-                          </option>
-                        ))}
-                      </select>
-
-                      {/* remove row */}
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
-                        className="ml-2 border rounded px-2 h-8 bg-white hover:bg-gray-50"
+                        className="border rounded px-3 py-2 bg-white hover:bg-gray-50"
                         onClick={() =>
-                          setChannelMix((cur) => cur.filter((_, j) => j !== i))
+                          setChannelMix((cur) => [
+                            ...cur,
+                            { preset: Object.keys(LEAK_PRESETS)[0], w: 0 },
+                          ])
                         }
                       >
-                        Remove
+                        Add row
                       </button>
+                      <div className="inline-flex flex-wrap items-center gap-2">
+                        <button
+                          className="border rounded px-3 py-2 bg-white hover:bg-gray-50"
+                          onClick={() =>
+                            setChannelMix((cur) => {
+                              const sum = cur.reduce((s, r) => s + (isFinite(r.w) ? r.w : 0), 0) || 1;
+                              return cur.map((r) => ({
+                                ...r,
+                                w: Math.round((r.w / sum) * 100),
+                              }));
+                            })
+                          }
+                        >
+                          Normalize %
+                        </button>
+                        <button
+                          className="border rounded px-3 py-2 bg-white hover:bg-gray-50"
+                          onClick={() => {
+                            const rows = channelMix.map((r) => ({
+                              w: r.w,
+                              preset: r.preset,
+                            }));
+                            const blended = blendLeaks(rows);
+                            setLeak(blended);
+                          }}
+                        >
+                          Blend now -&gt; apply to leakages
+                        </button>
+                      </div>
                     </div>
-                  ))}
-
-                  {/* add row */}
-                  <button
-                    className="border rounded px-3 h-8 bg-white hover:bg-gray-50"
-                    onClick={() =>
-                      setChannelMix((cur) => [
-                        ...cur,
-                        { preset: Object.keys(LEAK_PRESETS)[0], w: 0 },
-                      ])
-                    }
-                  >
-                    Add row
-                  </button>
-
-                  {/* normalize & apply */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      className="border rounded px-3 h-8 bg-white hover:bg-gray-50"
-                      onClick={() =>
-                        setChannelMix((cur) => {
-                          const sum =
-                            cur.reduce(
-                              (s, r) => s + (isFinite(r.w) ? r.w : 0),
-                              0
-                            ) || 1;
-                          return cur.map((r) => ({
-                            ...r,
-                            w: Math.round((r.w / sum) * 100),
-                          }));
-                        })
-                      }
-                    >
-                      Normalize %
-                    </button>
-                    <button
-                      className="border rounded px-3 h-8 bg-white hover:bg-gray-50"
-                      onClick={() => {
-                        const rows = channelMix.map((r) => ({
-                          w: r.w,
-                          preset: r.preset,
-                        }));
-                        const blended = blendLeaks(rows);
-                        setLeak(blended); // apply to all tiers
-                      }}
-                    >
-                      Blend now → apply to leakages
-                    </button>
                   </div>
-                </div>
-              </details>
+                </details>
+              </div>
             </div>
           </Section>
         </div>
@@ -3981,12 +3929,12 @@ export default function App() {
                   {explainDelta
                     ? `Revenue ${explainDelta.deltaRevenue >= 0 ? "+" : "-"}$${Math.abs(
                         explainDelta.deltaRevenue
-                      ).toFixed(0)} · Active ${
+                      ).toFixed(0)} Â· Active ${
                         explainDelta.deltaActive >= 0 ? "+" : "-"
-                      }${Math.abs(explainDelta.deltaActive).toFixed(0)} · ARPU ${
+                      }${Math.abs(explainDelta.deltaActive).toFixed(0)} Â· ARPU ${
                         explainDelta.deltaARPU >= 0 ? "+" : "-"
                       }$${Math.abs(explainDelta.deltaARPU).toFixed(2)}`
-                    : "Use “Set baseline to now” so deltas have context."}
+                    : "Use â€œSet baseline to nowâ€ so deltas have context."}
                 </p>
               </div>
 
@@ -4010,7 +3958,7 @@ export default function App() {
                   {optimizerWhyLines.length > 0
                     ? optimizerWhyLines[0]
                     : quickOpt.best
-                    ? "Optimizer ready — run to refresh insights."
+                    ? "Optimizer ready â€” run to refresh insights."
                     : "Set ranges & floors, then run the optimizer."}
                 </div>
                 {optimizerWhyLines.length > 1 && (
@@ -4022,9 +3970,9 @@ export default function App() {
             </div>
 
             <Explanation slot="callouts.overview">
-              Provide a 2‑3 sentence narrative here that summarizes the current ladder, why the optimizer’s
+              Provide a 2â€‘3 sentence narrative here that summarizes the current ladder, why the optimizerâ€™s
               guidance matters, and how a hiring manager should interpret the KPIs before diving into
-              the charts. Desktop ChatGPT: describe the storyline at a “consultant readout” level (what
+              the charts. Desktop ChatGPT: describe the storyline at a â€œconsultant readoutâ€ level (what
               changed, who benefits, which guardrails are binding) and mention how to validate the
               recommendation (e.g., rerun optimizer, review waterfall, print summary).
             </Explanation>
@@ -4032,7 +3980,7 @@ export default function App() {
 
           <Section
             id="kpi-pocket-coverage"
-            title="KPI — Pocket floor coverage"
+            title="KPI â€” Pocket floor coverage"
             actions={<ActionCluster chart="coverage" id="coverage-heatmap" csv />}
           >
             <div className="flex items-center gap-2 text-xs mb-2">
@@ -4071,9 +4019,9 @@ export default function App() {
                         feasible ladders (pocket floors)
                       </div>
                       <div className="text-[11px] text-gray-600 mt-1">
-                        baseline {pct0}% → {pct1}% ·{" "}
-                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} ·{" "}
-                        {coverageSnapshot.tested.toLocaleString()} combos · step $
+                        baseline {pct0}% â†’ {pct1}% Â·{" "}
+                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} Â·{" "}
+                        {coverageSnapshot.tested.toLocaleString()} combos Â· step $
                         {coverageSnapshot.step}
                       </div>
                     </div>
@@ -4118,7 +4066,7 @@ export default function App() {
                               What is this slice?
                             </summary>
                             <div className="text-[11px] text-gray-600 mt-1">
-                              Good × Better feasibility with Best fixed near the
+                              Good Ã— Better feasibility with Best fixed near the
                               lower feasible bound (approx {bestUsed}).
                             </div>
                           </details>
@@ -4146,12 +4094,12 @@ export default function App() {
             actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
           >
             <Explanation slot="chart.profitFrontier">
-              Desktop ChatGPT: explain how to narrate the profit frontier — what holding Good/Better constant means,
+              Desktop ChatGPT: explain how to narrate the profit frontier â€” what holding Good/Better constant means,
               how to spot the sweet spot vs. margin floors, and when to use this plot before invoking the optimizer.
               Mention that each point is a full mixed-logit evaluation, so it is ideal for fast sense-checking of the
-              Best tier and for answering “what if we nudged premium $X?” questions.
+              Best tier and for answering â€œwhat if we nudged premium $X?â€ questions.
             </Explanation>
-            <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontier… </div>}>
+            <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontierâ€¦ </div>}>
               <ErrorBoundary title="Frontier chart failed">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-slate-700">Profit frontier</h3>
@@ -4178,13 +4126,13 @@ export default function App() {
             actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
           >
             <Explanation slot="chart.takeRate">
-              Desktop ChatGPT: outline how to use take-rate bars to judge conversion mix, what “None” represents,
+              Desktop ChatGPT: outline how to use take-rate bars to judge conversion mix, what â€œNoneâ€ represents,
               and which inputs (prices, features, reference prices) materially shift these bars. Include guidance on
-              how hiring managers should talk through a mix change (e.g., “Value seekers grew +Xpp when we…”).
+              how hiring managers should talk through a mix change (e.g., â€œValue seekers grew +Xpp when weâ€¦â€).
             </Explanation>
             <Suspense
               fallback={
-                <div className="text-xs text-gray-500 p-2">Loading bars…</div>
+                <div className="text-xs text-gray-500 p-2">Loading barsâ€¦</div>
               }
             >
               <ErrorBoundary title="Take-Rate chart failed">
@@ -4209,7 +4157,7 @@ export default function App() {
           >
             <Explanation slot="chart.cohort">
               Desktop ChatGPT: describe what the cohort rehearsal simulates (retention slider, pocket margin over a
-              12‑month period) and when a PM should tweak retention vs. pricing. Highlight that this is where to
+              12â€‘month period) and when a PM should tweak retention vs. pricing. Highlight that this is where to
               narrate sustainability of profit rather than just one-period lift.
             </Explanation>
             {(() => {
@@ -4258,7 +4206,7 @@ export default function App() {
                       />
                       <span>%</span>
                       <span className="text-gray-500 ml-2">
-                        (churn ≈ {(100 - retentionPct).toFixed(1)}%/mo)
+                        (churn â‰ˆ {(100 - retentionPct).toFixed(1)}%/mo)
                       </span>
                     </div>
 
@@ -4282,7 +4230,7 @@ export default function App() {
 
           <Section
             id="tornado"
-            title="Tornado — what moves profit?"
+            title="Tornado â€” what moves profit?"
             className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
             actions={<ActionCluster chart="tornado" id="tornado-main" csv />}
           >
@@ -4312,7 +4260,7 @@ export default function App() {
                     )
                   }
                 >
-                  <option value="symmetric">±{tornadoPriceBump}% symmetric</option>
+                  <option value="symmetric">Â±{tornadoPriceBump}% symmetric</option>
                   <option value="data" disabled={!priceRangeState?.map}>
                     {dataRangeOptionLabel}
                   </option>
@@ -4403,7 +4351,7 @@ export default function App() {
             <Suspense
               fallback={
                 <div className="text-xs text-gray-500 p-2">
-                  Loading tornado…
+                  Loading tornadoâ€¦
                 </div>
               }
             >
@@ -4436,3 +4384,5 @@ export default function App() {
     </div>
   );
 }
+
+
