@@ -516,7 +516,22 @@ export default function App() {
     return () => timers.forEach(clearTimeout);
   }, [toasts]);
 
-  const [activeSection, setActiveSection] = useState<string>("profit-frontier");
+  const NAV_SECTIONS = useMemo(
+    () => [
+      "topline-kpis",
+      "callouts",
+      "change-lens",
+      "profit-frontier",
+      "pocket-price-waterfall",
+      "compare-board",
+      "cohort-rehearsal",
+      "tornado",
+      "global-optimizer",
+    ],
+    []
+  );
+
+  const [activeSection, setActiveSection] = useState<string>(NAV_SECTIONS[0]);
   const stickyNavRef = useRef<HTMLDivElement | null>(null);
 
   const getStickyOffset = useCallback(() => {
@@ -555,8 +570,12 @@ export default function App() {
 
   function labelFor(id: string) {
     switch (id) {
+      case "topline-kpis":
+        return "Topline KPIs";
       case "callouts":
         return "Callouts";
+      case "change-lens":
+        return "What changed";
       case "profit-frontier":
         return "Profit Frontier";
       case "pocket-price-waterfall":
@@ -1457,6 +1476,19 @@ export default function App() {
     };
   }, [baselineKPIs, currentKPIs, costs, N, segments]);
 
+  const baselineActiveCustomers =
+    baselineKPIs ? Math.round(N * (1 - baselineKPIs.shares.none)) : null;
+  const currentActiveFromShares = Math.round(
+    N * (1 - currentKPIs.shares.none)
+  );
+  const marginDeltaPP =
+    baselineKPIs != null
+      ? currentKPIs.grossMarginPct - baselineKPIs.grossMarginPct
+      : null;
+  const currentMarginRatio = currentKPIs.grossMarginPct / 100;
+  const baselineMarginRatio =
+    baselineKPIs != null ? baselineKPIs.grossMarginPct / 100 : null;
+
   // ---- Tornado sensitivity data ----
   const [tornadoPocket, setTornadoPocket] = useState(true);
   const [tornadoView, setTornadoView] = useState<"current" | "optimized">("current");
@@ -1943,14 +1975,7 @@ export default function App() {
 
 
   useEffect(() => {
-    const ids = [
-      "profit-frontier",
-      "pocket-price-waterfall",
-      "compare-board",
-      "cohort-rehearsal",
-      "tornado",
-      "global-optimizer",
-    ];
+    const ids = NAV_SECTIONS;
     const observer = new IntersectionObserver(
       (entries) => {
         // Pick the most visible section
@@ -1966,7 +1991,7 @@ export default function App() {
       {
         // Trigger when ~40% in view; adjust rootMargin to sit below the sticky
         threshold: [0.25, 0.4, 0.6],
-        rootMargin: "-80px 0px -40% 0px", // top offset for the sticky KPI+nav
+        rootMargin: "-80px 0px -40% 0px", // top offset for the sticky nav
       }
     );
 
@@ -1976,7 +2001,34 @@ export default function App() {
     });
 
     return () => observer.disconnect();
-  }, []);
+  }, [NAV_SECTIONS]);
+
+  const renderDeltaBadge = (
+    delta: number | null | undefined,
+    formatter: (n: number) => string,
+    suffix = ""
+  ) => {
+    if (delta === null || delta === undefined || !Number.isFinite(delta)) {
+      return <span className="text-[11px] text-slate-400">Pin a baseline</span>;
+    }
+    const positive = delta >= 0;
+    return (
+      <span
+        className={
+          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] " +
+          (positive
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+            : "border-rose-200 bg-rose-50 text-rose-700")
+        }
+      >
+        <span>{positive ? "▲" : "▼"}</span>
+        <span>
+          {formatter(Math.abs(delta))}
+          {suffix} vs baseline
+        </span>
+      </span>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
@@ -2057,96 +2109,17 @@ export default function App() {
         </div>
       </header>
 
-      {/* Sticky KPI bar (desktop & tablet) */}
+      {/* Sticky mini top-nav (desktop & tablet) */}
       <div
         ref={stickyNavRef}
         className="sticky top-0 z-40 hidden md:block bg-white/80 backdrop-blur border-b print:hidden"
         role="region"
-        aria-label="Key metrics and quick navigation"
+        aria-label="Quick navigation across sections"
       >
-        <div className="mx-auto max-w-7xl px-4">
-          {/* KPIs */}
-          <div className="grid grid-cols-5 gap-4 py-2 text-sm">
-            <div className="truncate">
-              <div className="text-[11px] text-gray-500 flex items-center">
-                Revenue (N=1000)
-                <InfoTip
-                  className="ml-1"
-                  align="right"
-                  id="kpi.revenue"
-                  ariaLabel="Why is Revenue computed this way?"
-                />
-              </div>
-              <div className="font-medium">{fmtUSD(revenue)}</div>
-            </div>
-
-            <div className="truncate">
-              <div className="text-[11px] text-gray-500 flex items-center">
-                Profit (N=1000)
-                <InfoTip
-                  className="ml-1"
-                  align="right"
-                  id="kpi.profit"
-                  ariaLabel="How is Profit calculated here?"
-                />
-              </div>
-              <div className="font-medium">{fmtUSD(profit)}</div>
-            </div>
-
-            <div className="truncate">
-              <div className="text-[11px] text-gray-500 flex items-center">
-                Active customers
-                <InfoTip
-                  className="ml-1"
-                  align="right"
-                  id="kpi.active"
-                  ariaLabel="What does Active customers mean?"
-                />
-              </div>
-              <div className="font-medium">
-                {activeCustomers.toLocaleString()}
-              </div>
-            </div>
-
-            <div className="truncate">
-              <div className="text-[11px] text-gray-500 flex items-center">
-                ARPU (active)
-                <InfoTip
-                  className="ml-1"
-                  align="right"
-                  id="kpi.arpu"
-                  ariaLabel="What is ARPU (active)?"
-                />
-              </div>
-              <div className="font-medium">{fmtUSD(arpu)}</div>
-            </div>
-
-            <div className="truncate">
-              <div className="text-[11px] text-gray-500 flex items-center">
-                Gross margin
-                <InfoTip
-                  className="ml-1"
-                  align="right"
-                  id="kpi.gm"
-                  ariaLabel="How is Gross margin computed?"
-                />
-              </div>
-              <div className="font-medium">{fmtPct(grossMarginPct)}</div>
-            </div>
-          </div>
-
-          {/* Mini top-nav */}
-          <nav className="pb-2">
+        <div className="mx-auto max-w-7xl px-4 py-2">
+          <nav aria-label="Section shortcuts">
             <div className="flex gap-2 overflow-x-auto no-scrollbar text-sm">
-              {[
-                "callouts",
-                "profit-frontier",
-                "pocket-price-waterfall",
-                "compare-board",
-                "cohort-rehearsal",
-                "tornado",
-                "global-optimizer",
-              ].map((id) => (
+              {NAV_SECTIONS.map((id) => (
                 <button
                   key={id}
                   onClick={() => scrollToId(id)}
@@ -2163,94 +2136,6 @@ export default function App() {
               ))}
             </div>
           </nav>
-
-          {explainDelta && (
-            <div className="border-t border-dashed border-slate-200 pt-1 pb-2 text-[11px] text-slate-700">
-              <details className="group">
-                <summary className="flex cursor-pointer items-center justify-between gap-2 text-[11px] font-medium text-slate-800">
-                  <span className="flex flex-wrap items-baseline gap-1">
-                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[9px] font-semibold">
-                      ?
-                    </span>
-                    <span>Tell me what changed</span>
-                    <span className="ml-1 text-[10px] font-normal text-slate-500">
-                      vs. your pinned baseline
-                    </span>
-                  </span>
-                  {/* Keep the quick Profit delta visible in both open/closed states */}
-                  <span className="text-[10px] text-slate-500">
-                    Profit Δ {explainDelta.deltaProfit >= 0 ? "+" : "−"}$
-                    {Math.abs(explainDelta.deltaProfit).toFixed(0)}
-                  </span>
-                </summary>
-
-                <div className="mt-1 grid gap-1 sm:grid-cols-2">
-                  <div>
-                    <div className="text-[11px]">
-                      <span className="font-medium">Profit</span>{" "}
-                      <span>
-                        {explainDelta.deltaProfit >= 0 ? "▲" : "▼"} $
-                        {Math.abs(explainDelta.deltaProfit).toFixed(0)} vs. baseline
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-600">
-                      Revenue Δ ${explainDelta.deltaRevenue.toFixed(0)} · Active
-                      customers Δ {explainDelta.deltaActive.toFixed(0)} · ARPU Δ $
-                      {explainDelta.deltaARPU.toFixed(2)}
-                    </div>
-                  </div>
-                  <div className="text-[11px] text-slate-600">
-                    {explainDelta.mainDriver}
-                  </div>
-                </div>
-
-                <div className="mt-1 text-[11px] text-slate-600">
-                  <div>{explainDelta.segmentLine}</div>
-                  <div className="mt-0.5">{explainDelta.suggestion}</div>
-                </div>
-
-                {optimizerExplainer && optimizerExplainer.lines.length > 0 && (
-                  <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-700">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-slate-500">
-                      <span>
-                        Optimizer applied at{" "}
-                        {new Date(optimizerExplainer.appliedAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                      <button
-                        type="button"
-                        className="text-[10px] underline text-slate-500 hover:text-slate-700"
-                        onClick={() => setOptimizerExplainer(null)}
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-                    <ul className="mt-1 list-disc space-y-1 pl-4">
-                      {optimizerExplainer.lines.map((line, idx) => (
-                        <li key={`opt-explain-${idx}`}>{line}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500">
-                  <span className="max-w-xl">
-                    Baseline stays fixed until you reset it. Handy when you’re
-                    exploring multiple what-if scenarios.
-                  </span>
-                  <button
-                    type="button"
-                    className="rounded border border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-slate-50"
-                    onClick={() => setBaselineKPIs(currentKPIs)}
-                  >
-                    Set baseline to now
-                  </button>
-                </div>
-              </details>
-            </div>
-          )}
         </div>
       </div>
 
@@ -3908,10 +3793,185 @@ export default function App() {
               </div>
             </div>
           </Section>
-        </div>
+      </div>
 
-        {/* Right: Charts */}
-        <div className="col-span-12 lg:col-span-6 space-y-4 min-w-0">
+      {/* Right: Charts */}
+      <div className="col-span-12 lg:col-span-6 space-y-4 min-w-0">
+          <Section
+            id="topline-kpis"
+            title="Topline KPIs"
+            actions={
+              <div className="text-xs text-slate-500">
+                Live scorecard for this ladder; deltas use your pinned baseline so the Callouts below have context.
+              </div>
+            }
+          >
+            {(() => {
+              const baselineFallback = "Pin a baseline to compare.";
+              const cards = [
+                {
+                  key: "revenue",
+                  label: "Revenue (N=1000)",
+                  infoId: "kpi.revenue",
+                  aria: "Why is Revenue computed this way?",
+                  value: fmtUSD(currentKPIs.revenue),
+                  baseline: baselineKPIs
+                    ? `Baseline ${fmtUSD(baselineKPIs.revenue)}`
+                    : baselineFallback,
+                  delta: explainDelta?.deltaRevenue ?? null,
+                  deltaFormatter: (v: number) => fmtUSD(v),
+                },
+                {
+                  key: "profit",
+                  label: "Profit (N=1000)",
+                  infoId: "kpi.profit",
+                  aria: "How is Profit calculated here?",
+                  value: fmtUSD(currentKPIs.profit),
+                  baseline: baselineKPIs
+                    ? `Baseline ${fmtUSD(baselineKPIs.profit)}`
+                    : baselineFallback,
+                  delta: explainDelta?.deltaProfit ?? null,
+                  deltaFormatter: (v: number) => fmtUSD(v),
+                },
+                {
+                  key: "active",
+                  label: "Active customers",
+                  infoId: "kpi.active",
+                  aria: "What does Active customers mean?",
+                  value: currentActiveFromShares.toLocaleString(),
+                  baseline:
+                    baselineActiveCustomers !== null
+                      ? `Baseline ${baselineActiveCustomers.toLocaleString()}`
+                      : baselineFallback,
+                  delta: explainDelta?.deltaActive ?? null,
+                  deltaFormatter: (v: number) =>
+                    Math.round(v).toLocaleString(),
+                },
+                {
+                  key: "arpu",
+                  label: "ARPU (active)",
+                  infoId: "kpi.arpu",
+                  aria: "What is ARPU (active)?",
+                  value: `$${currentKPIs.arpuActive.toFixed(2)}`,
+                  baseline: baselineKPIs
+                    ? `Baseline $${baselineKPIs.arpuActive.toFixed(2)}`
+                    : baselineFallback,
+                  delta: explainDelta?.deltaARPU ?? null,
+                  deltaFormatter: (v: number) => `$${v.toFixed(2)}`,
+                },
+                {
+                  key: "margin",
+                  label: "Gross margin",
+                  infoId: "kpi.gm",
+                  aria: "How is Gross margin computed?",
+                  value: fmtPct(currentMarginRatio),
+                  baseline:
+                    baselineMarginRatio !== null
+                      ? `Baseline ${fmtPct(baselineMarginRatio)}`
+                      : baselineFallback,
+                  delta: marginDeltaPP,
+                  deltaFormatter: (v: number) => `${v.toFixed(1)} pp`,
+                },
+              ];
+
+              const tierColors: Record<"good" | "better" | "best", string> = {
+                good: "bg-sky-500",
+                better: "bg-indigo-500",
+                best: "bg-fuchsia-500",
+              };
+
+              return (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {cards.map((card) => (
+                      <div
+                        key={card.key}
+                        className="rounded-xl border border-slate-200 bg-white/60 p-3 shadow-sm"
+                      >
+                        <div className="flex items-center justify-between text-[11px] text-slate-600">
+                          <span className="flex items-center gap-1">
+                            {card.label}
+                            {card.infoId && (
+                              <InfoTip
+                                className="ml-1"
+                                align="right"
+                                id={card.infoId}
+                                ariaLabel={card.aria}
+                              />
+                            )}
+                          </span>
+                          {renderDeltaBadge(
+                            card.delta,
+                            card.deltaFormatter as (n: number) => string
+                          )}
+                        </div>
+                        <div className="text-xl font-semibold text-slate-900">
+                          {card.value}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {card.baseline}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+                      <span>Choice mix at this ladder</span>
+                      <span className="text-slate-500">
+                        Pair with Callouts to narrate who is buying and why.
+                      </span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {(["good", "better", "best"] as const).map((tier) => {
+                        const share = Math.max(
+                          0,
+                          Math.round(currentKPIs.shares[tier] * 1000) / 10
+                        );
+                        const baselineShare = baselineKPIs
+                          ? Math.round(baselineKPIs.shares[tier] * 1000) / 10
+                          : null;
+                        const delta =
+                          baselineShare !== null ? share - baselineShare : null;
+                        const barWidth = Math.min(100, Math.max(4, share));
+                        const tone =
+                          delta === null
+                            ? "text-slate-500"
+                            : delta >= 0
+                            ? "text-emerald-700"
+                            : "text-rose-700";
+                        return (
+                          <div
+                            key={tier}
+                            className="rounded-lg border border-slate-200 bg-white/70 p-3"
+                          >
+                            <div className="flex items-center justify-between text-[11px] text-slate-600">
+                              <span className="capitalize">{tier}</span>
+                              <span className="font-semibold text-slate-900">
+                                {share}%
+                              </span>
+                            </div>
+                            <div className="mt-1 h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
+                              <div
+                                className={`h-full rounded-full ${tierColors[tier]}`}
+                                style={{ width: `${barWidth}%` }}
+                              />
+                            </div>
+                            <div className={`mt-1 text-[11px] ${tone}`}>
+                              {delta === null
+                                ? "Baseline to see mix deltas."
+                                : `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}pp vs baseline`}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </Section>
+
           <Section id="callouts" title="Callouts snapshot">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div className="rounded-xl border border-blue-100 bg-blue-50/40 px-3 py-2">
@@ -3970,17 +4030,179 @@ export default function App() {
             </div>
 
             <Explanation slot="callouts.overview">
-              Provide a 2‑3 sentence narrative here that summarizes the current ladder, why the optimizer’s
+              Provide a 2-3 sentence narrative here that summarizes the current ladder, why the optimizer's
               guidance matters, and how a hiring manager should interpret the KPIs before diving into
-              the charts. Desktop ChatGPT: describe the storyline at a “consultant readout” level (what
+              the charts. Desktop ChatGPT: describe the storyline at a "consultant readout" level (what
               changed, who benefits, which guardrails are binding) and mention how to validate the
               recommendation (e.g., rerun optimizer, review waterfall, print summary).
             </Explanation>
           </Section>
 
           <Section
+            id="change-lens"
+            title="What changed vs baseline"
+            actions={
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-slate-500">
+                  Baseline stays fixed until you reset it.
+                </span>
+                <button
+                  type="button"
+                  className="rounded border border-slate-300 px-2 py-1 font-medium text-slate-700 hover:bg-slate-50"
+                  onClick={() => setBaselineKPIs(currentKPIs)}
+                >
+                  Set baseline to now
+                </button>
+              </div>
+            }
+          >
+            {!explainDelta ? (
+              <p className="text-sm text-slate-600">
+                Pin a baseline to see what moved, which is pulled directly into the Callouts above.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    {
+                      key: "delta-profit",
+                      label: "Profit",
+                      delta: explainDelta.deltaProfit,
+                      formatter: (v: number) => fmtUSD(v),
+                      now: fmtUSD(currentKPIs.profit),
+                      base: baselineKPIs ? fmtUSD(baselineKPIs.profit) : null,
+                    },
+                    {
+                      key: "delta-revenue",
+                      label: "Revenue",
+                      delta: explainDelta.deltaRevenue,
+                      formatter: (v: number) => fmtUSD(v),
+                      now: fmtUSD(currentKPIs.revenue),
+                      base: baselineKPIs ? fmtUSD(baselineKPIs.revenue) : null,
+                    },
+                    {
+                      key: "delta-active",
+                      label: "Active customers",
+                      delta: explainDelta.deltaActive,
+                      formatter: (v: number) =>
+                        Math.round(v).toLocaleString(),
+                      now: currentActiveFromShares.toLocaleString(),
+                      base:
+                        baselineActiveCustomers !== null
+                          ? baselineActiveCustomers.toLocaleString()
+                          : null,
+                    },
+                    {
+                      key: "delta-arpu",
+                      label: "ARPU (active)",
+                      delta: explainDelta.deltaARPU,
+                      formatter: (v: number) => `$${v.toFixed(2)}`,
+                      now: `$${currentKPIs.arpuActive.toFixed(2)}`,
+                      base: baselineKPIs
+                        ? `$${baselineKPIs.arpuActive.toFixed(2)}`
+                        : null,
+                    },
+                    {
+                      key: "delta-margin",
+                      label: "Gross margin",
+                      delta: marginDeltaPP,
+                      formatter: (v: number) => `${v.toFixed(1)} pp`,
+                      now: fmtPct(currentMarginRatio),
+                      base:
+                        baselineMarginRatio !== null
+                          ? fmtPct(baselineMarginRatio)
+                          : null,
+                    },
+                  ].map((item) => (
+                    <div
+                      key={item.key}
+                      className="rounded-lg border border-slate-200 bg-white/70 p-3 shadow-sm"
+                    >
+                      <div className="text-[11px] text-slate-600">
+                        {item.label}
+                      </div>
+                      <div className="mt-1">
+                        {renderDeltaBadge(item.delta, item.formatter)}
+                      </div>
+                      <div className="mt-1 text-[11px] text-slate-500">
+                        <span className="font-medium text-slate-700">
+                          Now:
+                        </span>{" "}
+                        {item.now}
+                        {item.base && (
+                          <>
+                            <span className="mx-1 text-slate-400">|</span>
+                            Baseline: {item.base}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg border border-slate-200 bg-white/80 p-3">
+                    <div className="text-[11px] uppercase tracking-wide text-slate-600">
+                      Story to pair with Callouts
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">
+                      {explainDelta.mainDriver}
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-1">
+                      {explainDelta.segmentLine}
+                    </p>
+                    <p className="text-[11px] text-slate-600 mt-1">
+                      {explainDelta.suggestion}
+                    </p>
+                    <p className="mt-2 text-[11px] text-slate-500">
+                      Use this narrative with the Callouts snapshot and the mix bars above to
+                      headline who is winning, who is at risk, and which guardrail is biting.
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 bg-linear-to-br from-slate-50 to-white p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-slate-600">
+                      <span>Optimizer context</span>
+                      {optimizerExplainer && (
+                        <button
+                          type="button"
+                          className="text-[11px] underline text-slate-500 hover:text-slate-700"
+                          onClick={() => setOptimizerExplainer(null)}
+                        >
+                          Dismiss
+                        </button>
+                      )}
+                    </div>
+                    {optimizerExplainer && optimizerExplainer.lines.length > 0 ? (
+                      <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] text-slate-700">
+                        {optimizerExplainer.lines.map((line, idx) => (
+                          <li key={`opt-explain-${idx}`}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="mt-2 text-[11px] text-slate-600 space-y-1">
+                        <div>
+                          {optimizerWhyLines[0] ||
+                            "Run the optimizer to get a ready-made storyline and exportable rationale."}
+                        </div>
+                        {optimizerWhyLines[1] && (
+                          <div>{optimizerWhyLines[1]}</div>
+                        )}
+                        <div className="text-slate-500">
+                          Pair this with the Callouts cards to cite constraints, feasibility, and
+                          where the optimizer wants you to push next.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </Section>
+
+          <Section
             id="kpi-pocket-coverage"
-            title="KPI — Pocket floor coverage"
+            title="KPI - Pocket floor coverage"
             actions={<ActionCluster chart="coverage" id="coverage-heatmap" csv />}
           >
             <div className="flex items-center gap-2 text-xs mb-2">
