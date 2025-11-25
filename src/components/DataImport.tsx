@@ -38,7 +38,7 @@ export default function DataImport(props: {
   return (
     <div className="flex flex-wrap gap-2">
       <label className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50 cursor-pointer">
-        Import CSV
+        Import Scenario Parameters CSV
         <input
           type="file"
           accept=".csv,.tsv,text/csv,text/tab-separated-values"
@@ -63,7 +63,7 @@ export default function DataImport(props: {
           URL.revokeObjectURL(url);
         }}
       >
-        Download CSV template
+        Download Scenario Parameters CSV
       </button>
     </div>
   );

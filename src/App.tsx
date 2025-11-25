@@ -1,6 +1,6 @@
 ﻿// src/App.tsx
 
-import { Suspense, lazy, type ReactNode } from "react";
+import { Suspense, lazy, type ReactNode, type ChangeEvent } from "react";
 // replace direct imports:
 const FrontierChartReal = lazy(() => import("./components/FrontierChart"));
 const Tornado = lazy(() => import("./components/Tornado"));
@@ -61,6 +61,7 @@ import Modal from "./components/Modal";
 import ErrorBoundary from "./components/ErrorBoundary";
 import OnboardingOverlay from "./components/OnboardingOverlay";
 import { useStickyState } from "./lib/useStickyState";
+import { csvTemplate } from "./lib/csv";
 
 import { preflight, fetchWithRetry } from "./lib/net";
 
@@ -127,21 +128,27 @@ const ONBOARDING_STEPS = [
   },
 ] as const;
 
-const SCENARIO_TAB_SECTION_IDS = [
-  "preset-scenarios",
+const LOAD_TAB_SECTION_IDS = ["preset-scenarios", "scenario-imports"] as const;
+const ADJUST_TAB_SECTION_IDS = [
   "scenario",
   "customer-segments",
-  "compare-board",
-  "scenario-journal",
-  "recent-short-links",
+  "pocket-price-waterfall",
 ] as const;
-
-const OPTIMIZER_TAB_SECTION_IDS = [
+const ADJUST_SLIDERS_SECTION_IDS = ["scenario"] as const;
+const ADJUST_SEGMENTS_SECTION_IDS = ["customer-segments"] as const;
+const ADJUST_LEAKAGES_SECTION_IDS = ["pocket-price-waterfall"] as const;
+const SAVE_TAB_SECTION_IDS = [
+  "scenario-baseline",
+  "compare-board",
+  "share-links",
+  "recent-short-links",
+  "scenario-journal",
+] as const;
+const OPTIMIZE_TAB_SECTION_IDS = [
   "global-optimizer",
   "reference-prices",
   "current-vs-optimized",
   "methods",
-  "pocket-price-waterfall",
 ] as const;
 
 type SaveError = {
@@ -312,9 +319,15 @@ function mapFitToSegments(
 export default function App() {
   const [journal, setJournal] = useState<string[]>([]);
   const [showSalesImport, setShowSalesImport] = useState(false);
-  const [leftColumnTab, setLeftColumnTab] = useState<"scenario" | "optimizer">(
-    "scenario"
-  );
+  const [leftColumnTab, setLeftColumnTab] = useState<
+    "load" | "adjust" | "save" | "optimize"
+  >("load");
+  const [adjustSubTab, setAdjustSubTab] = useState<
+    "sliders" | "segments" | "leakages"
+  >("sliders");
+  const [scenarioBaseline, setScenarioBaseline] = useStickyState<
+    { snapshot: ScenarioImport; savedAt: number } | null
+  >("po:scenario-baseline", null);
 
   // Baseline KPIs for the â€œTell me what changedâ€ panel
   const [baselineKPIs, setBaselineKPIs] = useState<SnapshotKPIs | null>(null);
@@ -551,12 +564,26 @@ export default function App() {
     []
   );
 
-  const scenarioTabSet = useMemo(
-    () => new Set<string>(SCENARIO_TAB_SECTION_IDS),
+  const loadTabSet = useMemo(() => new Set<string>(LOAD_TAB_SECTION_IDS), []);
+  const adjustTabSet = useMemo(
+    () => new Set<string>(ADJUST_TAB_SECTION_IDS),
     []
   );
-  const optimizerTabSet = useMemo(
-    () => new Set<string>(OPTIMIZER_TAB_SECTION_IDS),
+  const adjustSlidersSet = useMemo(
+    () => new Set<string>(ADJUST_SLIDERS_SECTION_IDS),
+    []
+  );
+  const adjustSegmentsSet = useMemo(
+    () => new Set<string>(ADJUST_SEGMENTS_SECTION_IDS),
+    []
+  );
+  const adjustLeakagesSet = useMemo(
+    () => new Set<string>(ADJUST_LEAKAGES_SECTION_IDS),
+    []
+  );
+  const saveTabSet = useMemo(() => new Set<string>(SAVE_TAB_SECTION_IDS), []);
+  const optimizeTabSet = useMemo(
+    () => new Set<string>(OPTIMIZE_TAB_SECTION_IDS),
     []
   );
 
@@ -624,14 +651,27 @@ export default function App() {
 
   function scrollToId(id: string) {
     if (typeof document === "undefined") return;
-    const wantsScenario = scenarioTabSet.has(id);
-    const wantsOptimizer = optimizerTabSet.has(id);
-    const shouldSwitch =
-      (wantsScenario && leftColumnTab !== "scenario") ||
-      (wantsOptimizer && leftColumnTab !== "optimizer");
+    const wantsLoad = loadTabSet.has(id);
+    const wantsAdjust = adjustTabSet.has(id);
+    const wantsSave = saveTabSet.has(id);
+    const wantsOptimize = optimizeTabSet.has(id);
 
-    if (wantsScenario) setLeftColumnTab("scenario");
-    if (wantsOptimizer) setLeftColumnTab("optimizer");
+    if (wantsAdjust) {
+      if (adjustSlidersSet.has(id)) setAdjustSubTab("sliders");
+      else if (adjustSegmentsSet.has(id)) setAdjustSubTab("segments");
+      else if (adjustLeakagesSet.has(id)) setAdjustSubTab("leakages");
+    }
+
+    const shouldSwitch =
+      (wantsLoad && leftColumnTab !== "load") ||
+      (wantsAdjust && leftColumnTab !== "adjust") ||
+      (wantsSave && leftColumnTab !== "save") ||
+      (wantsOptimize && leftColumnTab !== "optimize");
+
+    if (wantsLoad) setLeftColumnTab("load");
+    if (wantsAdjust) setLeftColumnTab("adjust");
+    if (wantsSave) setLeftColumnTab("save");
+    if (wantsOptimize) setLeftColumnTab("optimize");
 
     const runScroll = () => {
       const el = document.getElementById(id);
@@ -1873,6 +1913,241 @@ export default function App() {
   }
 
 
+  async function handleImportJson(e: ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      const text = await f.text();
+      const obj: unknown = JSON.parse(text);
+
+      if (!isScenarioImport(obj)) {
+        pushJ?.(`[${now()}] Import failed: missing core keys`);
+        toast("error", "Import failed: invalid JSON (missing required fields)");
+        alert("Invalid JSON: missing required fields.");
+        e.target.value = "";
+        return;
+      }
+
+      const sc = obj as ScenarioImport;
+
+      if (sc.prices) setPrices(sc.prices);
+      if (sc.costs) setCosts(sc.costs);
+      if (sc.features) setFeatures(sc.features);
+      if (sc.refPrices) setRefPrices(sc.refPrices);
+      if (sc.leak) setLeak(sc.leak);
+      if (sc.segments)
+        setSegments(
+          mapNormalizedToUI(normalizeSegmentsForSave(sc.segments))
+        );
+      if (sc.analysis) {
+        if (typeof sc.analysis.tornadoPocket === "boolean")
+          setTornadoPocket(sc.analysis.tornadoPocket);
+        if (typeof sc.analysis.tornadoPriceBump === "number")
+          setTornadoPriceBump(sc.analysis.tornadoPriceBump);
+        if (typeof sc.analysis.tornadoPctBump === "number")
+          setTornadoPctBump(sc.analysis.tornadoPctBump);
+        if (
+          sc.analysis.tornadoRangeMode === "symmetric" ||
+          sc.analysis.tornadoRangeMode === "data"
+        ) {
+          setTornadoRangeMode(sc.analysis.tornadoRangeMode);
+        }
+        if (typeof sc.analysis.retentionPct === "number")
+          setRetentionPct(sc.analysis.retentionPct);
+        if (typeof sc.analysis.kpiFloorAdj === "number")
+          setKpiFloorAdj(sc.analysis.kpiFloorAdj);
+        if (sc.analysis.priceRange) {
+          const ok = setPriceRangeFromData(
+            sc.analysis.priceRange,
+            sc.analysis.priceRangeSource ?? "shared"
+          );
+          if (!ok) fallbackToSyntheticRanges();
+        } else {
+          fallbackToSyntheticRanges();
+        }
+      } else {
+        fallbackToSyntheticRanges();
+      }
+
+      pushJ?.(`[${now()}] Imported scenario JSON`);
+      toast("success", "Imported scenario");
+    } catch (err) {
+      pushJ?.(
+        `[${now()}] Import failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+      toast(
+        "error",
+        `Import failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+      alert("Failed to import JSON.");
+    }
+    e.target.value = "";
+  }
+
+  async function handleTestBackend() {
+    const ok = await preflight("/api/get?s=ping");
+    if (ok) {
+      toast("success", "Backend OK (204)");
+      pushJ?.(`[${now()}] Backend OK (preflight 204)`);
+    } else {
+      toast("error", "Backend preflight failed");
+      pushJ?.(`[${now()}] Backend preflight failed`);
+    }
+  }
+
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast?.("success", "URL copied to clipboard");
+    } catch {
+      toast?.("error", "Copy failed—select and copy the address bar");
+    }
+  }
+
+  function handleCopyLongUrl() {
+    const q = new URLSearchParams({
+      p: [prices.good, prices.better, prices.best].join(","),
+      c: [costs.good, costs.better, costs.best].join(","),
+      fa: [
+        features.featA.good,
+        features.featA.better,
+        features.featA.best,
+      ].join(","),
+      fb: [
+        features.featB.good,
+        features.featB.better,
+        features.featB.best,
+      ].join(","),
+    });
+    const longUrl = `${location.origin}${location.pathname}?${q.toString()}`;
+    navigator.clipboard.writeText(longUrl).catch(() => {});
+    pushJ(`[${now()}] Copied long URL state`);
+  }
+
+  function handleExportJson() {
+    const snap = buildScenarioSnapshot({
+      prices,
+      costs,
+      features,
+      refPrices,
+      leak,
+      segments,
+      tornadoPocket,
+      tornadoPriceBump,
+      tornadoPctBump,
+      tornadoRangeMode,
+      retentionPct,
+      kpiFloorAdj,
+      priceRange: priceRangeState,
+    });
+    const blob = new Blob([JSON.stringify(snap, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "pricing_scenario.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    pushJ?.(`[${now()}] Exported scenario JSON`);
+  }
+
+  function handleExportCsv() {
+    const header = csvTemplate().split(/\r?\n/)[0]?.split(",") ?? [];
+    const setValue = (
+      row: string[],
+      key: string,
+      value: string | number | null | undefined
+    ) => {
+      const idx = header.findIndex(
+        (h) => h.toLowerCase() === key.toLowerCase()
+      );
+      if (idx >= 0) {
+        row[idx] = value === undefined || value === null ? "" : String(value);
+      }
+    };
+    const makeRow = (
+      seg:
+        | {
+            name?: string;
+            weight: number;
+            beta: {
+              price: number;
+              featA: number;
+              featB: number;
+              refAnchor?: number;
+            };
+          }
+        | null,
+      includeGlobals: boolean
+    ) => {
+      const row = Array(header.length).fill("");
+      if (includeGlobals) {
+        setValue(row, "prices.good", prices.good);
+        setValue(row, "prices.better", prices.better);
+        setValue(row, "prices.best", prices.best);
+        setValue(row, "costs.good", costs.good);
+        setValue(row, "costs.better", costs.better);
+        setValue(row, "costs.best", costs.best);
+        setValue(row, "ref.good", refPrices.good);
+        setValue(row, "ref.better", refPrices.better);
+        setValue(row, "ref.best", refPrices.best);
+        setValue(row, "promo.good", leak.promo.good);
+        setValue(row, "promo.better", leak.promo.better);
+        setValue(row, "promo.best", leak.promo.best);
+        setValue(row, "volume.good", leak.volume.good);
+        setValue(row, "volume.better", leak.volume.better);
+        setValue(row, "volume.best", leak.volume.best);
+        setValue(row, "leak.paymentPct", leak.paymentPct);
+        setValue(row, "leak.paymentFixed", leak.paymentFixed);
+        setValue(row, "leak.fxPct", leak.fxPct);
+        setValue(row, "leak.refundsPct", leak.refundsPct);
+      }
+      if (seg) {
+        setValue(row, "name", seg.name ?? "");
+        setValue(row, "weight", seg.weight);
+        setValue(row, "beta.price", seg.beta.price);
+        setValue(row, "beta.featA", seg.beta.featA);
+        setValue(row, "beta.featB", seg.beta.featB);
+        setValue(row, "beta.refAnchor", seg.beta.refAnchor);
+      }
+      return row.join(",");
+    };
+
+    const segRows = segments.map((seg) => ({
+      name: seg.name,
+      weight: seg.weight,
+      beta: {
+        price: seg.betaPrice,
+        featA: seg.betaFeatA,
+        featB: seg.betaFeatB,
+        ...(seg.betaRefAnchor !== undefined
+          ? { refAnchor: seg.betaRefAnchor }
+          : {}),
+      },
+    }));
+
+    const lines: string[] = [];
+    if (segRows.length) {
+      segRows.forEach((seg, idx) => {
+        lines.push(makeRow(seg, idx === 0));
+      });
+    } else {
+      lines.push(makeRow(null, true));
+    }
+    const csv = [header.join(","), ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "pricing_scenario.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    pushJ?.(`[${now()}] Exported scenario CSV`);
+  }
+
   async function saveScenarioShortLink() {
     try {
       // 1) Cheap warmup â€” if it fails, we continue anyway
@@ -2195,1705 +2470,1684 @@ export default function App() {
               aria-label="Left column views"
             >
               <button
-                id="tab-btn-scenario"
+                id="tab-btn-load"
                 type="button"
                 role="tab"
-                aria-selected={leftColumnTab === "scenario"}
-                aria-controls="tab-set-scenario"
+                aria-selected={leftColumnTab === "load"}
+                aria-controls="tab-load-scenario"
                 className={`px-3 py-2 rounded-lg border text-sm font-semibold ${
-                  leftColumnTab === "scenario"
+                  leftColumnTab === "load"
                     ? "bg-gray-900 text-white border-gray-900 shadow"
                     : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
                 }`}
-                onClick={() => setLeftColumnTab("scenario")}
+                onClick={() => setLeftColumnTab("load")}
               >
-                Set Scenario
+                Load Scenario
+              </button>
+              <button
+                id="tab-btn-adjust"
+                type="button"
+                role="tab"
+                aria-selected={leftColumnTab === "adjust"}
+                aria-controls="tab-adjust-scenario"
+                className={`px-3 py-2 rounded-lg border text-sm font-semibold ${
+                  leftColumnTab === "adjust"
+                    ? "bg-gray-900 text-white border-gray-900 shadow"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                }`}
+                onClick={() => {
+                  setLeftColumnTab("adjust");
+                  setAdjustSubTab((cur) => cur || "sliders");
+                }}
+              >
+                Adjust Scenario
+              </button>
+              <button
+                id="tab-btn-save"
+                type="button"
+                role="tab"
+                aria-selected={leftColumnTab === "save"}
+                aria-controls="tab-save-scenario"
+                className={`px-3 py-2 rounded-lg border text-sm font-semibold ${
+                  leftColumnTab === "save"
+                    ? "bg-gray-900 text-white border-gray-900 shadow"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                }`}
+                onClick={() => setLeftColumnTab("save")}
+              >
+                Save Scenario
               </button>
               <button
                 id="tab-btn-optimizer"
                 type="button"
                 role="tab"
-                aria-selected={leftColumnTab === "optimizer"}
+                aria-selected={leftColumnTab === "optimize"}
                 aria-controls="tab-global-optimizer"
                 className={`px-3 py-2 rounded-lg border text-sm font-semibold ${
-                  leftColumnTab === "optimizer"
+                  leftColumnTab === "optimize"
                     ? "bg-gray-900 text-white border-gray-900 shadow"
                     : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
                 }`}
-                onClick={() => setLeftColumnTab("optimizer")}
+                onClick={() => setLeftColumnTab("optimize")}
               >
                 Optimize
               </button>
             </div>
           </div>
 
-          {/* Left: Scenario Panel */}
-          <div
-            role="tabpanel"
-            id="tab-set-scenario"
-            aria-labelledby="tab-btn-scenario"
-            className={`col-span-12 lg:col-span-3 flex flex-col min-h-0 min-w-0 overflow-x-visible space-y-3 md:space-y-4 ${
-              leftColumnTab === "scenario" ? "" : "hidden"
-            }`}
-          >
+          {leftColumnTab === "adjust" && (
+            <div className="no-print mb-3">
+              <div
+                className="inline-flex flex-wrap items-center gap-2"
+                role="tablist"
+                aria-label="Adjust scenario detail tabs"
+              >
+                <button
+                  id="tab-btn-scenario-sliders"
+                  type="button"
+                  role="tab"
+                  aria-selected={adjustSubTab === "sliders"}
+                  aria-controls="tab-adjust-sliders"
+                  className={`px-3 py-1.5 rounded-md border text-xs font-semibold ${
+                    adjustSubTab === "sliders"
+                      ? "bg-gray-900 text-white border-gray-900 shadow"
+                      : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                  }`}
+                  onClick={() => setAdjustSubTab("sliders")}
+                >
+                  Scenario Sliders
+                </button>
+                <button
+                  id="tab-btn-customer-segments"
+                  type="button"
+                  role="tab"
+                  aria-selected={adjustSubTab === "segments"}
+                  aria-controls="tab-adjust-segments"
+                  className={`px-3 py-1.5 rounded-md border text-xs font-semibold ${
+                    adjustSubTab === "segments"
+                      ? "bg-gray-900 text-white border-gray-900 shadow"
+                      : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                  }`}
+                  onClick={() => setAdjustSubTab("segments")}
+                >
+                  Customer Segments
+                </button>
+                <button
+                  id="tab-btn-leakages"
+                  type="button"
+                  role="tab"
+                  aria-selected={adjustSubTab === "leakages"}
+                  aria-controls="tab-adjust-leakages"
+                  className={`px-3 py-1.5 rounded-md border text-xs font-semibold ${
+                    adjustSubTab === "leakages"
+                      ? "bg-gray-900 text-white border-gray-900 shadow"
+                      : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                  }`}
+                  onClick={() => setAdjustSubTab("leakages")}
+                >
+                  Leakages
+                </button>
+              </div>
+            </div>
+          )}
+
+          {leftColumnTab === "load" && (
+            <div role="tabpanel" id="tab-load-scenario" aria-labelledby="tab-btn-load" className="space-y-3 md:space-y-4 min-w-0">
           <Section id="preset-scenarios" title="Preset scenarios" className="order-0">
-            <PresetPicker
-              presets={PRESETS}
-              activeId={scenarioPresetId}
-              onApply={applyScenarioPreset}
-              infoId="presets.scenario"
-              className="mt-1"
-            />
-          </Section>
-          
-          <Section id="scenario" title="Scenario Panel" className="left-rail-scroll overflow-x-auto order-1">
-            <div className="shrink-0 space-y-4">
-            </div>
-            <div id="scenarioScroll" className="flex-1 min-h-0 overflow-y-auto pr-2 pb-4">
-              {(["good", "better", "best"] as const).map((tier) => (
-                <div key={tier} className="space-y-1">
-                  <label className="block text-sm font-medium capitalize">
-                    {tier} price (${prices[tier].toLocaleString(undefined, { maximumFractionDigits: 2 })})
+                      <PresetPicker
+                        presets={PRESETS}
+                        activeId={scenarioPresetId}
+                        onApply={applyScenarioPreset}
+                        infoId="presets.scenario"
+                        className="mt-1"
+                      />
+                    </Section>
+              <Section id="scenario-imports" title="Import & health checks">
+                <div className="flex flex-wrap gap-2 items-center text-xs">
+                  <label className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50 cursor-pointer">
+                    Import Scenario Parameters JSON
+                    <input
+                      type="file"
+                      accept="application/json"
+                      className="hidden"
+                      onChange={handleImportJson}
+                    />
                   </label>
-                  <div className="flex items-center gap-2 w-full">
-                    <input
-                      type="range"
-                      min={sliderMin}
-                      max={sliderMax}
-                      step={0.01}
-                      value={prices[tier]}
-                      onFocus={() => beginPriceEdit(tier)}
-                      onPointerDown={() => beginPriceEdit(tier)}
-                      onMouseDown={() => beginPriceEdit(tier)}
-                      onTouchStart={() => beginPriceEdit(tier)}
-                      onChange={(e) => updatePrice(tier, Number(e.target.value))}
-                      onPointerUp={() => commitPriceEdit(tier)}
-                      onPointerCancel={() => commitPriceEdit(tier)}
-                      onMouseUp={() => commitPriceEdit(tier)}
-                      onTouchEnd={() => commitPriceEdit(tier)}
-                      onBlur={() => commitPriceEdit(tier)}
-                      className="flex-[1.4] min-w-[140px] max-w-[220px]"
-                      aria-label={`${tier} price slider`}
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      inputMode="decimal"
-                    value={prices[tier]}
-                    onFocus={() => beginPriceEdit(tier)}
-                    onChange={(e) => updatePrice(tier, Number(e.target.value))}
-                    onBlur={(e) => commitPriceEdit(tier, Number(e.target.value))}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        (e.currentTarget as HTMLInputElement).blur();
-                      }
+
+                  <DataImport
+                    onPaste={(obj) => {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      applyScenarioPartial(obj as any);
+                      pushJ?.(`[${now()}] Imported scenario CSV`);
+                      toast("success", "Scenario CSV applied");
                     }}
-                      className="w-24 border rounded px-2 py-1 text-sm"
-                      aria-label={`${tier} price input`}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-3 gap-2 mt-2">
-              {(["good", "better", "best"] as const).map((tier) => (
-                <div key={tier} className="text-xs">
-                  <div className="font-semibold capitalize mb-1">
-                    {tier} cost
-                  </div>
-                  <input
-                    type="number"
-                    value={costs[tier]}
-                    onFocus={() => beginCostEdit(tier)}
-                    onChange={(e) => {
-                      const to = Number(e.target.value || 0);
-                      setCosts((c) => ({ ...c, [tier]: to }));
-                    }}
-                    onBlur={(e) => commitCostEdit(tier, Number(e.target.value))}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        (e.currentTarget as HTMLInputElement).blur();
-                      }
-                    }}
-                    className="w-full border rounded px-2 py-1"
+                    onToast={(kind, msg) => toast(kind, msg)}
                   />
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-3 gap-2 mt-2">
-              {(["good", "better", "best"] as const).map((tier) => (
-                <label
-                  key={`A-${tier}`}
-                  className="text-xs flex items-center gap-2"
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!features.featA[tier]}
-                    onChange={() =>
-                      setFeatures((f) => {
-                        const on = !f.featA[tier];
-                        pushJ(formatToggle("FeatA", tier, on));
-                        return {
-                          ...f,
-                          featA: { ...f.featA, [tier]: on ? 1 : 0 },
-                        };
-                      })
-                    }
-                  />
-                  FeatA {tier}
-                </label>
-              ))}
-              {(["good", "better", "best"] as const).map((tier) => (
-                <label
-                  key={`B-${tier}`}
-                  className="text-xs flex items-center gap-2"
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!features.featB[tier]}
-                    onChange={() =>
-                      setFeatures((f) => {
-                        const on = !f.featB[tier];
-                        pushJ(formatToggle("FeatB", tier, on));
-                        return {
-                          ...f,
-                          featB: { ...f.featB, [tier]: on ? 1 : 0 },
-                        };
-                      })
-                    }
-                  />
-                  FeatB {tier}
-                </label>
-              ))}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                className="text-xs border px-2 py-1 rounded"
-                onClick={saveScenarioShortLink}
-                title="Create a short link (saved in Cloudflare KV)"
-              >
-                Save short link
-              </button>
 
-              <button
-                className="border rounded px-2 py-1 text-sm bg-white hover:bg-gray-50"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(window.location.href);
-                    toast?.("success", "URL copied to clipboard");
-                  } catch {
-                    toast?.(
-                      "error",
-                      "Copy failedâ€”select and copy the address bar"
-                    );
-                  }
-                }}
-              >
-                Copy link
-              </button>
-              
-              <button
-                className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50"
-                onClick={() => {
-                  localStorage.removeItem("po:prices");
-                  localStorage.removeItem("po:costs");
-                  localStorage.removeItem("po:refs");
-                  localStorage.removeItem("po:leak");
-                  localStorage.removeItem("po:constraints");
-                  // You can also hard reset state if you want immediate UI reflect:
-                  setPrices({ good: 9, better: 15, best: 25 });
-                  setCosts({ good: 3, better: 5, best: 8 });
-                  setRefPrices({ good: 10, better: 18, best: 30 });
-                  setLeak({ promo: { good: 0.05, better: 0.05, best: 0.05 }, volume: { good: 0.03, better: 0.03, best: 0.03 }, paymentPct: 0.029, paymentFixed: 0.3, fxPct: 0, refundsPct: 0.02 });
-                  setOptConstraints({ gapGB: 2, gapBB: 4, marginFloor: { good: 0.25, better: 0.25, best: 0.25 }, charm: false, usePocketProfit: false, usePocketMargins: false });
-                }}
-                aria-label="Reset all settings to defaults"
-              >
-                Reset defaults
-              </button>
-
-              <button
-                className="text-xs border px-2 py-1 rounded"
-              onClick={() => {
-                const snap = buildScenarioSnapshot({
-                  prices,
-                  costs,
-                  features,
-                  refPrices,
-                  leak,
-                  segments,
-                  tornadoPocket,
-                  tornadoPriceBump,
-                  tornadoPctBump,
-                  tornadoRangeMode,
-                  retentionPct,
-                  kpiFloorAdj,
-                  priceRange: priceRangeState,
-                });
-                  const blob = new Blob([JSON.stringify(snap, null, 2)], {
-                    type: "application/json",
-                  });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = "pricing_scenario.json";
-                  a.click();
-                  URL.revokeObjectURL(url);
-                  pushJ?.(`[${now()}] Exported scenario JSON`);
-                }}
-              >
-                Export JSON
-              </button>
-
-              <label className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50 cursor-pointer">
-                Import JSON
-                <input
-                  type="file"
-                  accept="application/json"
-                  className="hidden"
-                  onChange={async (e) => {
-                    const f = e.target.files?.[0];
-                    if (!f) return;
-                    try {
-                      const text = await f.text();
-                      const obj: unknown = JSON.parse(text);
-
-                      if (!isScenarioImport(obj)) {
-                        pushJ?.(`[${now()}] Import failed: missing core keys`);
-                        toast(
-                          "error",
-                          "Import failed: invalid JSON (missing required fields)"
-                        );
-                        alert("Invalid JSON: missing required fields.");
-                        e.currentTarget.value = "";
-                        return;
-                      }
-
-                      const sc = obj as ScenarioImport;
-
-                      if (sc.prices) setPrices(sc.prices);
-                      if (sc.costs) setCosts(sc.costs);
-                      if (sc.features) setFeatures(sc.features);
-                      if (sc.refPrices) setRefPrices(sc.refPrices);
-                      if (sc.leak) setLeak(sc.leak);
-                      if (sc.segments)
-                        setSegments(
-                          mapNormalizedToUI(
-                            normalizeSegmentsForSave(sc.segments)
-                          )
-                        );
-                      if (sc.analysis) {
-                        if (typeof sc.analysis.tornadoPocket === "boolean")
-                          setTornadoPocket(sc.analysis.tornadoPocket);
-                        if (typeof sc.analysis.tornadoPriceBump === "number")
-                          setTornadoPriceBump(sc.analysis.tornadoPriceBump);
-                        if (typeof sc.analysis.tornadoPctBump === "number")
-                          setTornadoPctBump(sc.analysis.tornadoPctBump);
-                        if (
-                          sc.analysis.tornadoRangeMode === "symmetric" ||
-                          sc.analysis.tornadoRangeMode === "data"
-                        ) {
-                          setTornadoRangeMode(sc.analysis.tornadoRangeMode);
-                        }
-                        if (typeof sc.analysis.retentionPct === "number")
-                          setRetentionPct(sc.analysis.retentionPct);
-                        if (typeof sc.analysis.kpiFloorAdj === "number")
-                          setKpiFloorAdj(sc.analysis.kpiFloorAdj);
-                        if (sc.analysis.priceRange) {
-                          const ok = setPriceRangeFromData(
-                            sc.analysis.priceRange,
-                            sc.analysis.priceRangeSource ?? "shared"
-                          );
-                          if (!ok) fallbackToSyntheticRanges();
-                        } else {
-                          fallbackToSyntheticRanges();
-                        }
-                      } else {
-                        fallbackToSyntheticRanges();
-                      }
-
-                      pushJ?.(`[${now()}] Imported scenario JSON`);
-                      toast("success", "Imported scenario");
-                    } catch (err) {
-                      pushJ?.(
-                        `[${now()}] Import failed: ${
-                          err instanceof Error ? err.message : String(err)
-                        }`
-                      );
-                      toast(
-                        "error",
-                        `Import failed: ${
-                          err instanceof Error ? err.message : String(err)
-                        }`
-                      );
-                      alert("Failed to import JSON.");
-                    }
-                    e.currentTarget.value = ""; // allow re-upload same file
-                  }}
-                />
-              </label>
-
-              {/* CSV Import + Template */}
-              <DataImport
-                onPaste={(obj) => {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  applyScenarioPartial(obj as any);
-                  pushJ?.(`[${now()}] Imported scenario CSV`);
-                  toast("success", "Scenario CSV applied");
-                }}
-                onToast={(kind, msg) => toast(kind, msg)}
-              />
-
-              {/* Sales data importer (opens modal) */}
-              <div className="mt-2">
-                <button
-                  id="sales-import-trigger"
-                  className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
-                  onClick={() => setShowSalesImport(true)}
-                  title="Upload sales logs CSV and estimate latent-class segments"
-                >
-                  Import Sales CSV (estimate)
-                </button>
-              </div>
-
-              <button
-                className="text-xs border px-2 py-1 rounded"
-                onClick={() => {
-                  const q = new URLSearchParams({
-                    p: [prices.good, prices.better, prices.best].join(","),
-                    c: [costs.good, costs.better, costs.best].join(","),
-                    fa: [
-                      features.featA.good,
-                      features.featA.better,
-                      features.featA.best,
-                    ].join(","),
-                    fb: [
-                      features.featB.good,
-                      features.featB.better,
-                      features.featB.best,
-                    ].join(","),
-                  });
-                  const longUrl = `${location.origin}${
-                    location.pathname
-                  }?${q.toString()}`;
-                  navigator.clipboard.writeText(longUrl).catch(() => {});
-                  pushJ(`[${now()}] Copied long URL state`);
-                }}
-              >
-                Copy long URL
-              </button>
-
-              <button
-                className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
-                onClick={async () => {
-                  const ok = await preflight("/api/get?s=ping");
-                  if (ok) {
-                    toast("success", "Backend OK (204)");
-                    pushJ?.(`[${now()}] Backend OK (preflight 204)`);
-                  } else {
-                    toast("error", "Backend preflight failed");
-                    pushJ?.(`[${now()}] Backend preflight failed`);
-                  }
-                }}
-                aria-label="Test backend connectivity"
-                title="Quick health check (HEAD /api/get?s=ping)"
-              >
-                Test backend
-              </button>
-            </div>
-
-            <Modal
-              open={showSalesImport}
-              onClose={() => setShowSalesImport(false)}
-              title="Import Sales CSV & Estimate Segments"
-              size="xl"
-              footer={
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-600">
-                    The estimator runs in a Web Worker and won’t block the UI. Your CSV never leaves the browser.
-                  </p>
                   <button
-                    className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
-                    onClick={() => setShowSalesImport(false)}
+                    id="sales-import-trigger"
+                    className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                    onClick={() => setShowSalesImport(true)}
+                    title="Upload sales logs CSV and estimate latent-class segments"
                   >
-                    Close
+                    Import Sales Data CSV (estimate)
+                  </button>
+
+                  <button
+                    className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                    onClick={handleTestBackend}
+                    aria-label="Test backend connectivity"
+                    title="Quick health check (HEAD /api/get?s=ping)"
+                  >
+                    Test backend
                   </button>
                 </div>
-              }
-            >
-              <div className="text-xs text-gray-700 mb-2">
-                1) Upload your sales CSV &nbsp;→&nbsp; 2) Map columns &nbsp;→&nbsp; 3) Estimate.  
-                Use compact column names if possible; unknowns can be left blank.
-              </div>
-              <SalesImport
-                onApply={({ segments, diagnostics, stats }) => {
-                  const segs = mapFitToSegments(segments);
-                  setSegments(segs);
-                  if (
-                    !stats ||
-                    !stats.priceRange ||
-                    !setPriceRangeFromData(
-                      stats.priceRange,
-                      stats.priceRangeSource ?? "imported"
-                    )
-                  ) {
-                    fallbackToSyntheticRanges();
-                  }
-                  setFitInfo(diagnostics);
-                  pushJ?.(
-                    `[${now()}] Estimated from sales data (logLik=${Math.round(
-                      diagnostics.logLik
-                    )}, iters=${diagnostics.iters}, converged=${diagnostics.converged})`
-                  );
-                  toast("success", "Applied latent-class estimate");
-                }}
-                onToast={(kind, msg) => toast(kind, msg)}
-                onDone={() => setShowSalesImport(false)}
-              />
-            </Modal>
-          </Section>
+              </Section>
 
-          <Section
-            id="customer-segments"
-            title={
-              <span className="inline-flex items-center gap-2">
-                <span>Customer Segments</span>
-                <InfoTip
-                  id="segments.mix"
-                  ariaLabel="Adjust segment mix and review narratives"
-                  align="right"
-                />
-              </span>
-            }
-            actions={
-              <button
-                className="text-xs border rounded px-2 py-1"
-                onClick={() => setSegments(normalizeWeights(segments))}
-              >
-                Normalize to 100%
-              </button>
-            } 
-            className="order-2"
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              {segments.map((seg, i) => {
-                const lines = describeSegment(seg);
-                return (
-                  <div
-                    key={seg.name}
-                    className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 shadow-sm space-y-2"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-[11px] uppercase tracking-wide text-slate-500">
-                          Segment
-                        </div>
-                        <div className="text-base font-semibold text-slate-900">
-                          {seg.name}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[11px] text-slate-500">Weight</div>
-                        <div className="text-sm font-semibold text-slate-900">
-                          {Math.round(seg.weight * 100)}%
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        value={seg.weight}
-                        onChange={(e) => {
-                          const w = Number(e.target.value);
-                          const next = segments.map((t, j) =>
-                            j === i ? { ...t, weight: w } : t
-                          );
-                          setSegments(normalizeWeights(next));
-                        }}
-                        className="flex-1"
-                        aria-label={`${seg.name} weight slider`}
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={1}
-                        value={Math.round(seg.weight * 100)}
-                        onChange={(e) => {
-                          const pct = Number(e.target.value);
-                          if (!Number.isFinite(pct)) return;
-                          const clamped = Math.max(0, Math.min(100, pct));
-                          const w = clamped / 100;
-                          const next = segments.map((t, j) =>
-                            j === i ? { ...t, weight: w } : t
-                          );
-                          setSegments(normalizeWeights(next));
-                        }}
-                        className="w-16 border rounded px-2 py-1 text-right"
-                        aria-label={`${seg.name} weight percent`}
-                      />
-                    </div>
-
-                    <div className="mt-2">
-                      <div className="text-[11px] uppercase tracking-wide text-slate-500">
-                        Story
-                      </div>
-                      <ul className="mt-1 space-y-1 list-disc list-inside text-slate-600">
-                        {lines.map((line, idx) => (
-                          <li key={`${seg.name}-line-${idx}`}>{line}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Section>
-
-          <div className="print-page" aria-hidden="true" />
-          <Section id="compare-board" title="Scenario Compare (A/B/C)" className="order-3">
-            <Explanation slot="chart.compareBoard">
-              Desktop ChatGPT: describe how to position these A/B/C slots during interviews — e.g., “Save current,
-              branch, then reload while screen-sharing.” Mention how KPIs update and how to interpret gaps between
-              saved ladders.
-            </Explanation>
-            <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
-              <span className="text-gray-600">Save current to:</span>
-              {(["A", "B", "C"] as const).map((id) => (
-                <button
-                  key={id}
-                  className="border rounded px-2 py-1 bg-white hover:bg-gray-50"
-                  onClick={() => saveToSlot(id)}
-                >
-                  Save to {id}
-                </button>
-              ))}
-            </div>
-
-            {(() => {
-              // derive KPIs for the board
-              const usePocket = !!optConstraints.usePocketProfit;
-              const curKPIs = kpisFromSnapshot(
-                { prices, costs, features, refPrices, leak, segments },
-                N,
-                usePocket
-              );
-
-              const objA = readSlot("A");
-              const objB = readSlot("B");
-              const objC = readSlot("C");
-
-              const slots: Record<"A" | "B" | "C", SnapshotKPIs | null> = {
-                A: objA
-                  ? {
-                      ...kpisFromSnapshot(
-                        {
-                          prices: objA.prices,
-                          costs: objA.costs,
-                          features: objA.features,
-                          refPrices: objA.refPrices ? objA.refPrices : refPrices,
-                          leak: objA.leak ? objA.leak : leak,
-                          segments, // reuse current mix
-                        },
-                        N,
-                        usePocket
-                      ),
-                      title: "Saved A",
-                    }
-                  : null,
-
-                B: objB
-                  ? {
-                      ...kpisFromSnapshot(
-                        {
-                          prices: objB.prices,
-                          costs: objB.costs,
-                          features: objB.features,
-                          refPrices: objB.refPrices ? objB.refPrices : refPrices,
-                          leak: objB.leak ? objB.leak : leak,
-                          segments,
-                        },
-                        N,
-                        usePocket
-                      ),
-                      title: "Saved B",
-                    }
-                  : null,
-                C: objC
-                  ? {
-                      ...kpisFromSnapshot(
-                        {
-                          prices: objC.prices,
-                          costs: objC.costs,
-                          features: objC.features,
-                          refPrices: objC.refPrices ? objC.refPrices : refPrices,
-                          leak: objC.leak ? objC.leak : leak,
-                          segments,
-                        },
-                        N,
-                        usePocket
-                      ),
-                      title: "Saved C",
-                    }
-                  : null,
-              };
-
-              return (
-                <CompareBoard
-                  slots={slots}
-                  current={curKPIs}
-                  onLoad={(id: "A" | "B" | "C") => loadFromSlot(id)}
-                  onClear={(id: "A" | "B" | "C") => {
-                    clearSlot(id);
-                    toast("info", `Cleared slot ${id}`);
-                    setJournal((j) => [...j]);
-                  }}
-                />
-              );
-            })()}
-          </Section>
-
-          <Section id="scenario-journal" title="Scenario Journal" className="order-4">
-            <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
-              {journal.length === 0 ? (
-                <li className="text-gray-400">
-                  Adjust sliders/toggles to log changes…
-                </li>
-              ) : (
-                journal.map((line, i) => <li key={i}>{line}</li>)
-              )}
-              <li>
-                Revenue (N=1000): <strong>{fmtUSD(revenue)}</strong>
-              </li>
-              <li>
-                Profit (N=1000): <strong>{fmtUSD(profit)}</strong>
-              </li>
-              <li>
-                Active customers:{" "}
-                <strong>{activeCustomers.toLocaleString()}</strong>
-              </li>
-              <li>
-                ARPU (active only): <strong>{fmtUSD(arpu)}</strong>
-              </li>
-              <li>
-                Profit / customer (all N):{" "}
-                <strong>{fmtUSD(profitPerCustomer)}</strong>
-              </li>
-              <li>
-                Gross margin: <strong>{fmtPct(grossMarginPct)}</strong>
-              </li>
-            </ul>
-            <div className="mt-2 flex gap-2">
-              <button
-                className="text-xs border px-2 py-1 rounded"
-                onClick={() => setJournal([])}
-              >
-                Clear
-              </button>
-              <button
-                className="text-xs border px-2 py-1 rounded"
-                onClick={() => {
-                  const blob = new Blob([journal.slice().reverse().join("\n")], {
-                    type: "text/plain",
-                  });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = "scenario-journal.txt";
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-              >
-                Download .txt
-              </button>
-            </div>
-          </Section>
-
-          <Section id="recent-short-links" title="Recent short links" className="order-5">
-            <details className="text-xs">
-              <summary className="cursor-pointer select-none font-medium mb-2">
-                Show recents
-              </summary>
-
-              <ul className="text-xs space-y-1">
-                {readRecents().length === 0 ? (
-                  <li className="text-gray-500">None yet</li>
-                ) : (
-                  readRecents().map((r) => (
-                    <li
-                      key={r.id}
-                      className="flex items-center justify-between gap-2"
+              <Modal
+                open={showSalesImport}
+                onClose={() => setShowSalesImport(false)}
+                title="Import Sales CSV & Estimate Segments"
+                size="xl"
+                footer={
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-600">
+                      The estimator runs in a Web Worker and won’t block the UI. Your CSV never leaves the browser.
+                    </p>
+                    <button
+                      className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
+                      onClick={() => setShowSalesImport(false)}
                     >
-                      <button
-                        className="underline"
-                        title={new Date(r.t).toLocaleString()}
-                        onClick={() => {
-                          const url = `${location.origin}${location.pathname}?s=${r.id}`;
-                          location.assign(url); // reload page with this id
-                        }}
-                      >
-                        {r.id}
-                      </button>
-                      <button
-                        className="border rounded px-2 py-0.5"
-                        onClick={() => {
-                          const url = `${location.origin}${location.pathname}?s=${r.id}`;
-                          navigator.clipboard.writeText(url).catch(() => {});
-                          pushJ(`[${now()}] Copied short link ${r.id}`);
-                        }}
-                      >
-                        Copy
-                      </button>
-                    </li>
-                  ))
-                )}
-              </ul>
-              <div className="mt-2">
-                <button
-                  className="text-xs border rounded px-2 py-1"
-                  onClick={() => {
-                    localStorage.removeItem(RECENT_KEY);
-                    pushJ(`[${now()}] Cleared recent short links`);
-                    location.reload();
-                  }}
-                >
-                  Clear recents
-                </button>
-              </div>
-            </details>
-          </Section>          
-        </div>
-
-        {/* Center: Optimizer */}
-        <div
-          role="tabpanel"
-          id="tab-global-optimizer"
-          aria-labelledby="tab-btn-optimizer"
-          className={`col-span-12 lg:col-span-3 space-y-3 md:space-y-4 min-w-0 self-start md:text-[13px] pr-1 ${
-            leftColumnTab === "optimizer" ? "" : "hidden"
-          }`}
-        >
-          <Section id="global-optimizer" title="Global Optimizer">
-            <Explanation slot="chart.optimizer">
-              Desktop ChatGPT: provide copy that frames this as the “decision cockpit” — explain ranges, steps,
-              charm-ending toggle, and pocket-vs-list guardrails. Call out how to cite binding constraints and what
-              to say when the optimizer fails or returns no feasible ladder.
-            </Explanation>
-            {/* Compact header: inline ranges + actions */}
-            <div className="flex flex-col gap-3">
-              {/* Header row wraps nicely on small screens */}
-              <div className="flex flex-wrap items-end gap-3 text-xs">
-                <span className="font-semibold mr-2 basis-full sm:basis-auto">
-                  Ranges ($)
-                </span>
-
-                {/* Good */}
-                <label className="flex items-center gap-1">
-                  <span className="w-12">Good</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Good min"
-                    value={optRanges.good[0]}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        good: [Number(e.target.value), r.good[1]] as [
-                          number,
-                          number
-                        ],
-                      }))
-                    }
-                  />
-                  <span>-</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Good max"
-                    value={optRanges.good[1]}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        good: [r.good[0], Number(e.target.value)] as [
-                          number,
-                          number
-                        ],
-                      }))
-                    }
-                  />
-                </label>
-
-                {/* Better */}
-                <label className="flex items-center gap-1">
-                  <span className="w-12">Better</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Better min"
-                    value={optRanges.better[0]}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        better: [Number(e.target.value), r.better[1]] as [
-                          number,
-                          number
-                        ],
-                      }))
-                    }
-                  />
-                  <span>-</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Better max"
-                    value={optRanges.better[1]}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        better: [r.better[0], Number(e.target.value)] as [
-                          number,
-                          number
-                        ],
-                      }))
-                    }
-                  />
-                </label>
-
-                {/* Best */}
-                <label className="flex items-center gap-1">
-                  <span className="w-12">Best</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Best min"
-                    value={optRanges.best[0]}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        best: [Number(e.target.value), r.best[1]] as [
-                          number,
-                          number
-                        ],
-                      }))
-                    }
-                  />
-                  <span>-</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Best max"
-                    value={optRanges.best[1]}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        best: [r.best[0], Number(e.target.value)] as [
-                          number,
-                          number
-                        ],
-                      }))
-                    }
-                  />
-                </label>
-
-                {/* Step */}
-                <label className="flex items-center gap-1">
-                  <span className="w-8">Step</span>
-                  <input
-                    type="number"
-                    className="border rounded px-2 h-8 w-16"
-                    aria-label="Step"
-                    value={optRanges.step}
-                    onChange={(e) =>
-                      setOptRanges((r) => ({
-                        ...r,
-                        step: Math.max(0.25, Number(e.target.value)),
-                      }))
-                    }
-                  />
-                </label>
-
-                {/* Actions */}
-                <div className="ml-auto flex items-center gap-2">
-                  <button
-                    className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50"
-                    onClick={runOptimizer}
-                    disabled={isOptRunning}
-                  >
-                    {isOptRunning ? "Running..." : "Run"}
-                  </button>
-                  <button
-                    className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50 disabled:opacity-50"
-                    onClick={applyOptimizedPrices}
-                    disabled={!optResult || isOptRunning}
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-
-              {/* Result line (one-liner) */}
-              <div className="text-xs text-gray-700">
-                {optError && (
-                  <span className="text-red-600 mr-2">Error: {optError}</span>
-                )}
-                {optResult ? (
-                  <span>
-                    Best ladder ${optResult.prices.good}/$
-                    {optResult.prices.better}/${optResult.prices.best} -`&gt; Profit
-                    delta ${Math.round(optResult.profit)}
-                  </span>
-                ) : (
-                  <span className="text-gray-500">No result yet</span>
-                )}
-              </div>
-              {optResult && optimizerWhyLines.length > 0 && (
-                <div className="mt-2 rounded border border-dashed border-gray-200 bg-slate-50 p-3">
-                  <div className="text-xs font-semibold text-slate-700 mb-1">
-                    Why these prices?
+                      Close
+                    </button>
                   </div>
-                  <ul className="list-disc ml-4 space-y-1 text-[11px] text-gray-700">
-                    {optimizerWhyLines.map((line, idx) => (
-                      <li key={idx}>{line}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <details className="text-[11px] text-gray-600">
-                <summary className="cursor-pointer select-none">
-                  How ranges & floors work
-                </summary>
-                <div className="mt-1 print-tight">
-                  Optimizer searches the grid defined by ranges and step. Gap
-                  constraints keep ladder spacing consistent. Floors can be
-                  checked on list or <em>pocket</em> margin. Use Apply to write
-                  prices back to the Scenario Panel.
-                </div>
-              </details>
-
-              {/* Advanced constraints (collapsible) */}
-              <details className="rounded border border-gray-200 p-3 bg-gray-50/60">
-                <summary className="cursor-pointer select-none text-xs font-medium">
-                  Advanced constraints
-                </summary>
-
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
-                  <label className="flex items-center gap-2">
-                    <span className="w-28">Gap G-`&gt;B</span>
-                    <input
-                      type="number"
-                      className="border rounded px-2 h-8 flex-1"
-                      value={optConstraints.gapGB}
-                      onChange={(e) =>
-                        setOptConstraints((c) => ({
-                          ...c,
-                          gapGB: Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <span className="w-28">Gap B-`&gt;Best</span>
-                    <input
-                      type="number"
-                      className="border rounded px-2 h-8 flex-1"
-                      value={optConstraints.gapBB}
-                      onChange={(e) =>
-                        setOptConstraints((c) => ({
-                          ...c,
-                          gapBB: Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </label>
-
-                  <div>
-                    <div className="text-[11px] font-semibold mb-1">
-                      Margin floors
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(["good", "better", "best"] as const).map((t) => (
-                        <label key={t} className="text-[11px]">
-                          {t}
-                          <input
-                            type="number"
-                            className="mt-1 w-full border rounded px-1 py-0.5"
-                            value={optConstraints.marginFloor[t]}
-                            step={0.01}
-                            onChange={(e) =>
-                              setOptConstraints((c) => ({
-                                ...c,
-                                marginFloor: {
-                                  ...c.marginFloor,
-                                  [t]: Number(e.target.value),
-                                },
-                              }))
-                            }
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={optConstraints.charm}
-                      onChange={(e) =>
-                        setOptConstraints((c) => ({
-                          ...c,
-                          charm: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>Charm endings (.99)</span>
-                  </label>
-
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={optConstraints.usePocketMargins}
-                      onChange={(e) =>
-                        setOptConstraints((c) => ({
-                          ...c,
-                          usePocketMargins: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>
-                      Use <em>pocket</em> price for margin floors
-                    </span>
-                  </label>
-
-                  <p className="text-[11px] text-gray-500 sm:col-span-2 print-tight">
-                    When enabled, margins are checked on pocket (after
-                    promo/payment/FX/refunds) instead of list.
-                  </p>
-
-                  <label className="flex items-center gap-2 sm:col-span-2">
-                    <input
-                      type="checkbox"
-                      checked={optConstraints.usePocketProfit}
-                      onChange={(e) =>
-                        setOptConstraints((c) => ({
-                          ...c,
-                          usePocketProfit: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>Compute profit using pocket price</span>
-                  </label>
-                </div>
-              </details>
-
-              <details className="mt-4 rounded border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs">
-                <summary className="cursor-pointer select-none font-medium">
-                  Field guide (copy placeholder)
-                </summary>
-                <div
-                  data-copy-slot="waterfall.fieldGuide"
-                  className="space-y-2 text-slate-600 mt-2"
-                >
-                  <div>
-                    <span className="font-semibold">Tier discounts</span>: TODO — describe how promo vs. volume knobs
-                    affect list-to-pocket math and when to prioritize each tier.
-                  </div>
-                  <div>
-                    <span className="font-semibold">Global leakages</span>: TODO — explain processor %, fixed fees, FX,
-                    and refunds along with the types of businesses that feel each leakage the most.
-                  </div>
-                  <div>
-                    <span className="font-semibold">Compare all tiers</span>: TODO — narrative on using the mini
-                    waterfalls to defend Good/Better/Best deltas.
-                  </div>
-                  <div>
-                    <span className="font-semibold">Channel blend</span>: TODO — instructions for blending Stripe vs.
-                    marketplaces and how to talk about the resulting composite leak profile.
-                  </div>
-                </div>
-              </details>
-            </div>
-          </Section>
-
-          <Section id="reference-prices" title="Reference prices for Optimizer">
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2 items-center">
-              <label className="text-sm">Good</label>
-              <input
-                type="number"
-                className="col-span-2 border rounded px-2 py-1 h-9 w-full"
-                value={refPrices.good}
-                onChange={(e) =>
-                  setRefPrices((p) => ({ ...p, good: Number(e.target.value) }))
                 }
-              />
-              <label className="text-sm">Better</label>
-              <input
-                type="number"
-                className="col-span-2 border rounded px-2 py-1 h-9 w-full"
-                value={refPrices.better}
-                onChange={(e) =>
-                  setRefPrices((p) => ({
-                    ...p,
-                    better: Number(e.target.value),
-                  }))
-                }
-              />
-              <label className="text-sm">Best</label>
-              <input
-                type="number"
-                className="col-span-2 border rounded px-2 py-1 h-9 w-full"
-                value={refPrices.best}
-                onChange={(e) =>
-                  setRefPrices((p) => ({ ...p, best: Number(e.target.value) }))
-                }
-              />
-            </div>
-
-            <div className="mt-3">
-              <button
-                className="border rounded-md px-3 py-1.5 text-xs bg-white hover:bg-gray-50"
-                onClick={setRefsFromCurrent}
               >
-                Set from current prices
-              </button>
-            </div>
-          </Section>
-
-          <Section id="current-vs-optimized" title="Current vs Optimized">
-            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-slate-900 text-sm">How to read this card</span>
-                <span className="text-[10px] uppercase tracking-wide text-slate-500">Demo aid</span>
-              </div>
-              <p className="mt-1 leading-snug">
-                Use this to narrate “before vs after.” Apply the optimized ladder to push prices back to Scenario Panel,
-                undo to revert, then call out the delta and which constraints or drivers mattered most.
-              </p>
-            </div>
-            {(() => {
-              const curProfit = optConstraints.usePocketProfit
-                ? (() => {
-                    const probs = choiceShares(prices, features, segments, refPrices);
-                    const take = {
-                      good: Math.round(N * probs.good),
-                      better: Math.round(N * probs.better),
-                      best: Math.round(N * probs.best),
-                    };
-                    const pG = computePocketPrice(prices.good, "good", leak).pocket;
-                    const pB = computePocketPrice(prices.better, "better", leak).pocket;
-                    const pH = computePocketPrice(prices.best, "best", leak).pocket;
-                    return take.good * (pG - costs.good) + take.better * (pB - costs.better) + take.best * (pH - costs.best);
-                  })()
-                : (() => {
-                    const probs = choiceShares(prices, features, segments, refPrices);
-                    const take = {
-                      good: Math.round(N * probs.good),
-                      better: Math.round(N * probs.better),
-                      best: Math.round(N * probs.best),
-                    };
-                    return take.good * (prices.good - costs.good) + take.better * (prices.better - costs.better) + take.best * (prices.best - costs.best);
-                  })();
-
-              const best = quickOpt.best;
-              const bestProfit = quickOpt.profit;
-
-              if (!best)
-                return <div className="text-xs text-gray-600">No feasible ladder in the current ranges & floors.</div>;
-
-              return (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                      <div className="font-semibold mb-1">Current</div>
-                      <div>Good: ${prices.good}</div>
-                      <div>Better: ${prices.better}</div>
-                      <div>Best: ${prices.best}</div>
-                      <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(curProfit).toLocaleString()}</div>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                      <div className="font-semibold mb-1">Optimized</div>
-                      <div>Good: ${best.good}</div>
-                      <div>Better: ${best.better}</div>
-                      <div>Best: ${best.best}</div>
-                      <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(bestProfit).toLocaleString()}</div>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
-                      <div className="font-semibold">Delta</div>
-                      <div className="text-lg font-bold leading-tight">
-                        {bestProfit - curProfit >= 0 ? "+" : "-"}${Math.abs(Math.round(bestProfit - curProfit)).toLocaleString()}
-                      </div>
-                      <div className="text-[11px] text-slate-600">vs current profit</div>
-                      <div className="flex flex-col gap-2">
-                        <button
-                          className="w-full border rounded px-3 py-2 text-sm font-semibold bg-white hover:bg-gray-50"
-                          onClick={() => {
-                            lastAppliedPricesRef.current = { ...prices };
-                            setPrices(best);
-                            pushJ?.(`Applied optimized ladder: ${best.good}/${best.better}/${best.best}`);
-                          }}
-                        >
-                          Apply optimized ladder
-                        </button>
-                        <button
-                          className="w-full text-sm border rounded px-3 py-2 bg-white hover:bg-gray-50 disabled:opacity-50"
-                          disabled={!lastAppliedPricesRef.current}
-                          onClick={() => {
-                            const prev = lastAppliedPricesRef.current;
-                            if (!prev) return;
-                            setPrices(prev);
-                            lastAppliedPricesRef.current = null;
-                            pushJ?.("Undo: restored ladder to previous prices");
-                          }}
-                        >
-                          Undo apply ladder
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-1 text-xs max-w-md space-y-1">
-                    <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
-                      Why this recommendation?
-                    </div>
-                    <ul className="list-disc ml-4 space-y-1 text-slate-700 leading-snug">
-                      {(() => {
-                        const binds = explainGaps(best, {
-                          gapGB: optConstraints.gapGB,
-                          gapBB: optConstraints.gapBB,
-                        });
-                        return binds.length ? binds.map((b, i) => <li key={i}>{b}</li>) : <li>No gap constraints binding.</li>;
-                      })()}
-                      {(() => {
-                        const td = topDriver(tornadoRowsOptim);
-                        return <li>Largest profit driver near optimum: {td ? td : "n/a"}</li>;
-                      })()}
-                      <li>
-                        Floors: pocket margin ≥ {Math.round(optConstraints.marginFloor.good * 100)}% /{" "}
-                        {Math.round(optConstraints.marginFloor.better * 100)}% / {Math.round(optConstraints.marginFloor.best * 100)}% (G/B/Best).
-                      </li>
-                    </ul>
-                  </div>
+                <div className="text-xs text-gray-700 mb-2">
+                  1) Upload your sales CSV &nbsp;→&nbsp; 2) Map columns &nbsp;→&nbsp; 3) Estimate.
+                  Use compact column names if possible; unknowns can be left blank.
                 </div>
-              );
-            })()}
-          </Section>
-
-          <Section id="methods" title="Methods">
-            <p className="text-sm text-gray-700 print-tight">
-              MNL: U = β₀(j) + βₚ·price + β_A·featA + β_B·featB; outside option
-              intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
-              ridge regularization.
-            </p>
-            {fitInfo && (
-              <div className="text-xs text-gray-600 mt-2">
-                logLik: {Math.round(fitInfo.logLik)} • iters: {fitInfo.iters} •{" "}
-                {fitInfo.converged ? "converged" : "not converged"}
-              </div>
-            )}
-          </Section>
-
-          <Section
-            id="pocket-price-waterfall"
-            title={
-              <span className="inline-flex items-center gap-2">
-                <span>Pocket Price Waterfall</span>
-                <InfoTip
-                  className="ml-1"
-                  align="right"
-                  id="chart.waterfall"
-                  ariaLabel="How does the pocket price waterfall work?"
-                />
-              </span>
-            }
-            className="print:bg-white print:shadow-none print:h-auto"
-            actions={
-              <ActionCluster chart="waterfall" id="waterfall-main" csv={true} />
-            }
-          >
-            <Explanation slot="chart.waterfall" className="px-3 py-1.5 text-[11px] leading-snug">
-              Desktop ChatGPT: write a short walkthrough of list plus pocket math, how to narrate promo/volume/payment
-              levers, and when to use channel blend vs. compare-all view. Include guidance on explaining to hiring
-              managers why pocket profit matters more than list profit in certain industries.
-            </Explanation>
-            <div className="grid gap-4 md:grid-cols-2 items-start text-xs">
-              {/* Controls */}
-              <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1 text-xs font-semibold text-slate-800">
-                    <span>Choose preset</span>
-                    <InfoTip className="ml-1" align="right" id="presets.waterfall" ariaLabel="About leak presets" />
-                  </div>
-                  <select
-                    className="h-9 w-full border rounded px-2 bg-white"
-                    value={presetSel}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setPresetSel(v);
-                      if (LEAK_PRESETS[v]) setLeak(LEAK_PRESETS[v]);
-                    }}
-                  >
-                    <option value="" disabled>
-                      Choose preset...
-                    </option>
-                    {Object.keys(LEAK_PRESETS).map((k) => (
-                      <option key={k} value={k}>
-                        {k}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="font-semibold text-slate-800">Chart shows tier</span>
-                  <div className="inline-flex overflow-hidden rounded border">
-                    {(["good", "better", "best"] as const).map((t) => (
-                      <button
-                        key={t}
-                        className={`px-3 py-1 capitalize ${waterTier === t ? "bg-gray-900 text-white" : "bg-white"}`}
-                        onClick={() => setWaterTier(t)}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[11px] text-gray-600 leading-snug">
-                    Tier discounts are per-tier (affect the selected tier's chart). Global leakages (payment, FX, refunds) apply to all tiers.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-slate-800">Tier discounts (%)</span>
-                    <span className="text-[11px] text-slate-500">Per selected tier</span>
-                  </div>
-                  <div className="space-y-1">
-                    {(["good", "better", "best"] as const).map((t) => (
-                      <div key={t} className="grid grid-cols-2 gap-2 sm:grid-cols-4 items-center">
-                        <span className="capitalize text-slate-700">{t} promo</span>
-                        <input
-                          type="number"
-                          step={0.01}
-                          className="h-9 w-full border rounded px-2 bg-white"
-                          value={leak.promo[t]}
-                          onChange={(e) =>
-                            setLeak((L) => ({
-                              ...L,
-                              promo: {
-                                ...L.promo,
-                                [t]: clamp01(Number(e.target.value)),
-                              },
-                            }))
-                          }
-                        />
-                        <span className="text-slate-700">Volume</span>
-                        <input
-                          type="number"
-                          step={0.01}
-                          className="h-9 w-full border rounded px-2 bg-white"
-                          value={leak.volume[t]}
-                          onChange={(e) =>
-                            setLeak((L) => ({
-                              ...L,
-                              volume: {
-                                ...L.volume,
-                                [t]: clamp01(Number(e.target.value)),
-                              },
-                            }))
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    className="w-full md:w-auto border rounded px-3 py-2 bg-white hover:bg-gray-50"
-                    onClick={() =>
-                      setLeak((L) => {
-                        const t = waterTier;
-                        return {
-                          ...L,
-                          promo: {
-                            good: L.promo[t],
-                            better: L.promo[t],
-                            best: L.promo[t],
-                          },
-                          volume: {
-                            good: L.volume[t],
-                            better: L.volume[t],
-                            best: L.volume[t],
-                          },
-                        };
-                      })
+                <SalesImport
+                  onApply={({ segments, diagnostics, stats }) => {
+                    const segs = mapFitToSegments(segments);
+                    setSegments(segs);
+                    if (
+                      !stats ||
+                      !stats.priceRange ||
+                      !setPriceRangeFromData(
+                        stats.priceRange,
+                        stats.priceRangeSource ?? "imported"
+                      )
+                    ) {
+                      fallbackToSyntheticRanges();
                     }
-                    title="Copy the selected tier's promo/volume to the other tiers"
-                  >
-                    Copy this tier to others
-                  </button>
-                </div>
+                    setFitInfo(diagnostics);
+                    pushJ?.(
+                      `[${now()}] Estimated from sales data (logLik=${Math.round(
+                        diagnostics.logLik
+                      )}, iters=${diagnostics.iters}, converged=${diagnostics.converged})`
+                    );
+                    toast("success", "Applied latent-class estimate");
+                  }}
+                  onToast={(kind, msg) => toast(kind, msg)}
+                  onDone={() => setShowSalesImport(false)}
+                />
+              </Modal>
+            </div>
+          )}
 
-                <div className="space-y-2">
-                  <div className="font-semibold text-slate-800">Global leakages</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="flex flex-col gap-1 font-semibold text-slate-800">
-                      <span>Payment %</span>
-                      <input
-                        type="number"
-                        step={0.001}
-                        className="h-9 w-full border rounded px-2 bg-white"
-                        value={leak.paymentPct}
-                        onChange={(e) =>
-                          setLeak((L) => ({
-                            ...L,
-                            paymentPct: clamp01(Number(e.target.value)),
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 font-semibold text-slate-800">
-                      <span>Payment $</span>
-                      <input
-                        type="number"
-                        step={0.01}
-                        className="h-9 w-full border rounded px-2 bg-white"
-                        value={leak.paymentFixed}
-                        onChange={(e) =>
-                          setLeak((L) => ({
-                            ...L,
-                            paymentFixed: Math.max(0, Number(e.target.value)),
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 font-semibold text-slate-800">
-                      <span>FX %</span>
-                      <input
-                        type="number"
-                        step={0.001}
-                        className="h-9 w-full border rounded px-2 bg-white"
-                        value={leak.fxPct}
-                        onChange={(e) =>
-                          setLeak((L) => ({
-                            ...L,
-                            fxPct: clamp01(Number(e.target.value)),
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 font-semibold text-slate-800">
-                      <span>Refunds %</span>
-                      <input
-                        type="number"
-                        step={0.001}
-                        className="h-9 w-full border rounded px-2 bg-white"
-                        value={leak.refundsPct}
-                        onChange={(e) =>
-                          setLeak((L) => ({
-                            ...L,
-                            refundsPct: clamp01(Number(e.target.value)),
-                          }))
-                        }
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
+          {leftColumnTab === "adjust" && (
+            <div role="tabpanel" id="tab-adjust-scenario" aria-labelledby="tab-btn-adjust" className="space-y-3 md:space-y-4 min-w-0">
+              {adjustSubTab === "sliders" && (
+          <Section id="scenario" title="Scenario Panel" className="left-rail-scroll overflow-x-auto order-1">
+                      <div className="shrink-0 space-y-4">
+                      </div>
+                      <div id="scenarioScroll" className="flex-1 min-h-0 overflow-y-auto pr-2 pb-4">
+                        {(["good", "better", "best"] as const).map((tier) => (
+                          <div key={tier} className="space-y-1">
+                            <label className="block text-sm font-medium capitalize">
+                              {tier} price (${prices[tier].toLocaleString(undefined, { maximumFractionDigits: 2 })})
+                            </label>
+                            <div className="flex items-center gap-2 w-full">
+                              <input
+                                type="range"
+                                min={sliderMin}
+                                max={sliderMax}
+                                step={0.01}
+                                value={prices[tier]}
+                                onFocus={() => beginPriceEdit(tier)}
+                                onPointerDown={() => beginPriceEdit(tier)}
+                                onMouseDown={() => beginPriceEdit(tier)}
+                                onTouchStart={() => beginPriceEdit(tier)}
+                                onChange={(e) => updatePrice(tier, Number(e.target.value))}
+                                onPointerUp={() => commitPriceEdit(tier)}
+                                onPointerCancel={() => commitPriceEdit(tier)}
+                                onMouseUp={() => commitPriceEdit(tier)}
+                                onTouchEnd={() => commitPriceEdit(tier)}
+                                onBlur={() => commitPriceEdit(tier)}
+                                className="flex-[1.4] min-w-[140px] max-w-[220px]"
+                                aria-label={`${tier} price slider`}
+                              />
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                inputMode="decimal"
+                              value={prices[tier]}
+                              onFocus={() => beginPriceEdit(tier)}
+                              onChange={(e) => updatePrice(tier, Number(e.target.value))}
+                              onBlur={(e) => commitPriceEdit(tier, Number(e.target.value))}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  (e.currentTarget as HTMLInputElement).blur();
+                                }
+                              }}
+                                className="w-24 border rounded px-2 py-1 text-sm"
+                                aria-label={`${tier} price input`}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 mt-2">
+                        {(["good", "better", "best"] as const).map((tier) => (
+                          <div key={tier} className="text-xs">
+                            <div className="font-semibold capitalize mb-1">
+                              {tier} cost
+                            </div>
+                            <input
+                              type="number"
+                              value={costs[tier]}
+                              onFocus={() => beginCostEdit(tier)}
+                              onChange={(e) => {
+                                const to = Number(e.target.value || 0);
+                                setCosts((c) => ({ ...c, [tier]: to }));
+                              }}
+                              onBlur={(e) => commitCostEdit(tier, Number(e.target.value))}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  (e.currentTarget as HTMLInputElement).blur();
+                                }
+                              }}
+                              className="w-full border rounded px-2 py-1"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 mt-2">
+                        {(["good", "better", "best"] as const).map((tier) => (
+                          <label
+                            key={`A-${tier}`}
+                            className="text-xs flex items-center gap-2"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!features.featA[tier]}
+                              onChange={() =>
+                                setFeatures((f) => {
+                                  const on = !f.featA[tier];
+                                  pushJ(formatToggle("FeatA", tier, on));
+                                  return {
+                                    ...f,
+                                    featA: { ...f.featA, [tier]: on ? 1 : 0 },
+                                  };
+                                })
+                              }
+                            />
+                            FeatA {tier}
+                          </label>
+                        ))}
+                        {(["good", "better", "best"] as const).map((tier) => (
+                          <label
+                            key={`B-${tier}`}
+                            className="text-xs flex items-center gap-2"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!features.featB[tier]}
+                              onChange={() =>
+                                setFeatures((f) => {
+                                  const on = !f.featB[tier];
+                                  pushJ(formatToggle("FeatB", tier, on));
+                                  return {
+                                    ...f,
+                                    featB: { ...f.featB, [tier]: on ? 1 : 0 },
+                                  };
+                                })
+                              }
+                            />
+                            FeatB {tier}
+                          </label>
+                        ))}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50"
+                          onClick={() => {
+                            localStorage.removeItem("po:prices");
+                            localStorage.removeItem("po:costs");
+                            localStorage.removeItem("po:refs");
+                            localStorage.removeItem("po:leak");
+                            localStorage.removeItem("po:constraints");
+                            // You can also hard reset state if you want immediate UI reflect:
+                            setPrices({ good: 9, better: 15, best: 25 });
+                            setCosts({ good: 3, better: 5, best: 8 });
+                            setRefPrices({ good: 10, better: 18, best: 30 });
+                            setLeak({ promo: { good: 0.05, better: 0.05, best: 0.05 }, volume: { good: 0.03, better: 0.03, best: 0.03 }, paymentPct: 0.029, paymentFixed: 0.3, fxPct: 0, refundsPct: 0.02 });
+                            setOptConstraints({ gapGB: 2, gapBB: 4, marginFloor: { good: 0.25, better: 0.25, best: 0.25 }, charm: false, usePocketProfit: false, usePocketMargins: false });
+                          }}
+                          aria-label="Reset all settings to defaults"
+                        >
+                          Reset defaults
+                        </button>
+                      </div>
+                    </Section>
+              )}
+              {adjustSubTab === "segments" && (
+          <Section
+                      id="customer-segments"
+                      title={
+                        <span className="inline-flex items-center gap-2">
+                          <span>Customer Segments</span>
+                          <InfoTip
+                            id="segments.mix"
+                            ariaLabel="Adjust segment mix and review narratives"
+                            align="right"
+                          />
+                        </span>
+                      }
+                      actions={
+                        <button
+                          className="text-xs border rounded px-2 py-1"
+                          onClick={() => setSegments(normalizeWeights(segments))}
+                        >
+                          Normalize to 100%
+                        </button>
+                      } 
+                      className="order-2"
+                    >
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        {segments.map((seg, i) => {
+                          const lines = describeSegment(seg);
+                          return (
+                            <div
+                              key={seg.name}
+                              className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 shadow-sm space-y-2"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                                    Segment
+                                  </div>
+                                  <div className="text-base font-semibold text-slate-900">
+                                    {seg.name}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-[11px] text-slate-500">Weight</div>
+                                  <div className="text-sm font-semibold text-slate-900">
+                                    {Math.round(seg.weight * 100)}%
+                                  </div>
+                                </div>
+                              </div>
 
-              {/* Chart + optional views */}
-              <div className="space-y-3 min-w-0">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-700">Pocket Price Waterfall</div>
-                    <div className="text-[11px] text-slate-600">
-                      Showing {waterTier} tier - list ${listForWater.toFixed(2)}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-600">
-                    {WATERFALL_LEGEND.map((entry) => (
-                      <span
-                        key={entry.key}
-                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1"
-                        aria-label={`${entry.label} legend item`}
-                      >
-                        <span
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: entry.color }}
-                          aria-hidden="true"
-                        />
-                        <span className="font-semibold text-slate-800">{entry.label}</span>
-                        <InfoTip
-                          id={entry.infoId}
-                          ariaLabel={entry.aria}
-                          align="left"
-                          className="text-slate-500"
-                        />
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <Suspense
-                  fallback={
-                    <div className="text-xs text-gray-500 p-2">
-                      Loading waterfall...
-                    </div>
-                  }
-                >
-                  <ErrorBoundary title="Waterfall chart failed">
-                    <Waterfall
-                      chartId="waterfall-main"
-                      title="Pocket Price Waterfall"
-                      subtitle={`${waterTier} - list $${listForWater.toFixed(2)}`}
-                      listPrice={listForWater}
-                      steps={water.steps}
-                      colorMap={WATERFALL_COLOR_MAP}
-                    />
-                  </ErrorBoundary>
-                </Suspense>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={1}
+                                  step={0.01}
+                                  value={seg.weight}
+                                  onChange={(e) => {
+                                    const w = Number(e.target.value);
+                                    const next = segments.map((t, j) =>
+                                      j === i ? { ...t, weight: w } : t
+                                    );
+                                    setSegments(normalizeWeights(next));
+                                  }}
+                                  className="flex-1"
+                                  aria-label={`${seg.name} weight slider`}
+                                />
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  step={1}
+                                  value={Math.round(seg.weight * 100)}
+                                  onChange={(e) => {
+                                    const pct = Number(e.target.value);
+                                    if (!Number.isFinite(pct)) return;
+                                    const clamped = Math.max(0, Math.min(100, pct));
+                                    const w = clamped / 100;
+                                    const next = segments.map((t, j) =>
+                                      j === i ? { ...t, weight: w } : t
+                                    );
+                                    setSegments(normalizeWeights(next));
+                                  }}
+                                  className="w-16 border rounded px-2 py-1 text-right"
+                                  aria-label={`${seg.name} weight percent`}
+                                />
+                              </div>
 
-                {/* ---- Compare all tiers (small multiples) ---- */}
-                <details className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
-                  <summary className="cursor-pointer select-none text-xs font-semibold">
-                    Compare all tiers
-                  </summary>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
-                    {(["good", "better", "best"] as const).map((t) => {
-                      const list =
-                        t === "good"
-                          ? prices.good
-                          : t === "better"
-                          ? prices.better
-                          : prices.best;
-                      const wf = computePocketPrice(list, t, leak);
-                      return (
-                        <div key={t} className="min-w-0 h-56 overflow-hidden print:h-48">
+                              <div className="mt-2">
+                                <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                                  Story
+                                </div>
+                                <ul className="mt-1 space-y-1 list-disc list-inside text-slate-600">
+                                  {lines.map((line, idx) => (
+                                    <li key={`${seg.name}-line-${idx}`}>{line}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </Section>
+              )}
+              {adjustSubTab === "leakages" && (
+          <Section
+                      id="pocket-price-waterfall"
+                      title={
+                        <span className="inline-flex items-center gap-2">
+                          <span>Pocket Price Waterfall</span>
+                          <InfoTip
+                            className="ml-1"
+                            align="right"
+                            id="chart.waterfall"
+                            ariaLabel="How does the pocket price waterfall work?"
+                          />
+                        </span>
+                      }
+                      className="print:bg-white print:shadow-none print:h-auto"
+                      actions={
+                        <ActionCluster chart="waterfall" id="waterfall-main" csv={true} />
+                      }
+                    >
+                      <Explanation slot="chart.waterfall" className="px-3 py-1.5 text-[11px] leading-snug">
+                        Desktop ChatGPT: write a short walkthrough of list plus pocket math, how to narrate promo/volume/payment
+                        levers, and when to use channel blend vs. compare-all view. Include guidance on explaining to hiring
+                        managers why pocket profit matters more than list profit in certain industries.
+                      </Explanation>
+                      <div className="grid gap-4 md:grid-cols-2 items-start text-xs">
+                        {/* Controls */}
+                        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1 text-xs font-semibold text-slate-800">
+                              <span>Choose preset</span>
+                              <InfoTip className="ml-1" align="right" id="presets.waterfall" ariaLabel="About leak presets" />
+                            </div>
+                            <select
+                              className="h-9 w-full border rounded px-2 bg-white"
+                              value={presetSel}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setPresetSel(v);
+                                if (LEAK_PRESETS[v]) setLeak(LEAK_PRESETS[v]);
+                              }}
+                            >
+                              <option value="" disabled>
+                                Choose preset...
+                              </option>
+                              {Object.keys(LEAK_PRESETS).map((k) => (
+                                <option key={k} value={k}>
+                                  {k}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <span className="font-semibold text-slate-800">Chart shows tier</span>
+                            <div className="inline-flex overflow-hidden rounded border">
+                              {(["good", "better", "best"] as const).map((t) => (
+                                <button
+                                  key={t}
+                                  className={`px-3 py-1 capitalize ${waterTier === t ? "bg-gray-900 text-white" : "bg-white"}`}
+                                  onClick={() => setWaterTier(t)}
+                                >
+                                  {t}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="text-[11px] text-gray-600 leading-snug">
+                              Tier discounts are per-tier (affect the selected tier's chart). Global leakages (payment, FX, refunds) apply to all tiers.
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-slate-800">Tier discounts (%)</span>
+                              <span className="text-[11px] text-slate-500">Per selected tier</span>
+                            </div>
+                            <div className="space-y-1">
+                              {(["good", "better", "best"] as const).map((t) => (
+                                <div key={t} className="grid grid-cols-2 gap-2 sm:grid-cols-4 items-center">
+                                  <span className="capitalize text-slate-700">{t} promo</span>
+                                  <input
+                                    type="number"
+                                    step={0.01}
+                                    className="h-9 w-full border rounded px-2 bg-white"
+                                    value={leak.promo[t]}
+                                    onChange={(e) =>
+                                      setLeak((L) => ({
+                                        ...L,
+                                        promo: {
+                                          ...L.promo,
+                                          [t]: clamp01(Number(e.target.value)),
+                                        },
+                                      }))
+                                    }
+                                  />
+                                  <span className="text-slate-700">Volume</span>
+                                  <input
+                                    type="number"
+                                    step={0.01}
+                                    className="h-9 w-full border rounded px-2 bg-white"
+                                    value={leak.volume[t]}
+                                    onChange={(e) =>
+                                      setLeak((L) => ({
+                                        ...L,
+                                        volume: {
+                                          ...L.volume,
+                                          [t]: clamp01(Number(e.target.value)),
+                                        },
+                                      }))
+                                    }
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              className="w-full md:w-auto border rounded px-3 py-2 bg-white hover:bg-gray-50"
+                              onClick={() =>
+                                setLeak((L) => {
+                                  const t = waterTier;
+                                  return {
+                                    ...L,
+                                    promo: {
+                                      good: L.promo[t],
+                                      better: L.promo[t],
+                                      best: L.promo[t],
+                                    },
+                                    volume: {
+                                      good: L.volume[t],
+                                      better: L.volume[t],
+                                      best: L.volume[t],
+                                    },
+                                  };
+                                })
+                              }
+                              title="Copy the selected tier's promo/volume to the other tiers"
+                            >
+                              Copy this tier to others
+                            </button>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="font-semibold text-slate-800">Global leakages</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <label className="flex flex-col gap-1 font-semibold text-slate-800">
+                                <span>Payment %</span>
+                                <input
+                                  type="number"
+                                  step={0.001}
+                                  className="h-9 w-full border rounded px-2 bg-white"
+                                  value={leak.paymentPct}
+                                  onChange={(e) =>
+                                    setLeak((L) => ({
+                                      ...L,
+                                      paymentPct: clamp01(Number(e.target.value)),
+                                    }))
+                                  }
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 font-semibold text-slate-800">
+                                <span>Payment $</span>
+                                <input
+                                  type="number"
+                                  step={0.01}
+                                  className="h-9 w-full border rounded px-2 bg-white"
+                                  value={leak.paymentFixed}
+                                  onChange={(e) =>
+                                    setLeak((L) => ({
+                                      ...L,
+                                      paymentFixed: Math.max(0, Number(e.target.value)),
+                                    }))
+                                  }
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 font-semibold text-slate-800">
+                                <span>FX %</span>
+                                <input
+                                  type="number"
+                                  step={0.001}
+                                  className="h-9 w-full border rounded px-2 bg-white"
+                                  value={leak.fxPct}
+                                  onChange={(e) =>
+                                    setLeak((L) => ({
+                                      ...L,
+                                      fxPct: clamp01(Number(e.target.value)),
+                                    }))
+                                  }
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 font-semibold text-slate-800">
+                                <span>Refunds %</span>
+                                <input
+                                  type="number"
+                                  step={0.001}
+                                  className="h-9 w-full border rounded px-2 bg-white"
+                                  value={leak.refundsPct}
+                                  onChange={(e) =>
+                                    setLeak((L) => ({
+                                      ...L,
+                                      refundsPct: clamp01(Number(e.target.value)),
+                                    }))
+                                  }
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Chart + optional views */}
+                        <div className="space-y-3 min-w-0">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <div className="text-sm font-semibold text-slate-700">Pocket Price Waterfall</div>
+                              <div className="text-[11px] text-slate-600">
+                                Showing {waterTier} tier - list ${listForWater.toFixed(2)}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-600">
+                              {WATERFALL_LEGEND.map((entry) => (
+                                <span
+                                  key={entry.key}
+                                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1"
+                                  aria-label={`${entry.label} legend item`}
+                                >
+                                  <span
+                                    className="h-2 w-2 rounded-full"
+                                    style={{ backgroundColor: entry.color }}
+                                    aria-hidden="true"
+                                  />
+                                  <span className="font-semibold text-slate-800">{entry.label}</span>
+                                  <InfoTip
+                                    id={entry.infoId}
+                                    ariaLabel={entry.aria}
+                                    align="left"
+                                    className="text-slate-500"
+                                  />
+                                </span>
+                              ))}
+                            </div>
+                          </div>
                           <Suspense
                             fallback={
                               <div className="text-xs text-gray-500 p-2">
-                                Loading...
+                                Loading waterfall...
                               </div>
                             }
                           >
-                            <ErrorBoundary title="Waterfall mini chart failed">
+                            <ErrorBoundary title="Waterfall chart failed">
                               <Waterfall
-                                title={t}
-                                subtitle={`list $${list.toFixed(2)}`}
-                                listPrice={list}
-                                steps={wf.steps}
-                                variant="mini"
+                                chartId="waterfall-main"
+                                title="Pocket Price Waterfall"
+                                subtitle={`${waterTier} - list $${listForWater.toFixed(2)}`}
+                                listPrice={listForWater}
+                                steps={water.steps}
                                 colorMap={WATERFALL_COLOR_MAP}
                               />
                             </ErrorBoundary>
                           </Suspense>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </details>
 
-                {/* ---- Channel blend (optional) ---- */}
-                <details className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
-                  <summary className="cursor-pointer select-none text-xs font-semibold">
-                    Channel blend (optional)
-                  </summary>
-                  <div className="mt-2 space-y-2">
-                    {channelMix.map((row, i) => (
-                      <div key={i} className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2">
-                        <span className="text-[11px] text-slate-600">Row {i + 1}</span>
-                        <div className="inline-flex items-center gap-1">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            className="border rounded px-2 h-8 w-20"
-                            value={row.w}
-                            onChange={(e) => {
-                              const v = Math.max(0, Math.min(100, Number(e.target.value)));
-                              setChannelMix((cur) => cur.map((r, j) => (j === i ? { ...r, w: v } : r)));
+                          {/* ---- Compare all tiers (small multiples) ---- */}
+                          <details className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
+                            <summary className="cursor-pointer select-none text-xs font-semibold">
+                              Compare all tiers
+                            </summary>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
+                              {(["good", "better", "best"] as const).map((t) => {
+                                const list =
+                                  t === "good"
+                                    ? prices.good
+                                    : t === "better"
+                                    ? prices.better
+                                    : prices.best;
+                                const wf = computePocketPrice(list, t, leak);
+                                return (
+                                  <div key={t} className="min-w-0 h-56 overflow-hidden print:h-48">
+                                    <Suspense
+                                      fallback={
+                                        <div className="text-xs text-gray-500 p-2">
+                                          Loading...
+                                        </div>
+                                      }
+                                    >
+                                      <ErrorBoundary title="Waterfall mini chart failed">
+                                        <Waterfall
+                                          title={t}
+                                          subtitle={`list $${list.toFixed(2)}`}
+                                          listPrice={list}
+                                          steps={wf.steps}
+                                          variant="mini"
+                                          colorMap={WATERFALL_COLOR_MAP}
+                                        />
+                                      </ErrorBoundary>
+                                    </Suspense>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </details>
+
+                          {/* ---- Channel blend (optional) ---- */}
+                          <details className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
+                            <summary className="cursor-pointer select-none text-xs font-semibold">
+                              Channel blend (optional)
+                            </summary>
+                            <div className="mt-2 space-y-2">
+                              {channelMix.map((row, i) => (
+                                <div key={i} className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2">
+                                  <span className="text-[11px] text-slate-600">Row {i + 1}</span>
+                                  <div className="inline-flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      className="border rounded px-2 h-8 w-20"
+                                      value={row.w}
+                                      onChange={(e) => {
+                                        const v = Math.max(0, Math.min(100, Number(e.target.value)));
+                                        setChannelMix((cur) => cur.map((r, j) => (j === i ? { ...r, w: v } : r)));
+                                      }}
+                                    />
+                                    <span>%</span>
+                                  </div>
+                                  <select
+                                    className="border rounded px-2 h-8 w-full"
+                                    value={row.preset}
+                                    onChange={(e) =>
+                                      setChannelMix((cur) =>
+                                        cur.map((r, j) => (j === i ? { ...r, preset: e.target.value } : r))
+                                      )
+                                    }
+                                  >
+                                    {Object.keys(LEAK_PRESETS).map((k) => (
+                                      <option key={k} value={k}>
+                                        {k}
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  <button
+                                    className="border rounded px-2 h-8 bg-white hover:bg-gray-50"
+                                    onClick={() => setChannelMix((cur) => cur.filter((_, j) => j !== i))}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ))}
+
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  className="border rounded px-3 py-2 bg-white hover:bg-gray-50"
+                                  onClick={() =>
+                                    setChannelMix((cur) => [
+                                      ...cur,
+                                      { preset: Object.keys(LEAK_PRESETS)[0], w: 0 },
+                                    ])
+                                  }
+                                >
+                                  Add row
+                                </button>
+                                <div className="inline-flex flex-wrap items-center gap-2">
+                                  <button
+                                    className="border rounded px-3 py-2 bg-white hover:bg-gray-50"
+                                    onClick={() =>
+                                      setChannelMix((cur) => {
+                                        const sum = cur.reduce((s, r) => s + (isFinite(r.w) ? r.w : 0), 0) || 1;
+                                        return cur.map((r) => ({
+                                          ...r,
+                                          w: Math.round((r.w / sum) * 100),
+                                        }));
+                                      })
+                                    }
+                                  >
+                                    Normalize %
+                                  </button>
+                                  <button
+                                    className="border rounded px-3 py-2 bg-white hover:bg-gray-50"
+                                    onClick={() => {
+                                      const rows = channelMix.map((r) => ({
+                                        w: r.w,
+                                        preset: r.preset,
+                                      }));
+                                      const blended = blendLeaks(rows);
+                                      setLeak(blended);
+                                    }}
+                                  >
+                                    Blend now -&gt; apply to leakages
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </details>
+                        </div>
+                      </div>
+                    </Section>
+              )}
+            </div>
+          )}
+
+          {leftColumnTab === "save" && (
+            <div role="tabpanel" id="tab-save-scenario" aria-labelledby="tab-btn-save" className="space-y-3 md:space-y-4 min-w-0">
+              <Section id="scenario-baseline" title="Scenario baseline">
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <button
+                    type="button"
+                    className="rounded border border-slate-300 px-3 py-2 font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      const snapshot = buildScenarioSnapshot({
+                        prices,
+                        costs,
+                        features,
+                        refPrices,
+                        leak,
+                        segments,
+                        tornadoPocket,
+                        tornadoPriceBump,
+                        tornadoPctBump,
+                        tornadoRangeMode,
+                        retentionPct,
+                        kpiFloorAdj,
+                        priceRange: priceRangeState,
+                      });
+                      setScenarioBaseline({ snapshot, savedAt: Date.now() });
+                      toast("success", "Saved scenario baseline");
+                    }}
+                  >
+                    Set current scenario to baseline now
+                  </button>
+                  <div className="text-xs text-gray-600">
+                    {scenarioBaseline
+                      ? `Baseline saved ${new Date(scenarioBaseline.savedAt).toLocaleString()}`
+                      : "No scenario baseline saved yet."}
+                  </div>
+                </div>
+              </Section>
+          <Section id="compare-board" title="Scenario Compare (A/B/C)" className="order-3">
+                      <Explanation slot="chart.compareBoard">
+                        Desktop ChatGPT: describe how to position these A/B/C slots during interviews — e.g., “Save current,
+                        branch, then reload while screen-sharing.” Mention how KPIs update and how to interpret gaps between
+                        saved ladders.
+                      </Explanation>
+                      <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
+                        <span className="text-gray-600">Save current to:</span>
+                        {(["A", "B", "C"] as const).map((id) => (
+                          <button
+                            key={id}
+                            className="border rounded px-2 py-1 bg-white hover:bg-gray-50"
+                            onClick={() => saveToSlot(id)}
+                          >
+                            Save to {id}
+                          </button>
+                        ))}
+                      </div>
+
+                      {(() => {
+                        // derive KPIs for the board
+                        const usePocket = !!optConstraints.usePocketProfit;
+                        const curKPIs = kpisFromSnapshot(
+                          { prices, costs, features, refPrices, leak, segments },
+                          N,
+                          usePocket
+                        );
+
+                        const objA = readSlot("A");
+                        const objB = readSlot("B");
+                        const objC = readSlot("C");
+
+                        const slots: Record<"A" | "B" | "C", SnapshotKPIs | null> = {
+                          A: objA
+                            ? {
+                                ...kpisFromSnapshot(
+                                  {
+                                    prices: objA.prices,
+                                    costs: objA.costs,
+                                    features: objA.features,
+                                    refPrices: objA.refPrices ? objA.refPrices : refPrices,
+                                    leak: objA.leak ? objA.leak : leak,
+                                    segments, // reuse current mix
+                                  },
+                                  N,
+                                  usePocket
+                                ),
+                                title: "Saved A",
+                              }
+                            : null,
+
+                          B: objB
+                            ? {
+                                ...kpisFromSnapshot(
+                                  {
+                                    prices: objB.prices,
+                                    costs: objB.costs,
+                                    features: objB.features,
+                                    refPrices: objB.refPrices ? objB.refPrices : refPrices,
+                                    leak: objB.leak ? objB.leak : leak,
+                                    segments,
+                                  },
+                                  N,
+                                  usePocket
+                                ),
+                                title: "Saved B",
+                              }
+                            : null,
+                          C: objC
+                            ? {
+                                ...kpisFromSnapshot(
+                                  {
+                                    prices: objC.prices,
+                                    costs: objC.costs,
+                                    features: objC.features,
+                                    refPrices: objC.refPrices ? objC.refPrices : refPrices,
+                                    leak: objC.leak ? objC.leak : leak,
+                                    segments,
+                                  },
+                                  N,
+                                  usePocket
+                                ),
+                                title: "Saved C",
+                              }
+                            : null,
+                        };
+
+                        return (
+                          <CompareBoard
+                            slots={slots}
+                            current={curKPIs}
+                            onLoad={(id: "A" | "B" | "C") => loadFromSlot(id)}
+                            onClear={(id: "A" | "B" | "C") => {
+                              clearSlot(id);
+                              toast("info", `Cleared slot ${id}`);
+                              setJournal((j) => [...j]);
                             }}
                           />
-                          <span>%</span>
+                        );
+                      })()}
+                    </Section>
+              <Section id="share-links" title="Share & export">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <button
+                    className="text-xs border px-2 py-1 rounded"
+                    onClick={saveScenarioShortLink}
+                    title="Create a short link (saved in Cloudflare KV)"
+                  >
+                    Save short link
+                  </button>
+                  <button
+                    className="border rounded px-2 py-1 text-sm bg-white hover:bg-gray-50"
+                    onClick={handleCopyLink}
+                  >
+                    Copy link
+                  </button>
+                  <button
+                    className="text-xs border px-2 py-1 rounded"
+                    onClick={handleCopyLongUrl}
+                  >
+                    Copy long URL
+                  </button>
+                  <button
+                    className="text-xs border px-2 py-1 rounded"
+                    onClick={handleExportJson}
+                  >
+                    Export JSON
+                  </button>
+                  <button
+                    className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                    onClick={handleExportCsv}
+                  >
+                    Export Sales Parameters CSV
+                  </button>
+                </div>
+              </Section>
+          <Section id="recent-short-links" title="Recent short links" className="order-5">
+                      <details className="text-xs">
+                        <summary className="cursor-pointer select-none font-medium mb-2">
+                          Show recents
+                        </summary>
+
+                        <ul className="text-xs space-y-1">
+                          {readRecents().length === 0 ? (
+                            <li className="text-gray-500">None yet</li>
+                          ) : (
+                            readRecents().map((r) => (
+                              <li
+                                key={r.id}
+                                className="flex items-center justify-between gap-2"
+                              >
+                                <button
+                                  className="underline"
+                                  title={new Date(r.t).toLocaleString()}
+                                  onClick={() => {
+                                    const url = `${location.origin}${location.pathname}?s=${r.id}`;
+                                    location.assign(url); // reload page with this id
+                                  }}
+                                >
+                                  {r.id}
+                                </button>
+                                <button
+                                  className="border rounded px-2 py-0.5"
+                                  onClick={() => {
+                                    const url = `${location.origin}${location.pathname}?s=${r.id}`;
+                                    navigator.clipboard.writeText(url).catch(() => {});
+                                    pushJ(`[${now()}] Copied short link ${r.id}`);
+                                  }}
+                                >
+                                  Copy
+                                </button>
+                              </li>
+                            ))
+                          )}
+                        </ul>
+                        <div className="mt-2">
+                          <button
+                            className="text-xs border rounded px-2 py-1"
+                            onClick={() => {
+                              localStorage.removeItem(RECENT_KEY);
+                              pushJ(`[${now()}] Cleared recent short links`);
+                              location.reload();
+                            }}
+                          >
+                            Clear recents
+                          </button>
                         </div>
-                        <select
-                          className="border rounded px-2 h-8 w-full"
-                          value={row.preset}
-                          onChange={(e) =>
-                            setChannelMix((cur) =>
-                              cur.map((r, j) => (j === i ? { ...r, preset: e.target.value } : r))
-                            )
-                          }
-                        >
-                          {Object.keys(LEAK_PRESETS).map((k) => (
-                            <option key={k} value={k}>
-                              {k}
-                            </option>
-                          ))}
-                        </select>
-
+                      </details>
+                    </Section>
+          <Section id="scenario-journal" title="Scenario Journal" className="order-4">
+                      <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
+                        {journal.length === 0 ? (
+                          <li className="text-gray-400">
+                            Adjust sliders/toggles to log changes…
+                          </li>
+                        ) : (
+                          journal.map((line, i) => <li key={i}>{line}</li>)
+                        )}
+                        <li>
+                          Revenue (N=1000): <strong>{fmtUSD(revenue)}</strong>
+                        </li>
+                        <li>
+                          Profit (N=1000): <strong>{fmtUSD(profit)}</strong>
+                        </li>
+                        <li>
+                          Active customers:{" "}
+                          <strong>{activeCustomers.toLocaleString()}</strong>
+                        </li>
+                        <li>
+                          ARPU (active only): <strong>{fmtUSD(arpu)}</strong>
+                        </li>
+                        <li>
+                          Profit / customer (all N):{" "}
+                          <strong>{fmtUSD(profitPerCustomer)}</strong>
+                        </li>
+                        <li>
+                          Gross margin: <strong>{fmtPct(grossMarginPct)}</strong>
+                        </li>
+                      </ul>
+                      <div className="mt-2 flex gap-2">
                         <button
-                          className="border rounded px-2 h-8 bg-white hover:bg-gray-50"
-                          onClick={() => setChannelMix((cur) => cur.filter((_, j) => j !== i))}
+                          className="text-xs border px-2 py-1 rounded"
+                          onClick={() => setJournal([])}
                         >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        className="border rounded px-3 py-2 bg-white hover:bg-gray-50"
-                        onClick={() =>
-                          setChannelMix((cur) => [
-                            ...cur,
-                            { preset: Object.keys(LEAK_PRESETS)[0], w: 0 },
-                          ])
-                        }
-                      >
-                        Add row
-                      </button>
-                      <div className="inline-flex flex-wrap items-center gap-2">
-                        <button
-                          className="border rounded px-3 py-2 bg-white hover:bg-gray-50"
-                          onClick={() =>
-                            setChannelMix((cur) => {
-                              const sum = cur.reduce((s, r) => s + (isFinite(r.w) ? r.w : 0), 0) || 1;
-                              return cur.map((r) => ({
-                                ...r,
-                                w: Math.round((r.w / sum) * 100),
-                              }));
-                            })
-                          }
-                        >
-                          Normalize %
+                          Clear
                         </button>
                         <button
-                          className="border rounded px-3 py-2 bg-white hover:bg-gray-50"
+                          className="text-xs border px-2 py-1 rounded"
                           onClick={() => {
-                            const rows = channelMix.map((r) => ({
-                              w: r.w,
-                              preset: r.preset,
-                            }));
-                            const blended = blendLeaks(rows);
-                            setLeak(blended);
+                            const blob = new Blob([journal.slice().reverse().join("\n")], {
+                              type: "text/plain",
+                            });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = "scenario-journal.txt";
+                            a.click();
+                            URL.revokeObjectURL(url);
                           }}
                         >
-                          Blend now -&gt; apply to leakages
+                          Download .txt
                         </button>
                       </div>
-                    </div>
-                  </div>
-                </details>
-              </div>
+                    </Section>
             </div>
-          </Section>
+          )}
+
+          {leftColumnTab === "optimize" && (
+            <div role="tabpanel" id="tab-global-optimizer" aria-labelledby="tab-btn-optimizer" className="col-span-12 lg:col-span-3 space-y-3 md:space-y-4 min-w-0 self-start md:text-[13px] pr-1">
+          <Section id="global-optimizer" title="Global Optimizer">
+                      <Explanation slot="chart.optimizer">
+                        Desktop ChatGPT: provide copy that frames this as the “decision cockpit” — explain ranges, steps,
+                        charm-ending toggle, and pocket-vs-list guardrails. Call out how to cite binding constraints and what
+                        to say when the optimizer fails or returns no feasible ladder.
+                      </Explanation>
+                      {/* Compact header: inline ranges + actions */}
+                      <div className="flex flex-col gap-3">
+                        {/* Header row wraps nicely on small screens */}
+                        <div className="flex flex-wrap items-end gap-3 text-xs">
+                          <span className="font-semibold mr-2 basis-full sm:basis-auto">
+                            Ranges ($)
+                          </span>
+
+                          {/* Good */}
+                          <label className="flex items-center gap-1">
+                            <span className="w-12">Good</span>
+                            <input
+                              type="number"
+                              className="border rounded px-2 h-8 w-16"
+                              aria-label="Good min"
+                              value={optRanges.good[0]}
+                              onChange={(e) =>
+                                setOptRanges((r) => ({
+                                  ...r,
+                                  good: [Number(e.target.value), r.good[1]] as [
+                                    number,
+                                    number
+                                  ],
+                                }))
+                              }
+                            />
+                            <span>-</span>
+                            <input
+                              type="number"
+                              className="border rounded px-2 h-8 w-16"
+                              aria-label="Good max"
+                              value={optRanges.good[1]}
+                              onChange={(e) =>
+                                setOptRanges((r) => ({
+                                  ...r,
+                                  good: [r.good[0], Number(e.target.value)] as [
+                                    number,
+                                    number
+                                  ],
+                                }))
+                              }
+                            />
+                          </label>
+
+                          {/* Better */}
+                          <label className="flex items-center gap-1">
+                            <span className="w-12">Better</span>
+                            <input
+                              type="number"
+                              className="border rounded px-2 h-8 w-16"
+                              aria-label="Better min"
+                              value={optRanges.better[0]}
+                              onChange={(e) =>
+                                setOptRanges((r) => ({
+                                  ...r,
+                                  better: [Number(e.target.value), r.better[1]] as [
+                                    number,
+                                    number
+                                  ],
+                                }))
+                              }
+                            />
+                            <span>-</span>
+                            <input
+                              type="number"
+                              className="border rounded px-2 h-8 w-16"
+                              aria-label="Better max"
+                              value={optRanges.better[1]}
+                              onChange={(e) =>
+                                setOptRanges((r) => ({
+                                  ...r,
+                                  better: [r.better[0], Number(e.target.value)] as [
+                                    number,
+                                    number
+                                  ],
+                                }))
+                              }
+                            />
+                          </label>
+
+                          {/* Best */}
+                          <label className="flex items-center gap-1">
+                            <span className="w-12">Best</span>
+                            <input
+                              type="number"
+                              className="border rounded px-2 h-8 w-16"
+                              aria-label="Best min"
+                              value={optRanges.best[0]}
+                              onChange={(e) =>
+                                setOptRanges((r) => ({
+                                  ...r,
+                                  best: [Number(e.target.value), r.best[1]] as [
+                                    number,
+                                    number
+                                  ],
+                                }))
+                              }
+                            />
+                            <span>-</span>
+                            <input
+                              type="number"
+                              className="border rounded px-2 h-8 w-16"
+                              aria-label="Best max"
+                              value={optRanges.best[1]}
+                              onChange={(e) =>
+                                setOptRanges((r) => ({
+                                  ...r,
+                                  best: [r.best[0], Number(e.target.value)] as [
+                                    number,
+                                    number
+                                  ],
+                                }))
+                              }
+                            />
+                          </label>
+
+                          {/* Step */}
+                          <label className="flex items-center gap-1">
+                            <span className="w-8">Step</span>
+                            <input
+                              type="number"
+                              className="border rounded px-2 h-8 w-16"
+                              aria-label="Step"
+                              value={optRanges.step}
+                              onChange={(e) =>
+                                setOptRanges((r) => ({
+                                  ...r,
+                                  step: Math.max(0.25, Number(e.target.value)),
+                                }))
+                              }
+                            />
+                          </label>
+
+                          {/* Actions */}
+                          <div className="ml-auto flex items-center gap-2">
+                            <button
+                              className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50"
+                              onClick={runOptimizer}
+                              disabled={isOptRunning}
+                            >
+                              {isOptRunning ? "Running..." : "Run"}
+                            </button>
+                            <button
+                              className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50 disabled:opacity-50"
+                              onClick={applyOptimizedPrices}
+                              disabled={!optResult || isOptRunning}
+                            >
+                              Apply
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Result line (one-liner) */}
+                        <div className="text-xs text-gray-700">
+                          {optError && (
+                            <span className="text-red-600 mr-2">Error: {optError}</span>
+                          )}
+                          {optResult ? (
+                            <span>
+                              Best ladder ${optResult.prices.good}/$
+                              {optResult.prices.better}/${optResult.prices.best} -`&gt; Profit
+                              delta ${Math.round(optResult.profit)}
+                            </span>
+                          ) : (
+                            <span className="text-gray-500">No result yet</span>
+                          )}
+                        </div>
+                        {optResult && optimizerWhyLines.length > 0 && (
+                          <div className="mt-2 rounded border border-dashed border-gray-200 bg-slate-50 p-3">
+                            <div className="text-xs font-semibold text-slate-700 mb-1">
+                              Why these prices?
+                            </div>
+                            <ul className="list-disc ml-4 space-y-1 text-[11px] text-gray-700">
+                              {optimizerWhyLines.map((line, idx) => (
+                                <li key={idx}>{line}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        <details className="text-[11px] text-gray-600">
+                          <summary className="cursor-pointer select-none">
+                            How ranges & floors work
+                          </summary>
+                          <div className="mt-1 print-tight">
+                            Optimizer searches the grid defined by ranges and step. Gap
+                            constraints keep ladder spacing consistent. Floors can be
+                            checked on list or <em>pocket</em> margin. Use Apply to write
+                            prices back to the Scenario Panel.
+                          </div>
+                        </details>
+
+                        {/* Advanced constraints (collapsible) */}
+                        <details className="rounded border border-gray-200 p-3 bg-gray-50/60">
+                          <summary className="cursor-pointer select-none text-xs font-medium">
+                            Advanced constraints
+                          </summary>
+
+                          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                            <label className="flex items-center gap-2">
+                              <span className="w-28">Gap G-`&gt;B</span>
+                              <input
+                                type="number"
+                                className="border rounded px-2 h-8 flex-1"
+                                value={optConstraints.gapGB}
+                                onChange={(e) =>
+                                  setOptConstraints((c) => ({
+                                    ...c,
+                                    gapGB: Number(e.target.value),
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <span className="w-28">Gap B-`&gt;Best</span>
+                              <input
+                                type="number"
+                                className="border rounded px-2 h-8 flex-1"
+                                value={optConstraints.gapBB}
+                                onChange={(e) =>
+                                  setOptConstraints((c) => ({
+                                    ...c,
+                                    gapBB: Number(e.target.value),
+                                  }))
+                                }
+                              />
+                            </label>
+
+                            <div>
+                              <div className="text-[11px] font-semibold mb-1">
+                                Margin floors
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {(["good", "better", "best"] as const).map((t) => (
+                                  <label key={t} className="text-[11px]">
+                                    {t}
+                                    <input
+                                      type="number"
+                                      className="mt-1 w-full border rounded px-1 py-0.5"
+                                      value={optConstraints.marginFloor[t]}
+                                      step={0.01}
+                                      onChange={(e) =>
+                                        setOptConstraints((c) => ({
+                                          ...c,
+                                          marginFloor: {
+                                            ...c.marginFloor,
+                                            [t]: Number(e.target.value),
+                                          },
+                                        }))
+                                      }
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={optConstraints.charm}
+                                onChange={(e) =>
+                                  setOptConstraints((c) => ({
+                                    ...c,
+                                    charm: e.target.checked,
+                                  }))
+                                }
+                              />
+                              <span>Charm endings (.99)</span>
+                            </label>
+
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={optConstraints.usePocketMargins}
+                                onChange={(e) =>
+                                  setOptConstraints((c) => ({
+                                    ...c,
+                                    usePocketMargins: e.target.checked,
+                                  }))
+                                }
+                              />
+                              <span>
+                                Use <em>pocket</em> price for margin floors
+                              </span>
+                            </label>
+
+                            <p className="text-[11px] text-gray-500 sm:col-span-2 print-tight">
+                              When enabled, margins are checked on pocket (after
+                              promo/payment/FX/refunds) instead of list.
+                            </p>
+
+                            <label className="flex items-center gap-2 sm:col-span-2">
+                              <input
+                                type="checkbox"
+                                checked={optConstraints.usePocketProfit}
+                                onChange={(e) =>
+                                  setOptConstraints((c) => ({
+                                    ...c,
+                                    usePocketProfit: e.target.checked,
+                                  }))
+                                }
+                              />
+                              <span>Compute profit using pocket price</span>
+                            </label>
+                          </div>
+                        </details>
+
+                        <details className="mt-4 rounded border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs">
+                          <summary className="cursor-pointer select-none font-medium">
+                            Field guide (copy placeholder)
+                          </summary>
+                          <div
+                            data-copy-slot="waterfall.fieldGuide"
+                            className="space-y-2 text-slate-600 mt-2"
+                          >
+                            <div>
+                              <span className="font-semibold">Tier discounts</span>: TODO — describe how promo vs. volume knobs
+                              affect list-to-pocket math and when to prioritize each tier.
+                            </div>
+                            <div>
+                              <span className="font-semibold">Global leakages</span>: TODO — explain processor %, fixed fees, FX,
+                              and refunds along with the types of businesses that feel each leakage the most.
+                            </div>
+                            <div>
+                              <span className="font-semibold">Compare all tiers</span>: TODO — narrative on using the mini
+                              waterfalls to defend Good/Better/Best deltas.
+                            </div>
+                            <div>
+                              <span className="font-semibold">Channel blend</span>: TODO — instructions for blending Stripe vs.
+                              marketplaces and how to talk about the resulting composite leak profile.
+                            </div>
+                          </div>
+                        </details>
+                      </div>
+                    </Section>
+          <Section id="reference-prices" title="Reference prices for Optimizer">
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2 items-center">
+                        <label className="text-sm">Good</label>
+                        <input
+                          type="number"
+                          className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                          value={refPrices.good}
+                          onChange={(e) =>
+                            setRefPrices((p) => ({ ...p, good: Number(e.target.value) }))
+                          }
+                        />
+                        <label className="text-sm">Better</label>
+                        <input
+                          type="number"
+                          className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                          value={refPrices.better}
+                          onChange={(e) =>
+                            setRefPrices((p) => ({
+                              ...p,
+                              better: Number(e.target.value),
+                            }))
+                          }
+                        />
+                        <label className="text-sm">Best</label>
+                        <input
+                          type="number"
+                          className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                          value={refPrices.best}
+                          onChange={(e) =>
+                            setRefPrices((p) => ({ ...p, best: Number(e.target.value) }))
+                          }
+                        />
+                      </div>
+
+                      <div className="mt-3">
+                        <button
+                          className="border rounded-md px-3 py-1.5 text-xs bg-white hover:bg-gray-50"
+                          onClick={setRefsFromCurrent}
+                        >
+                          Set from current prices
+                        </button>
+                      </div>
+                    </Section>
+          <Section id="current-vs-optimized" title="Current vs Optimized">
+                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-slate-900 text-sm">How to read this card</span>
+                          <span className="text-[10px] uppercase tracking-wide text-slate-500">Demo aid</span>
+                        </div>
+                        <p className="mt-1 leading-snug">
+                          Use this to narrate “before vs after.” Apply the optimized ladder to push prices back to Scenario Panel,
+                          undo to revert, then call out the delta and which constraints or drivers mattered most.
+                        </p>
+                      </div>
+                      {(() => {
+                        const curProfit = optConstraints.usePocketProfit
+                          ? (() => {
+                              const probs = choiceShares(prices, features, segments, refPrices);
+                              const take = {
+                                good: Math.round(N * probs.good),
+                                better: Math.round(N * probs.better),
+                                best: Math.round(N * probs.best),
+                              };
+                              const pG = computePocketPrice(prices.good, "good", leak).pocket;
+                              const pB = computePocketPrice(prices.better, "better", leak).pocket;
+                              const pH = computePocketPrice(prices.best, "best", leak).pocket;
+                              return take.good * (pG - costs.good) + take.better * (pB - costs.better) + take.best * (pH - costs.best);
+                            })()
+                          : (() => {
+                              const probs = choiceShares(prices, features, segments, refPrices);
+                              const take = {
+                                good: Math.round(N * probs.good),
+                                better: Math.round(N * probs.better),
+                                best: Math.round(N * probs.best),
+                              };
+                              return take.good * (prices.good - costs.good) + take.better * (prices.better - costs.better) + take.best * (prices.best - costs.best);
+                            })();
+
+                        const best = quickOpt.best;
+                        const bestProfit = quickOpt.profit;
+
+                        if (!best)
+                          return <div className="text-xs text-gray-600">No feasible ladder in the current ranges & floors.</div>;
+
+                        return (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <div className="font-semibold mb-1">Current</div>
+                                <div>Good: ${prices.good}</div>
+                                <div>Better: ${prices.better}</div>
+                                <div>Best: ${prices.best}</div>
+                                <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(curProfit).toLocaleString()}</div>
+                              </div>
+                              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <div className="font-semibold mb-1">Optimized</div>
+                                <div>Good: ${best.good}</div>
+                                <div>Better: ${best.better}</div>
+                                <div>Best: ${best.best}</div>
+                                <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(bestProfit).toLocaleString()}</div>
+                              </div>
+                              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
+                                <div className="font-semibold">Delta</div>
+                                <div className="text-lg font-bold leading-tight">
+                                  {bestProfit - curProfit >= 0 ? "+" : "-"}${Math.abs(Math.round(bestProfit - curProfit)).toLocaleString()}
+                                </div>
+                                <div className="text-[11px] text-slate-600">vs current profit</div>
+                                <div className="flex flex-col gap-2">
+                                  <button
+                                    className="w-full border rounded px-3 py-2 text-sm font-semibold bg-white hover:bg-gray-50"
+                                    onClick={() => {
+                                      lastAppliedPricesRef.current = { ...prices };
+                                      setPrices(best);
+                                      pushJ?.(`Applied optimized ladder: ${best.good}/${best.better}/${best.best}`);
+                                    }}
+                                  >
+                                    Apply optimized ladder
+                                  </button>
+                                  <button
+                                    className="w-full text-sm border rounded px-3 py-2 bg-white hover:bg-gray-50 disabled:opacity-50"
+                                    disabled={!lastAppliedPricesRef.current}
+                                    onClick={() => {
+                                      const prev = lastAppliedPricesRef.current;
+                                      if (!prev) return;
+                                      setPrices(prev);
+                                      lastAppliedPricesRef.current = null;
+                                      pushJ?.("Undo: restored ladder to previous prices");
+                                    }}
+                                  >
+                                    Undo apply ladder
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-1 text-xs max-w-md space-y-1">
+                              <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
+                                Why this recommendation?
+                              </div>
+                              <ul className="list-disc ml-4 space-y-1 text-slate-700 leading-snug">
+                                {(() => {
+                                  const binds = explainGaps(best, {
+                                    gapGB: optConstraints.gapGB,
+                                    gapBB: optConstraints.gapBB,
+                                  });
+                                  return binds.length ? binds.map((b, i) => <li key={i}>{b}</li>) : <li>No gap constraints binding.</li>;
+                                })()}
+                                {(() => {
+                                  const td = topDriver(tornadoRowsOptim);
+                                  return <li>Largest profit driver near optimum: {td ? td : "n/a"}</li>;
+                                })()}
+                                <li>
+                                  Floors: pocket margin ≥ {Math.round(optConstraints.marginFloor.good * 100)}% /{" "}
+                                  {Math.round(optConstraints.marginFloor.better * 100)}% / {Math.round(optConstraints.marginFloor.best * 100)}% (G/B/Best).
+                                </li>
+                              </ul>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </Section>
+          <Section id="methods" title="Methods">
+                      <p className="text-sm text-gray-700 print-tight">
+                        MNL: U = β₀(j) + βₚ·price + β_A·featA + β_B·featB; outside option
+                        intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
+                        ridge regularization.
+                      </p>
+                      {fitInfo && (
+                        <div className="text-xs text-gray-600 mt-2">
+                          logLik: {Math.round(fitInfo.logLik)} • iters: {fitInfo.iters} •{" "}
+                          {fitInfo.converged ? "converged" : "not converged"}
+                        </div>
+                      )}
+                    </Section>
+            </div>
+          )}
         </div>
-      </div>
 
       {/* Right: Charts */}
       <div className="col-span-12 lg:col-span-6 space-y-4 min-w-0">

@@ -13,6 +13,7 @@ export type Segment = {
   betaNone: number         // baseline utility for “no purchase”
   alphaAnchor?: number   // 0..1 strength of anchoring
   lambdaLoss?: number    // >1, losses loom larger than gains
+  betaRefAnchor?: number // optional reference-anchor term from imports
 }
 
 export const defaultSegments: Segment[] = [
