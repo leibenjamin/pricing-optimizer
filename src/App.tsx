@@ -127,6 +127,23 @@ const ONBOARDING_STEPS = [
   },
 ] as const;
 
+const SCENARIO_TAB_SECTION_IDS = [
+  "preset-scenarios",
+  "scenario",
+  "customer-segments",
+  "compare-board",
+  "scenario-journal",
+  "recent-short-links",
+] as const;
+
+const OPTIMIZER_TAB_SECTION_IDS = [
+  "global-optimizer",
+  "reference-prices",
+  "current-vs-optimized",
+  "methods",
+  "pocket-price-waterfall",
+] as const;
+
 type SaveError = {
   error?: string;
   issues?: Array<{ path?: Array<string | number>; message?: string }>;
@@ -295,6 +312,9 @@ function mapFitToSegments(
 export default function App() {
   const [journal, setJournal] = useState<string[]>([]);
   const [showSalesImport, setShowSalesImport] = useState(false);
+  const [leftColumnTab, setLeftColumnTab] = useState<"scenario" | "optimizer">(
+    "scenario"
+  );
 
   // Baseline KPIs for the â€œTell me what changedâ€ panel
   const [baselineKPIs, setBaselineKPIs] = useState<SnapshotKPIs | null>(null);
@@ -531,6 +551,15 @@ export default function App() {
     []
   );
 
+  const scenarioTabSet = useMemo(
+    () => new Set<string>(SCENARIO_TAB_SECTION_IDS),
+    []
+  );
+  const optimizerTabSet = useMemo(
+    () => new Set<string>(OPTIMIZER_TAB_SECTION_IDS),
+    []
+  );
+
   const [activeSection, setActiveSection] = useState<string>(NAV_SECTIONS[0]);
   const stickyNavRef = useRef<HTMLDivElement | null>(null);
 
@@ -595,39 +624,56 @@ export default function App() {
 
   function scrollToId(id: string) {
     if (typeof document === "undefined") return;
-    const el = document.getElementById(id);
-    if (!el) return;
-    const stickyHeight = getStickyOffset();
-    const margin = 12;
-    const scrollParent = findScrollableParent(el);
-    const docElement = document.scrollingElement || document.documentElement;
+    const wantsScenario = scenarioTabSet.has(id);
+    const wantsOptimizer = optimizerTabSet.has(id);
+    const shouldSwitch =
+      (wantsScenario && leftColumnTab !== "scenario") ||
+      (wantsOptimizer && leftColumnTab !== "optimizer");
 
-    if (!scrollParent || scrollParent === document.body || scrollParent === docElement) {
-      const top = el.getBoundingClientRect().top + window.scrollY - stickyHeight - margin;
-      window.scrollTo({ top, behavior: "smooth" });
+    if (wantsScenario) setLeftColumnTab("scenario");
+    if (wantsOptimizer) setLeftColumnTab("optimizer");
+
+    const runScroll = () => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const stickyHeight = getStickyOffset();
+      const margin = 12;
+      const scrollParent = findScrollableParent(el);
+      const docElement = document.scrollingElement || document.documentElement;
+
+      if (!scrollParent || scrollParent === document.body || scrollParent === docElement) {
+        const top = el.getBoundingClientRect().top + window.scrollY - stickyHeight - margin;
+        window.scrollTo({ top, behavior: "smooth" });
+        window.setTimeout(() => focusSection(el), 400);
+        return;
+      }
+
+      const parentRect = scrollParent.getBoundingClientRect();
+      const parentTargetTop = parentRect.top + window.scrollY - stickyHeight - margin;
+      if (Math.abs(window.scrollY - parentTargetTop) > 1) {
+        window.scrollTo({ top: parentTargetTop, behavior: "smooth" });
+      }
+
+      const elementRect = el.getBoundingClientRect();
+      const targetTop =
+        elementRect.top - parentRect.top + scrollParent.scrollTop - margin;
+      if (typeof scrollParent.scrollTo === "function") {
+        scrollParent.scrollTo({
+          top: Math.max(0, targetTop),
+          behavior: "smooth",
+        });
+      } else {
+        scrollParent.scrollTop = Math.max(0, targetTop);
+      }
+
       window.setTimeout(() => focusSection(el), 400);
-      return;
-    }
+    };
 
-    const parentRect = scrollParent.getBoundingClientRect();
-    const parentTargetTop = parentRect.top + window.scrollY - stickyHeight - margin;
-    if (Math.abs(window.scrollY - parentTargetTop) > 1) {
-      window.scrollTo({ top: parentTargetTop, behavior: "smooth" });
-    }
-
-    const elementRect = el.getBoundingClientRect();
-    const targetTop =
-      elementRect.top - parentRect.top + scrollParent.scrollTop - margin;
-    if (typeof scrollParent.scrollTo === "function") {
-      scrollParent.scrollTo({
-        top: Math.max(0, targetTop),
-        behavior: "smooth",
-      });
+    if (shouldSwitch) {
+      window.setTimeout(runScroll, 30);
     } else {
-      scrollParent.scrollTop = Math.max(0, targetTop);
+      runScroll();
     }
-
-    window.setTimeout(() => focusSection(el), 400);
   }
 
   function findScrollableParent(el: HTMLElement | null): HTMLElement | null {
@@ -2140,8 +2186,56 @@ export default function App() {
       </div>
 
       <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4 min-h-screen print-grid-1 print:gap-2">
-        {/* Left: Scenario Panel */}
-        <div className="col-span-12 lg:col-span-3 flex flex-col min-h-0 min-w-0 overflow-x-visible">
+        {/* Left half: tabbed workspace */}
+        <div className="col-span-12 lg:col-span-6 min-w-0">
+          <div className="no-print mb-3">
+            <div
+              className="inline-flex flex-wrap items-center gap-2"
+              role="tablist"
+              aria-label="Left column views"
+            >
+              <button
+                id="tab-btn-scenario"
+                type="button"
+                role="tab"
+                aria-selected={leftColumnTab === "scenario"}
+                aria-controls="tab-set-scenario"
+                className={`px-3 py-2 rounded-lg border text-sm font-semibold ${
+                  leftColumnTab === "scenario"
+                    ? "bg-gray-900 text-white border-gray-900 shadow"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                }`}
+                onClick={() => setLeftColumnTab("scenario")}
+              >
+                Set Scenario
+              </button>
+              <button
+                id="tab-btn-optimizer"
+                type="button"
+                role="tab"
+                aria-selected={leftColumnTab === "optimizer"}
+                aria-controls="tab-global-optimizer"
+                className={`px-3 py-2 rounded-lg border text-sm font-semibold ${
+                  leftColumnTab === "optimizer"
+                    ? "bg-gray-900 text-white border-gray-900 shadow"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                }`}
+                onClick={() => setLeftColumnTab("optimizer")}
+              >
+                Optimize
+              </button>
+            </div>
+          </div>
+
+          {/* Left: Scenario Panel */}
+          <div
+            role="tabpanel"
+            id="tab-set-scenario"
+            aria-labelledby="tab-btn-scenario"
+            className={`col-span-12 lg:col-span-3 flex flex-col min-h-0 min-w-0 overflow-x-visible space-y-3 md:space-y-4 ${
+              leftColumnTab === "scenario" ? "" : "hidden"
+            }`}
+          >
           <Section id="preset-scenarios" title="Preset scenarios" className="order-0">
             <PresetPicker
               presets={PRESETS}
@@ -2877,7 +2971,12 @@ export default function App() {
 
         {/* Center: Optimizer */}
         <div
-          className="col-span-12 lg:col-span-3 space-y-3 md:space-y-4 min-w-0 self-start md:text-[13px] pr-1"
+          role="tabpanel"
+          id="tab-global-optimizer"
+          aria-labelledby="tab-btn-optimizer"
+          className={`col-span-12 lg:col-span-3 space-y-3 md:space-y-4 min-w-0 self-start md:text-[13px] pr-1 ${
+            leftColumnTab === "optimizer" ? "" : "hidden"
+          }`}
         >
           <Section id="global-optimizer" title="Global Optimizer">
             <Explanation slot="chart.optimizer">
@@ -3793,6 +3892,7 @@ export default function App() {
               </div>
             </div>
           </Section>
+        </div>
       </div>
 
       {/* Right: Charts */}
