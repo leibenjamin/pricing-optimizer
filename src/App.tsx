@@ -96,6 +96,10 @@ type PriceRangeState = {
   map: TierRangeMap;
   source: PriceRangeSource;
 };
+type BaselineMeta = {
+  label: string;
+  savedAt: number;
+};
 
 const ONBOARDING_STEPS = [
   {
@@ -329,8 +333,10 @@ export default function App() {
     { snapshot: ScenarioImport; savedAt: number } | null
   >("po:scenario-baseline", null);
 
-  // Baseline KPIs for the â€œTell me what changedâ€ panel
+  // Baseline KPIs for the "Tell me what changed" panel
   const [baselineKPIs, setBaselineKPIs] = useState<SnapshotKPIs | null>(null);
+  const [baselineMeta, setBaselineMeta] = useState<BaselineMeta | null>(null);
+  const [scorecardView, setScorecardView] = useState<"current" | "optimized">("current");
 
   // --- Toasts ---
   type Toast = {
@@ -551,9 +557,8 @@ export default function App() {
 
   const NAV_SECTIONS = useMemo(
     () => [
-      "topline-kpis",
+      "scorecard",
       "callouts",
-      "change-lens",
       "profit-frontier",
       "pocket-price-waterfall",
       "compare-board",
@@ -626,12 +631,10 @@ export default function App() {
 
   function labelFor(id: string) {
     switch (id) {
-      case "topline-kpis":
-        return "Topline KPIs";
+      case "scorecard":
+        return "Scorecard";
       case "callouts":
         return "Callouts";
-      case "change-lens":
-        return "What changed";
       case "profit-frontier":
         return "Profit Frontier";
       case "pocket-price-waterfall":
@@ -1183,10 +1186,6 @@ export default function App() {
     prices: { good: number; better: number; best: number };
     profit: number;
   } | null>(null);
-  const [optimizerExplainer, setOptimizerExplainer] = useState<{
-    lines: string[];
-    appliedAt: number;
-  } | null>(null);
 
   const computeScenarioProfit = useCallback(
     (ladder: Prices, usePocket: boolean) => {
@@ -1276,11 +1275,6 @@ export default function App() {
 
   function applyOptimizedPrices() {
     if (!optResult) return;
-    setOptimizerExplainer(
-      optimizerWhyLines.length
-        ? { lines: optimizerWhyLines, appliedAt: Date.now() }
-        : null
-    );
     pushJ?.(
       `[${now()}] Applied optimizer ladder $${optResult.prices.good}/$${optResult.prices.better}/$${optResult.prices.best}`
     );
@@ -1463,7 +1457,7 @@ export default function App() {
   const profitPerCustomer = profit / N;
   const grossMarginPct = revenue > 0 ? profit / revenue : 0;
 
-  // Light-weight KPI bundle used by Compare Board and the â€œWhat changedâ€ panel
+  // Light-weight KPI bundle used by Compare Board and the scorecard panel
   const currentKPIs = useMemo(
     () =>
       kpisFromSnapshot(
@@ -1473,108 +1467,148 @@ export default function App() {
       ),
     [prices, costs, features, segments, refPrices, leak, N]
   );
+  const optimizedKPIs = useMemo(
+    () => {
+      if (!optResult) return null;
+      return kpisFromSnapshot(
+        { prices: optResult.prices, costs, features, segments, refPrices, leak },
+        N,
+        false
+      );
+    },
+    [optResult, costs, features, segments, refPrices, leak, N]
+  );
 
   // Initialize baseline once on first render
   useEffect(() => {
     if (!baselineKPIs) {
       setBaselineKPIs(currentKPIs);
+      setBaselineMeta({ label: "Pinned on load", savedAt: Date.now() });
     }
   }, [baselineKPIs, currentKPIs]);
 
-  const explainDelta = useMemo<ExplainDelta | null>(() => {
-    if (!baselineKPIs || !segments.length) return null;
+  const buildExplainDelta = useCallback(
+    (target: SnapshotKPIs | null): ExplainDelta | null => {
+      if (!baselineKPIs || !segments.length || !target) return null;
 
-    const deltaProfit = currentKPIs.profit - baselineKPIs.profit;
-    const deltaRevenue = currentKPIs.revenue - baselineKPIs.revenue;
+      const deltaProfit = target.profit - baselineKPIs.profit;
+      const deltaRevenue = target.revenue - baselineKPIs.revenue;
 
-    const currentActive = N * (1 - currentKPIs.shares.none);
-    const baselineActive = N * (1 - baselineKPIs.shares.none);
-    const deltaActive = currentActive - baselineActive;
+      const currentActive = N * (1 - target.shares.none);
+      const baselineActive = N * (1 - baselineKPIs.shares.none);
+      const deltaActive = currentActive - baselineActive;
 
-    const deltaARPU = currentKPIs.arpuActive - baselineKPIs.arpuActive;
+      const deltaARPU = target.arpuActive - baselineKPIs.arpuActive;
 
-    // --- Main driver by tier (Good / Better / Best) ---
-    const tiers: Array<"good" | "better" | "best"> = ["good", "better", "best"];
-    const perTier = tiers.map((tier) => {
-      const shareBase = baselineKPIs.shares[tier];
-      const shareCur = currentKPIs.shares[tier];
-      const qBase = N * shareBase;
-      const qCur = N * shareCur;
+      // --- Main driver by tier (Good / Better / Best) ---
+      const tiers: Array<"good" | "better" | "best"> = ["good", "better", "best"];
+      const perTier = tiers.map((tier) => {
+        const shareBase = baselineKPIs.shares[tier];
+        const shareCur = target.shares[tier];
+        const qBase = N * shareBase;
+        const qCur = N * shareCur;
 
-      // Approximate unit margin from baseline list prices
-      const marginBase = baselineKPIs.prices[tier] - costs[tier];
+        // Approximate unit margin from baseline list prices
+        const marginBase = baselineKPIs.prices[tier] - costs[tier];
 
-      const mixEffect = (qCur - qBase) * marginBase;
-      const priceEffect =
-        qBase * (currentKPIs.prices[tier] - baselineKPIs.prices[tier]);
-      const total = mixEffect + priceEffect;
+        const mixEffect = (qCur - qBase) * marginBase;
+        const priceEffect =
+          qBase * (target.prices[tier] - baselineKPIs.prices[tier]);
+        const total = mixEffect + priceEffect;
 
-      return { tier, mixEffect, priceEffect, total };
-    });
+        return { tier, mixEffect, priceEffect, total };
+      });
 
-    const main = perTier.reduce((best, cand) =>
-      Math.abs(cand.total) > Math.abs(best.total) ? cand : best
-    , perTier[0]);
+      const main = perTier.reduce((best, cand) =>
+        Math.abs(cand.total) > Math.abs(best.total) ? cand : best
+      , perTier[0]);
 
-    let mainDriver: string;
-    if (Math.abs(deltaProfit) < 1e-2) {
-      mainDriver =
-        "Profit is essentially unchanged vs. your baseline scenario.";
-    } else {
-      const dir = deltaProfit > 0 ? "up" : "down";
-      const absDelta = Math.abs(deltaProfit).toFixed(0);
-      const driverKind =
-        Math.abs(main.mixEffect) >= Math.abs(main.priceEffect)
-          ? "mix shift across tiers"
-          : "unit margin change from price moves";
+      let mainDriver: string;
+      if (Math.abs(deltaProfit) < 1e-2) {
+        mainDriver =
+          "Profit is essentially unchanged vs. your baseline scenario.";
+      } else {
+        const dir = deltaProfit > 0 ? "up" : "down";
+        const absDelta = Math.abs(deltaProfit).toFixed(0);
+        const driverKind =
+          Math.abs(main.mixEffect) >= Math.abs(main.priceEffect)
+            ? "mix shift across tiers"
+            : "unit margin change from price moves";
 
-      mainDriver = `Profit is ${dir} about $${absDelta} vs. baseline, mainly driven by a ${driverKind} in the ${main.tier} tier.`;
-    }
+        mainDriver = `Profit is ${dir} about $${absDelta} vs. baseline, mainly driven by a ${driverKind} in the ${main.tier} tier.`;
+      }
 
-    // --- Most price-sensitive segment (by |betaPrice|) ---
-    const mostPriceSensitive = segments.reduce((best, seg) =>
-      Math.abs(seg.betaPrice) > Math.abs(best.betaPrice) ? seg : best
-    , segments[0]);
+      // --- Most price-sensitive segment (by |betaPrice|) ---
+      const mostPriceSensitive = segments.reduce((best, seg) =>
+        Math.abs(seg.betaPrice) > Math.abs(best.betaPrice) ? seg : best
+      , segments[0]);
 
-    const segmentLine = `Most price-sensitive segment right now: ${mostPriceSensitive.name} (Î²_price = ${mostPriceSensitive.betaPrice.toFixed(
-      2
-    )}). Price moves that help or hurt them will have outsized impact.`;
+      const segmentLine = `Most price-sensitive segment right now: ${mostPriceSensitive.name} (I_beta_price = ${mostPriceSensitive.betaPrice.toFixed(
+        2
+      )}). Price moves that help or hurt them will have outsized impact.`;
 
-    // --- Simple suggestion sentence ---
-    let suggestion: string;
-    if (Math.abs(deltaProfit) < 1e-2) {
-      suggestion =
-        "You're right on top of your baseline. Try a small $1-$2 nudge to the Better tier to explore profit vs. conversion trade-offs.";
-    } else if (deltaProfit > 0) {
-      suggestion = `You're ahead of baseline. If you're comfortable with the current active-customer level, consider testing a slightly higher price for the ${main.tier} tier to see if profit can rise further without losing too many buyers.`;
-    } else {
-      suggestion = `Profit is below baseline. Consider nudging the ${main.tier} tier back toward the baseline price, or improving its features, to regain mix from 'None' or lower tiers.`;
-    }
+      // --- Simple suggestion sentence ---
+      let suggestion: string;
+      if (Math.abs(deltaProfit) < 1e-2) {
+        suggestion =
+          "You're right on top of your baseline. Try a small $1-$2 nudge to the Better tier to explore profit vs. conversion trade-offs.";
+      } else if (deltaProfit > 0) {
+        suggestion = `You're ahead of baseline. If you're comfortable with the current active-customer level, consider testing a slightly higher price for the ${main.tier} tier to see if profit can rise further without losing too many buyers.`;
+      } else {
+        suggestion = `Profit is below baseline. Consider nudging the ${main.tier} tier back toward the baseline price, or improving its features, to regain mix from 'None' or lower tiers.`;
+      }
 
-    return {
-      deltaProfit,
-      deltaRevenue,
-      deltaARPU,
-      deltaActive,
-      mainDriver,
-      segmentLine,
-      suggestion,
-    };
-  }, [baselineKPIs, currentKPIs, costs, N, segments]);
+      return {
+        deltaProfit,
+        deltaRevenue,
+        deltaARPU,
+        deltaActive,
+        mainDriver,
+        segmentLine,
+        suggestion,
+      };
+    },
+    [baselineKPIs, costs, N, segments]
+  );
+
+  const explainDeltaCurrent = useMemo(
+    () => buildExplainDelta(currentKPIs),
+    [buildExplainDelta, currentKPIs]
+  );
+  const explainDeltaOptimized = useMemo(
+    () => buildExplainDelta(optimizedKPIs),
+    [buildExplainDelta, optimizedKPIs]
+  );
+
+  const scorecardKPIs =
+    scorecardView === "optimized" && optimizedKPIs
+      ? optimizedKPIs
+      : currentKPIs;
+  const scorecardExplainDelta =
+    scorecardView === "optimized" && optimizedKPIs
+      ? explainDeltaOptimized
+      : explainDeltaCurrent;
 
   const baselineActiveCustomers =
     baselineKPIs ? Math.round(N * (1 - baselineKPIs.shares.none)) : null;
-  const currentActiveFromShares = Math.round(
-    N * (1 - currentKPIs.shares.none)
+  const scorecardActiveFromShares = Math.round(
+    N * (1 - scorecardKPIs.shares.none)
   );
   const marginDeltaPP =
     baselineKPIs != null
-      ? currentKPIs.grossMarginPct - baselineKPIs.grossMarginPct
+      ? scorecardKPIs.grossMarginPct - baselineKPIs.grossMarginPct
       : null;
-  const currentMarginRatio = currentKPIs.grossMarginPct / 100;
+  const scorecardMarginRatio = scorecardKPIs.grossMarginPct / 100;
   const baselineMarginRatio =
     baselineKPIs != null ? baselineKPIs.grossMarginPct / 100 : null;
 
+  useEffect(() => {
+    if (scorecardView === "optimized" && !optimizedKPIs) {
+      setScorecardView("current");
+    }
+  }, [scorecardView, optimizedKPIs]);
+
+  // ---- Tornado sensitivity data ----
   // ---- Tornado sensitivity data ----
   const [tornadoPocket, setTornadoPocket] = useState(true);
   const [tornadoView, setTornadoView] = useState<"current" | "optimized">("current");
@@ -2327,12 +2361,17 @@ export default function App() {
   const renderDeltaBadge = (
     delta: number | null | undefined,
     formatter: (n: number) => string,
-    suffix = ""
+    suffix = "",
+    pct: number | null | undefined = null
   ) => {
     if (delta === null || delta === undefined || !Number.isFinite(delta)) {
       return <span className="text-[11px] text-slate-400">Pin a baseline</span>;
     }
     const positive = delta >= 0;
+    const pctText =
+      pct !== null && pct !== undefined && Number.isFinite(pct)
+        ? ` (${pct >= 0 ? "+" : "-"}${Math.abs(pct as number).toFixed(1)}%)`
+        : "";
     return (
       <span
         className={
@@ -2342,14 +2381,16 @@ export default function App() {
             : "border-rose-200 bg-rose-50 text-rose-700")
         }
       >
-        <span>{positive ? "▲" : "▼"}</span>
+        <span>{positive ? "+" : "-"}</span>
         <span>
           {formatter(Math.abs(delta))}
+          {pctText}
           {suffix} vs baseline
         </span>
       </span>
     );
   };
+
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
@@ -4152,79 +4193,149 @@ export default function App() {
       {/* Right: Charts */}
       <div className="col-span-12 lg:col-span-6 space-y-4 min-w-0">
           <Section
-            id="topline-kpis"
-            title="Topline KPIs"
+            id="scorecard"
+            title="Scorecard"
             actions={
-              <div className="text-xs text-slate-500">
-                Live scorecard for this ladder; deltas use your pinned baseline so the Callouts below have context.
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                  <span className="font-semibold text-slate-800">Baseline</span>
+                  <span className="text-slate-600">
+                    {baselineMeta
+                      ? `${baselineMeta.label} - ${new Date(baselineMeta.savedAt).toLocaleString()}`
+                      : "Pinned on load"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="rounded border border-slate-300 px-2 py-1 font-medium text-slate-700 hover:bg-slate-50"
+                  onClick={() => {
+                    setBaselineKPIs(scorecardKPIs);
+                    setBaselineMeta({ label: "Pinned now", savedAt: Date.now() });
+                  }}
+                >
+                  Set baseline to now
+                </button>
+                <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-0.5">
+                  <span className="text-slate-500">View</span>
+                  <div className="inline-flex overflow-hidden rounded border border-slate-200">
+                    <button
+                      type="button"
+                      className={`px-2 h-7 ${scorecardView === "current" ? "bg-gray-900 text-white" : "bg-white"}`}
+                      onClick={() => setScorecardView("current")}
+                    >
+                      Current
+                    </button>
+                    <button
+                      type="button"
+                      className={`px-2 h-7 ${
+                        scorecardView === "optimized" && optimizedKPIs
+                          ? "bg-gray-900 text-white"
+                          : "bg-white"
+                      } ${!optimizedKPIs ? "opacity-50 cursor-not-allowed" : ""}`}
+                      onClick={() => optimizedKPIs && setScorecardView("optimized")}
+                      disabled={!optimizedKPIs}
+                    >
+                      Optimized
+                    </button>
+                  </div>
+                </div>
               </div>
             }
           >
             {(() => {
               const baselineFallback = "Pin a baseline to compare.";
-              const cards = [
+              const metrics = [
                 {
                   key: "revenue",
                   label: "Revenue (N=1000)",
                   infoId: "kpi.revenue",
                   aria: "Why is Revenue computed this way?",
-                  value: fmtUSD(currentKPIs.revenue),
-                  baseline: baselineKPIs
+                  value: fmtUSD(scorecardKPIs.revenue),
+                  baselineLabel: baselineKPIs
                     ? `Baseline ${fmtUSD(baselineKPIs.revenue)}`
                     : baselineFallback,
-                  delta: explainDelta?.deltaRevenue ?? null,
-                  deltaFormatter: (v: number) => fmtUSD(v),
+                  delta: baselineKPIs
+                    ? scorecardKPIs.revenue - baselineKPIs.revenue
+                    : null,
+                  deltaPct:
+                    baselineKPIs && baselineKPIs.revenue
+                      ? ((scorecardKPIs.revenue - baselineKPIs.revenue) /
+                          Math.max(baselineKPIs.revenue, 1e-9)) * 100
+                      : null,
+                  formatter: (v: number) => fmtUSD(v),
                 },
                 {
                   key: "profit",
                   label: "Profit (N=1000)",
                   infoId: "kpi.profit",
                   aria: "How is Profit calculated here?",
-                  value: fmtUSD(currentKPIs.profit),
-                  baseline: baselineKPIs
+                  value: fmtUSD(scorecardKPIs.profit),
+                  baselineLabel: baselineKPIs
                     ? `Baseline ${fmtUSD(baselineKPIs.profit)}`
                     : baselineFallback,
-                  delta: explainDelta?.deltaProfit ?? null,
-                  deltaFormatter: (v: number) => fmtUSD(v),
+                  delta: baselineKPIs
+                    ? scorecardKPIs.profit - baselineKPIs.profit
+                    : null,
+                  deltaPct:
+                    baselineKPIs && baselineKPIs.profit
+                      ? ((scorecardKPIs.profit - baselineKPIs.profit) /
+                          Math.max(baselineKPIs.profit, 1e-9)) * 100
+                      : null,
+                  formatter: (v: number) => fmtUSD(v),
                 },
                 {
                   key: "active",
                   label: "Active customers",
                   infoId: "kpi.active",
                   aria: "What does Active customers mean?",
-                  value: currentActiveFromShares.toLocaleString(),
-                  baseline:
+                  value: scorecardActiveFromShares.toLocaleString(),
+                  baselineLabel:
                     baselineActiveCustomers !== null
                       ? `Baseline ${baselineActiveCustomers.toLocaleString()}`
                       : baselineFallback,
-                  delta: explainDelta?.deltaActive ?? null,
-                  deltaFormatter: (v: number) =>
-                    Math.round(v).toLocaleString(),
+                  delta:
+                    baselineActiveCustomers !== null
+                      ? scorecardActiveFromShares - baselineActiveCustomers
+                      : null,
+                  deltaPct:
+                    baselineActiveCustomers && baselineActiveCustomers > 0
+                      ? ((scorecardActiveFromShares - baselineActiveCustomers) /
+                          baselineActiveCustomers) * 100
+                      : null,
+                  formatter: (v: number) => Math.round(v).toLocaleString(),
                 },
                 {
                   key: "arpu",
                   label: "ARPU (active)",
                   infoId: "kpi.arpu",
                   aria: "What is ARPU (active)?",
-                  value: `$${currentKPIs.arpuActive.toFixed(2)}`,
-                  baseline: baselineKPIs
+                  value: `$${scorecardKPIs.arpuActive.toFixed(2)}`,
+                  baselineLabel: baselineKPIs
                     ? `Baseline $${baselineKPIs.arpuActive.toFixed(2)}`
                     : baselineFallback,
-                  delta: explainDelta?.deltaARPU ?? null,
-                  deltaFormatter: (v: number) => `$${v.toFixed(2)}`,
+                  delta: baselineKPIs
+                    ? scorecardKPIs.arpuActive - baselineKPIs.arpuActive
+                    : null,
+                  deltaPct:
+                    baselineKPIs && baselineKPIs.arpuActive
+                      ? ((scorecardKPIs.arpuActive - baselineKPIs.arpuActive) /
+                          Math.max(baselineKPIs.arpuActive, 1e-9)) * 100
+                      : null,
+                  formatter: (v: number) => `$${v.toFixed(2)}`,
                 },
                 {
                   key: "margin",
                   label: "Gross margin",
                   infoId: "kpi.gm",
                   aria: "How is Gross margin computed?",
-                  value: fmtPct(currentMarginRatio),
-                  baseline:
+                  value: fmtPct(scorecardMarginRatio),
+                  baselineLabel:
                     baselineMarginRatio !== null
                       ? `Baseline ${fmtPct(baselineMarginRatio)}`
                       : baselineFallback,
                   delta: marginDeltaPP,
-                  deltaFormatter: (v: number) => `${v.toFixed(1)} pp`,
+                  deltaPct: null,
+                  formatter: (v: number) => `${v.toFixed(1)} pp`,
                 },
               ];
 
@@ -4234,10 +4345,27 @@ export default function App() {
                 best: "bg-fuchsia-500",
               };
 
+              const activePrices =
+                scorecardView === "optimized" && optResult
+                  ? optResult.prices
+                  : prices;
+              const gapNotes = explainGaps(activePrices, {
+                gapGB: optConstraints.gapGB,
+                gapBB: optConstraints.gapBB,
+              });
+              const gapLine = gapNotes.length
+                ? gapNotes[0]
+                : `Gaps slack: ${(activePrices.better - activePrices.good - optConstraints.gapGB).toFixed(2)} / ${(activePrices.best - activePrices.better - optConstraints.gapBB).toFixed(2)} (G/B, B/Best)`;
+              const floorLine = `Floors: Good ${Math.round(optConstraints.marginFloor.good * 100)}% | Better ${Math.round(optConstraints.marginFloor.better * 100)}% | Best ${Math.round(optConstraints.marginFloor.best * 100)}%`;
+              const optimizerReady = Boolean(quickOpt.best);
+              const optimizerLine = optimizerReady
+                ? `Optimizer ready - ranges ${optRanges.good[0]}-${optRanges.good[1]} / ${optRanges.better[0]}-${optRanges.better[1]} / ${optRanges.best[0]}-${optRanges.best[1]}`
+                : "Set ranges and floors, then run the optimizer";
+
               return (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {cards.map((card) => (
+                    {metrics.map((card) => (
                       <div
                         key={card.key}
                         className="rounded-xl border border-slate-200 bg-white/60 p-3 shadow-sm"
@@ -4256,14 +4384,16 @@ export default function App() {
                           </span>
                           {renderDeltaBadge(
                             card.delta,
-                            card.deltaFormatter as (n: number) => string
+                            card.formatter as (n: number) => string,
+                            "",
+                            card.deltaPct
                           )}
                         </div>
                         <div className="text-xl font-semibold text-slate-900">
                           {card.value}
                         </div>
                         <div className="mt-1 text-[11px] text-slate-500">
-                          {card.baseline}
+                          {card.baselineLabel}
                         </div>
                       </div>
                     ))}
@@ -4277,13 +4407,13 @@ export default function App() {
                       </span>
                     </div>
                     <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {(["good", "better", "best"] as const).map((tier) => {
+                      {["good", "better", "best"].map((tier) => {
                         const share = Math.max(
                           0,
-                          Math.round(currentKPIs.shares[tier] * 1000) / 10
+                          Math.round(scorecardKPIs.shares[tier as "good" | "better" | "best"] * 1000) / 10
                         );
                         const baselineShare = baselineKPIs
-                          ? Math.round(baselineKPIs.shares[tier] * 1000) / 10
+                          ? Math.round(baselineKPIs.shares[tier as "good" | "better" | "best"] * 1000) / 10
                           : null;
                         const delta =
                           baselineShare !== null ? share - baselineShare : null;
@@ -4307,7 +4437,7 @@ export default function App() {
                             </div>
                             <div className="mt-1 h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
                               <div
-                                className={`h-full rounded-full ${tierColors[tier]}`}
+                                className={`h-full rounded-full ${tierColors[tier as "good" | "better" | "best"]}`}
                                 style={{ width: `${barWidth}%` }}
                               />
                             </div>
@@ -4321,239 +4451,110 @@ export default function App() {
                       })}
                     </div>
                   </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-lg border border-slate-200 bg-white/80 p-3">
+                      <div className="text-[11px] uppercase tracking-wide text-slate-600">
+                        Driver snapshot
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {scorecardExplainDelta?.mainDriver || "Pin a baseline to see driver story."}
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-1">
+                        {scorecardExplainDelta?.segmentLine || "Narrate which segment is winning or losing once deltas are available."}
+                      </p>
+                      {scorecardExplainDelta?.suggestion && (
+                        <p className="text-[11px] text-slate-600 mt-1">
+                          {scorecardExplainDelta.suggestion}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200 bg-linear-to-br from-slate-50 to-white p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-slate-600">
+                        <span>Guardrails & optimizer</span>
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {gapLine}
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-1">{floorLine}</p>
+                      <p className="text-[11px] text-slate-600 mt-1">{optimizerLine}</p>
+                    </div>
+                  </div>
                 </>
               );
             })()}
           </Section>
 
           <Section id="callouts" title="Callouts snapshot">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div className="rounded-xl border border-blue-100 bg-blue-50/40 px-3 py-2">
-                <div className="text-[11px] uppercase text-slate-600">
-                  Profit vs baseline
-                </div>
-                <div className="text-2xl font-semibold text-slate-900">
-                  {explainDelta
-                    ? `${explainDelta.deltaProfit >= 0 ? "+" : "-"}$${Math.abs(
-                        explainDelta.deltaProfit
-                      ).toFixed(0)}`
-                    : "Pin a baseline"}
-                </div>
-                <p className="text-[11px] text-slate-600 mt-1">
-                  {explainDelta
-                    ? `Revenue ${explainDelta.deltaRevenue >= 0 ? "+" : "-"}$${Math.abs(
-                        explainDelta.deltaRevenue
-                      ).toFixed(0)} · Active ${
-                        explainDelta.deltaActive >= 0 ? "+" : "-"
-                      }${Math.abs(explainDelta.deltaActive).toFixed(0)} · ARPU ${
-                        explainDelta.deltaARPU >= 0 ? "+" : "-"
-                      }$${Math.abs(explainDelta.deltaARPU).toFixed(2)}`
-                    : "Use “Set baseline to now” so deltas have context."}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 px-3 py-2">
-                <div className="text-[11px] uppercase text-slate-600">
-                  Main driver
-                </div>
-                <div className="text-sm font-semibold text-slate-900">
-                  {explainDelta?.mainDriver ? explainDelta.mainDriver : "Drivers appear here once a baseline is set."}
-                </div>
-                <p className="text-[11px] text-slate-600 mt-1">
-                  {explainDelta?.segmentLine ? explainDelta.segmentLine : "Narrate which segment is winning or losing once deltas are available."}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-purple-100 bg-purple-50/40 px-3 py-2">
-                <div className="text-[11px] uppercase text-slate-600">
-                  Optimizer outlook
-                </div>
-                <div className="text-sm font-semibold text-slate-900">
-                  {optimizerWhyLines.length > 0
-                    ? optimizerWhyLines[0]
-                    : quickOpt.best
-                    ? "Optimizer ready — run to refresh insights."
-                    : "Set ranges & floors, then run the optimizer."}
-                </div>
-                {optimizerWhyLines.length > 1 && (
-                  <p className="text-[11px] text-slate-600 mt-1">
-                    {optimizerWhyLines[1]}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <Explanation slot="callouts.overview">
-              Provide a 2-3 sentence narrative here that summarizes the current ladder, why the optimizer's
-              guidance matters, and how a hiring manager should interpret the KPIs before diving into
-              the charts. Desktop ChatGPT: describe the storyline at a "consultant readout" level (what
-              changed, who benefits, which guardrails are binding) and mention how to validate the
-              recommendation (e.g., rerun optimizer, review waterfall, print summary).
-            </Explanation>
-          </Section>
-
-          <Section
-            id="change-lens"
-            title="What changed vs baseline"
-            actions={
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-slate-500">
-                  Baseline stays fixed until you reset it.
-                </span>
-                <button
-                  type="button"
-                  className="rounded border border-slate-300 px-2 py-1 font-medium text-slate-700 hover:bg-slate-50"
-                  onClick={() => setBaselineKPIs(currentKPIs)}
-                >
-                  Set baseline to now
-                </button>
-              </div>
-            }
-          >
-            {!explainDelta ? (
-              <p className="text-sm text-slate-600">
-                Pin a baseline to see what moved, which is pulled directly into the Callouts above.
-              </p>
-            ) : (
-              <div className="space-y-3">
+            {optResult ? (
+              <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {[
-                    {
-                      key: "delta-profit",
-                      label: "Profit",
-                      delta: explainDelta.deltaProfit,
-                      formatter: (v: number) => fmtUSD(v),
-                      now: fmtUSD(currentKPIs.profit),
-                      base: baselineKPIs ? fmtUSD(baselineKPIs.profit) : null,
-                    },
-                    {
-                      key: "delta-revenue",
-                      label: "Revenue",
-                      delta: explainDelta.deltaRevenue,
-                      formatter: (v: number) => fmtUSD(v),
-                      now: fmtUSD(currentKPIs.revenue),
-                      base: baselineKPIs ? fmtUSD(baselineKPIs.revenue) : null,
-                    },
-                    {
-                      key: "delta-active",
-                      label: "Active customers",
-                      delta: explainDelta.deltaActive,
-                      formatter: (v: number) =>
-                        Math.round(v).toLocaleString(),
-                      now: currentActiveFromShares.toLocaleString(),
-                      base:
-                        baselineActiveCustomers !== null
-                          ? baselineActiveCustomers.toLocaleString()
-                          : null,
-                    },
-                    {
-                      key: "delta-arpu",
-                      label: "ARPU (active)",
-                      delta: explainDelta.deltaARPU,
-                      formatter: (v: number) => `$${v.toFixed(2)}`,
-                      now: `$${currentKPIs.arpuActive.toFixed(2)}`,
-                      base: baselineKPIs
-                        ? `$${baselineKPIs.arpuActive.toFixed(2)}`
-                        : null,
-                    },
-                    {
-                      key: "delta-margin",
-                      label: "Gross margin",
-                      delta: marginDeltaPP,
-                      formatter: (v: number) => `${v.toFixed(1)} pp`,
-                      now: fmtPct(currentMarginRatio),
-                      base:
-                        baselineMarginRatio !== null
-                          ? fmtPct(baselineMarginRatio)
-                          : null,
-                    },
-                  ].map((item) => (
-                    <div
-                      key={item.key}
-                      className="rounded-lg border border-slate-200 bg-white/70 p-3 shadow-sm"
-                    >
-                      <div className="text-[11px] text-slate-600">
-                        {item.label}
-                      </div>
-                      <div className="mt-1">
-                        {renderDeltaBadge(item.delta, item.formatter)}
-                      </div>
-                      <div className="mt-1 text-[11px] text-slate-500">
-                        <span className="font-medium text-slate-700">
-                          Now:
-                        </span>{" "}
-                        {item.now}
-                        {item.base && (
-                          <>
-                            <span className="mx-1 text-slate-400">|</span>
-                            Baseline: {item.base}
-                          </>
-                        )}
-                      </div>
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/40 px-3 py-2">
+                    <div className="text-[11px] uppercase text-slate-600">
+                      Optimizer vs baseline
                     </div>
-                  ))}
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-lg border border-slate-200 bg-white/80 p-3">
-                    <div className="text-[11px] uppercase tracking-wide text-slate-600">
-                      Story to pair with Callouts
-                    </div>
-                    <div className="mt-1 text-sm font-semibold text-slate-900">
-                      {explainDelta.mainDriver}
+                    <div className="text-2xl font-semibold text-slate-900">
+                      {explainDeltaOptimized
+                        ? `${explainDeltaOptimized.deltaProfit >= 0 ? "+" : "-"}$${Math.abs(
+                            explainDeltaOptimized.deltaProfit
+                          ).toFixed(0)}`
+                        : "Pin a baseline"}
                     </div>
                     <p className="text-[11px] text-slate-600 mt-1">
-                      {explainDelta.segmentLine}
-                    </p>
-                    <p className="text-[11px] text-slate-600 mt-1">
-                      {explainDelta.suggestion}
-                    </p>
-                    <p className="mt-2 text-[11px] text-slate-500">
-                      Use this narrative with the Callouts snapshot and the mix bars above to
-                      headline who is winning, who is at risk, and which guardrail is biting.
+                      {explainDeltaOptimized
+                        ? `Revenue ${explainDeltaOptimized.deltaRevenue >= 0 ? "+" : "-"}$${Math.abs(
+                            explainDeltaOptimized.deltaRevenue
+                          ).toFixed(0)} | Active ${
+                            explainDeltaOptimized.deltaActive >= 0 ? "+" : "-"
+                          }${Math.abs(explainDeltaOptimized.deltaActive).toFixed(0)} | ARPU ${
+                            explainDeltaOptimized.deltaARPU >= 0 ? "+" : "-"
+                          }$${Math.abs(explainDeltaOptimized.deltaARPU).toFixed(2)}`
+                        : 'Use "Set baseline to now" so deltas have context.'}
                     </p>
                   </div>
 
-                  <div className="rounded-lg border border-slate-200 bg-linear-to-br from-slate-50 to-white p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-slate-600">
-                      <span>Optimizer context</span>
-                      {optimizerExplainer && (
-                        <button
-                          type="button"
-                          className="text-[11px] underline text-slate-500 hover:text-slate-700"
-                          onClick={() => setOptimizerExplainer(null)}
-                        >
-                          Dismiss
-                        </button>
-                      )}
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 px-3 py-2">
+                    <div className="text-[11px] uppercase text-slate-600">
+                      Main driver
                     </div>
-                    {optimizerExplainer && optimizerExplainer.lines.length > 0 ? (
-                      <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] text-slate-700">
-                        {optimizerExplainer.lines.map((line, idx) => (
-                          <li key={`opt-explain-${idx}`}>{line}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="mt-2 text-[11px] text-slate-600 space-y-1">
-                        <div>
-                          {optimizerWhyLines[0] ||
-                            "Run the optimizer to get a ready-made storyline and exportable rationale."}
-                        </div>
-                        {optimizerWhyLines[1] && (
-                          <div>{optimizerWhyLines[1]}</div>
-                        )}
-                        <div className="text-slate-500">
-                          Pair this with the Callouts cards to cite constraints, feasibility, and
-                          where the optimizer wants you to push next.
-                        </div>
-                      </div>
+                    <div className="text-sm font-semibold text-slate-900">
+                      {explainDeltaOptimized?.mainDriver || scorecardExplainDelta?.mainDriver || "Drivers appear here once a baseline is set."}
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-1">
+                      {explainDeltaOptimized?.segmentLine || scorecardExplainDelta?.segmentLine || "Narrate which segment is winning or losing once deltas are available."}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-purple-100 bg-purple-50/40 px-3 py-2">
+                    <div className="text-[11px] uppercase text-slate-600">
+                      Optimizer outlook
+                    </div>
+                    <div className="text-sm font-semibold text-slate-900">
+                      {optimizerWhyLines.length > 0
+                        ? optimizerWhyLines[0]
+                        : quickOpt.best
+                        ? "Optimizer ready - run to refresh insights."
+                        : "Set ranges & floors, then run the optimizer."}
+                    </div>
+                    {optimizerWhyLines.length > 1 && (
+                      <p className="text-[11px] text-slate-600 mt-1">
+                        {optimizerWhyLines[1]}
+                      </p>
                     )}
                   </div>
                 </div>
+
+                <Explanation slot="callouts.overview">
+                  Provide a short narrative that summarizes the optimizer result and where guardrails bite. Mention how to validate: rerun optimizer, review waterfall, export/print the summary.
+                </Explanation>
+              </>
+            ) : (
+              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-3 py-2 text-sm text-slate-600">
+                Run the optimizer to populate these callouts with lift, drivers, and guardrail notes.
               </div>
             )}
           </Section>
-
           <Section
             id="kpi-pocket-coverage"
             title="KPI - Pocket floor coverage"
