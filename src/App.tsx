@@ -3795,7 +3795,7 @@ export default function App() {
                           {optResult ? (
                             <span>
                               Best ladder ${optResult.prices.good}/$
-                              {optResult.prices.better}/${optResult.prices.best} -`&gt; Profit
+                              {optResult.prices.better}/${optResult.prices.best} -&gt; Profit
                               delta ${Math.round(optResult.profit)}
                             </span>
                           ) : (
@@ -3834,7 +3834,7 @@ export default function App() {
 
                           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
                             <label className="flex items-center gap-2">
-                              <span className="w-28">Gap G-`&gt;B</span>
+                              <span className="w-28">Gap G-&gt;B</span>
                               <input
                                 type="number"
                                 className="border rounded px-2 h-8 flex-1"
@@ -3848,7 +3848,7 @@ export default function App() {
                               />
                             </label>
                             <label className="flex items-center gap-2">
-                              <span className="w-28">Gap B-`&gt;Best</span>
+                              <span className="w-28">Gap B-&gt;Best</span>
                               <input
                                 type="number"
                                 className="border rounded px-2 h-8 flex-1"
@@ -4613,9 +4613,9 @@ export default function App() {
                         feasible ladders (pocket floors)
                       </div>
                       <div className="text-[11px] text-gray-600 mt-1">
-                        baseline {pct0}% -> {pct1}% |{" "}
-                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} |{" "}
-                        {coverageSnapshot.tested.toLocaleString()} combos | step $
+                        baseline {pct0}% -&gt; {pct1}% ·{" "}
+                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} ·{" "}
+                        {coverageSnapshot.tested.toLocaleString()} combos · step $
                         {coverageSnapshot.step}
                       </div>
                     </div>
@@ -4647,7 +4647,7 @@ export default function App() {
                     </div>
                     <div>
                       <span className="font-semibold text-gray-800">Grid and gaps:</span>{" "}
-                      Good -> Better gap {optConstraints.gapGB}, Better -> Best gap {optConstraints.gapBB}; step $
+                      Good → Better gap {optConstraints.gapGB}, Better → Best gap {optConstraints.gapBB}; step $
                       {optRanges.step} across {coverageSnapshot.tested.toLocaleString()} ladder combinations.
                     </div>
                   </div>

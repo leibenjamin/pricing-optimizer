@@ -1,4 +1,4 @@
-// src/lib/explain.ts
+﻿// src/lib/explain.ts
 import type { Prices } from "./segments";
 import { computePocketPrice, type Leakages, type Tier } from "./waterfall";
 
