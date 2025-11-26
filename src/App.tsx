@@ -4613,9 +4613,9 @@ export default function App() {
                         feasible ladders (pocket floors)
                       </div>
                       <div className="text-[11px] text-gray-600 mt-1">
-                        baseline {pct0}% → {pct1}% ·{" "}
-                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} ·{" "}
-                        {coverageSnapshot.tested.toLocaleString()} combos · step $
+                        baseline {pct0}% -> {pct1}% |{" "}
+                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} |{" "}
+                        {coverageSnapshot.tested.toLocaleString()} combos | step $
                         {coverageSnapshot.step}
                       </div>
                     </div>
