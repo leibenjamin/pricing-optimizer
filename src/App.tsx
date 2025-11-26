@@ -4559,6 +4559,24 @@ export default function App() {
             title="KPI - Pocket floor coverage"
             actions={<ActionCluster chart="coverage" id="coverage-heatmap" csv />}
           >
+            <Explanation slot="kpi.pocketCoverage">
+              <div className="font-semibold text-[11px] text-slate-700">
+                How to read pocket floor coverage
+              </div>
+              <ul className="mt-1 list-disc space-y-1 pl-4">
+                <li>
+                  Coverage is the share of Good/Better/Best ladders inside the search grid that clear pocket-margin floors
+                  after promo/FX/refund leakages.
+                </li>
+                <li>
+                  The sensitivity slider bumps every floor up or down (in percentage points) to stress-test how fragile feasibility is
+                  before you run the optimizer.
+                </li>
+                <li>
+                  Apply floors pushes the adjusted floors into the optimizer guardrails so the global search aligns with what you are validating here.
+                </li>
+              </ul>
+            </Explanation>
             <div className="flex items-center gap-2 text-xs mb-2">
               <span className="text-gray-600">Floor sensitivity:</span>
               <input
@@ -4621,6 +4639,18 @@ export default function App() {
                       Apply floors
                     </button>
                   </div>
+                  <div className="text-[11px] text-gray-700 mt-2 space-y-1">
+                    <div>
+                      <span className="font-semibold text-gray-800">Floors tested:</span>{" "}
+                      Good {Math.round(floors1.good * 100)}% | Better {Math.round(floors1.better * 100)}% | Best{" "}
+                      {Math.round(floors1.best * 100)}% ({kpiFloorAdj} pp sensitivity applied).
+                    </div>
+                    <div>
+                      <span className="font-semibold text-gray-800">Grid and gaps:</span>{" "}
+                      Good -> Better gap {optConstraints.gapGB}, Better -> Best gap {optConstraints.gapBB}; step $
+                      {optRanges.step} across {coverageSnapshot.tested.toLocaleString()} ladder combinations.
+                    </div>
+                  </div>
 
                   <div className="mt-3">
                     {(() => {
@@ -4639,18 +4669,28 @@ export default function App() {
                         <>
                           <details className="mb-1">
                             <summary className="cursor-pointer select-none text-[11px] text-gray-600">
-                              What is this slice?
+                              How to read this heatmap
                             </summary>
-                            <div className="text-[11px] text-gray-600 mt-1">
-                              Good Ã— Better feasibility with Best fixed near the
-                              lower feasible bound (approx {bestUsed}).
+                            <div className="text-[11px] text-gray-600 mt-1 space-y-1">
+                              <div>
+                                Best is pinned near the lowest feasible price (about {bestUsed}) so we can see the Good
+                                vs Better feasibility wedge.
+                              </div>
+                              <div>
+                                Green cells = Good/Better price pairs that clear the pocket floors and respect the required gaps; gray cells fail a gap or a margin floor.
+                              </div>
+                              <div>
+                                If the green band collapses as you raise floors, either ease the floors, widen the gap guardrails, or broaden the search ranges before running the optimizer.
+                              </div>
                             </div>
                           </details>
+
 
                           <HeatmapMini
                             cells={cells}
                             gTicks={gTicks}
                             bTicks={bTicks}
+                            title="Feasible region (Good on X, Better on Y)"
                             chartId="coverage-heatmap"
                             exportKind="coverage"
                           />

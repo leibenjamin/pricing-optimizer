@@ -15,7 +15,7 @@ export default function HeatmapMini({
   cells,
   gTicks,
   bTicks,
-  title = "Feasible region (Good × Better)",
+  title = "Feasible region (Good vs Better)",
   height = 220,
   chartId,
   exportKind = "coverage",
@@ -166,7 +166,8 @@ export default function HeatmapMini({
         })}
       </svg>
       <div className="text-[11px] text-gray-600 mt-1">
-        Green = tiers feasible at pocket-margin floors (Best fixed near the lower feasible bound).
+        Green = Good/Better price pairs that clear pocket-margin floors with Best pinned near its lowest feasible point;
+        gray = fails a gap or a floor.
       </div>
     </div>
   );
