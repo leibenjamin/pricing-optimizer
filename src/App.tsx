@@ -1536,7 +1536,7 @@ export default function App() {
       Math.abs(seg.betaPrice) > Math.abs(best.betaPrice) ? seg : best
     , segments[0]);
 
-    const segmentLine = `Most price-sensitive segment right now: â€œ${mostPriceSensitive.name}â€ (Î²_price = ${mostPriceSensitive.betaPrice.toFixed(
+    const segmentLine = `Most price-sensitive segment right now: ${mostPriceSensitive.name} (Î²_price = ${mostPriceSensitive.betaPrice.toFixed(
       2
     )}). Price moves that help or hurt them will have outsized impact.`;
 
@@ -1544,11 +1544,11 @@ export default function App() {
     let suggestion: string;
     if (Math.abs(deltaProfit) < 1e-2) {
       suggestion =
-        "Youâ€™re right on top of your baseline. Try a small $1â€“$2 nudge to the Better tier to explore profit vs. conversion trade-offs.";
+        "You're right on top of your baseline. Try a small $1-$2 nudge to the Better tier to explore profit vs. conversion trade-offs.";
     } else if (deltaProfit > 0) {
-      suggestion = `Youâ€™re ahead of baseline. If youâ€™re comfortable with the current active-customer level, consider testing a slightly higher price for the ${main.tier} tier to see if profit can rise further without losing too many buyers.`;
+      suggestion = `You're ahead of baseline. If you're comfortable with the current active-customer level, consider testing a slightly higher price for the ${main.tier} tier to see if profit can rise further without losing too many buyers.`;
     } else {
-      suggestion = `Profit is below baseline. Consider nudging the ${main.tier} tier back toward the baseline price, or improving its features, to regain mix from â€œNoneâ€ or lower tiers.`;
+      suggestion = `Profit is below baseline. Consider nudging the ${main.tier} tier back toward the baseline price, or improving its features, to regain mix from 'None' or lower tiers.`;
     }
 
     return {
