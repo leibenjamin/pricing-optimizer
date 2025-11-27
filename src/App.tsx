@@ -1,4 +1,4 @@
-// src/App.tsx
+﻿// src/App.tsx
 
 import { Suspense, lazy, type ReactNode, type ChangeEvent } from "react";
 // replace direct imports:
@@ -379,10 +379,10 @@ export default function App() {
               <div className="flex items-start gap-2">
                 <div className="mt-0.5">
                   {t.kind === "error"
-                    ? "⚠️"
+                    ? "âš ï¸"
                     : t.kind === "success"
-                    ? "✅"
-                    : "ℹ️"}
+                    ? "âœ…"
+                    : "â„¹ï¸"}
                 </div>
                 <div className="flex-1">{t.msg}</div>
                 <button
@@ -392,7 +392,7 @@ export default function App() {
                     setToasts((ts) => ts.filter((x) => x.id !== t.id))
                   }
                 >
-                  ✕
+                  âœ•
                 </button>
               </div>
             </div>
@@ -438,7 +438,7 @@ export default function App() {
     // Keyboard shortcuts (Alt+1..4 = PNG, Shift+Alt+1..4 = CSV, Ctrl/Cmd+P = print)
     useEffect(() => {
       const onKey = (e: KeyboardEvent) => {
-        // Respect native print with Ctrl/Cmd+P (don’t intercept)
+        // Respect native print with Ctrl/Cmd+P (donâ€™t intercept)
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") return;
 
         const idx = Number(e.key) - 1; // '1' -> 0
@@ -495,7 +495,7 @@ export default function App() {
                   key={g.chartId}
                   className="flex items-center gap-1 border rounded-md px-1 py-0.5"
                   aria-label={g.aria}
-                  title={`${g.label} • Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
+                  title={`${g.label} â€¢ Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
                 >
                   {/* Chip label scrolls to the section */}
                   <button
@@ -936,6 +936,7 @@ export default function App() {
     setCosts(p.costs);
     setRefPrices(p.refPrices);
     setLeak(p.leak);
+    setChannelBlendApplied(false);
     setScenarioPresetId(p.id);
     pushJ(`Loaded preset: ${p.name}`);
   }, [setPrices, setCosts, setRefPrices, setLeak, pushJ]);
@@ -1275,11 +1276,10 @@ export default function App() {
         );
         setOptResult({ prices: out.prices, profit: out.profit, kpis: resultKPIs });
         pushJ(
-          `[${now()}] Optimizer ✓ best ladder $${out.prices.good}/$${
-            out.prices.better
-          }/$${out.prices.best} (profit≈$${Math.round(out.profit)})`
+          `[${now()}] Optimizer best ladder $${out.prices.good}/$${out.prices.better}/$${out.prices.best} (profit $${Math.round(out.profit)})`
         );
         toast("success", "Optimizer finished");
+        toast("info", "Optimizer done. Pin as baseline for clean deltas.");
       })
       .catch((e) => {
         if (runIdRef.current !== runId) return;
@@ -1728,7 +1728,7 @@ export default function App() {
       if (!stats) return `${label} --`;
       return `${label} $${stats.min.toFixed(2)}-$${stats.max.toFixed(2)}`;
     });
-    return `${prefix}: ${rows.join(" · " )}`;
+    return `${prefix}: ${rows.join(" Â· " )}`;
   }, [priceRangeState]);
 
   const dataRangeOptionLabel =
@@ -2148,7 +2148,7 @@ export default function App() {
       await navigator.clipboard.writeText(window.location.href);
       toast?.("success", "URL copied to clipboard");
     } catch {
-      toast?.("error", "Copy failed�select and copy the address bar");
+      toast?.("error", "Copy failed—select and copy the address bar");
     }
   }
 
@@ -2300,7 +2300,7 @@ export default function App() {
 
   async function saveScenarioShortLink() {
     try {
-      // 1) Cheap warmup — if it fails, we continue anyway
+      // 1) Cheap warmup â€” if it fails, we continue anyway
       const ok = await preflight("/api/get?s=ping");
       if (!ok) {
         pushJ(`[${now()}] Preflight failed (continuing to save)`);
@@ -2356,7 +2356,7 @@ export default function App() {
         try {
           const bodyUnknown: unknown = await res.json();
           if (isSaveError(bodyUnknown)) {
-            if (bodyUnknown.error) detail += ` — ${bodyUnknown.error}`;
+            if (bodyUnknown.error) detail += ` â€” ${bodyUnknown.error}`;
             if (Array.isArray(bodyUnknown.issues) && bodyUnknown.issues.length) {
               const i0 = bodyUnknown.issues[0];
               const at = i0?.path ? ` at ${i0.path.join(".")}` : "";
@@ -2529,12 +2529,12 @@ export default function App() {
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h1 className="text-xl font-semibold">Pricing Optimizer</h1>
                 <span className="text-xs text-gray-500">
-                  v0.3 � Latent-class choice model (3 segments)
+                  v0.3 • Latent-class choice model (3 segments)
                 </span>
               </div>
               <p className="mt-1 text-sm text-slate-600">
-                Good/Better/Best ladder � pocket price waterfall � profit frontier �
-                tornado sensitivity � cohorts
+                Good/Better/Best ladder • pocket price waterfall • profit frontier •
+                tornado sensitivity • cohorts
               </p>
               <div className="no-print mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
                 <button
@@ -2546,7 +2546,7 @@ export default function App() {
                   Take tour
                 </button>
                 <span className="text-xs text-slate-500">
-                  4 steps � highlights each key section
+                  4 steps · highlights each key section
                 </span>
               </div>
             </div>
@@ -2823,7 +2823,7 @@ export default function App() {
                 footer={
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-gray-600">
-                      The estimator runs in a Web Worker and won�t block the UI. Your CSV never leaves the browser.
+                      The estimator runs in a Web Worker and won’t block the UI. Your CSV never leaves the browser.
                     </p>
                     <button
                       className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
@@ -3159,7 +3159,10 @@ export default function App() {
                               onChange={(e) => {
                                 const v = e.target.value;
                                 setPresetSel(v);
-                                if (LEAK_PRESETS[v]) setLeak(LEAK_PRESETS[v]);
+                                if (LEAK_PRESETS[v]) {
+                                  setLeak(LEAK_PRESETS[v]);
+                                  setChannelBlendApplied(false);
+                                }
                               }}
                             >
                               <option value="" disabled>
@@ -3205,32 +3208,34 @@ export default function App() {
                                     step={0.01}
                                     className="h-9 w-full border rounded px-2 bg-white"
                                     value={leak.promo[t]}
-                                    onChange={(e) =>
-                                      setLeak((L) => ({
-                                        ...L,
-                                        promo: {
-                                          ...L.promo,
-                                          [t]: clamp01(Number(e.target.value)),
-                                        },
-                                      }))
-                                    }
-                                  />
+                                  onChange={(e) => {
+                                    setLeak((L) => ({
+                                      ...L,
+                                      promo: {
+                                        ...L.promo,
+                                        [t]: clamp01(Number(e.target.value)),
+                                      },
+                                    }));
+                                    setChannelBlendApplied(false);
+                                  }}
+                                />
                                   <span className="text-slate-700">Volume</span>
                                   <input
                                     type="number"
                                     step={0.01}
                                     className="h-9 w-full border rounded px-2 bg-white"
                                     value={leak.volume[t]}
-                                    onChange={(e) =>
-                                      setLeak((L) => ({
-                                        ...L,
-                                        volume: {
-                                          ...L.volume,
-                                          [t]: clamp01(Number(e.target.value)),
-                                        },
-                                      }))
-                                    }
-                                  />
+                                  onChange={(e) => {
+                                    setLeak((L) => ({
+                                      ...L,
+                                      volume: {
+                                        ...L.volume,
+                                        [t]: clamp01(Number(e.target.value)),
+                                      },
+                                    }));
+                                    setChannelBlendApplied(false);
+                                  }}
+                                />
                                 </div>
                               ))}
                             </div>
@@ -3273,12 +3278,13 @@ export default function App() {
                                   step={0.001}
                                   className="h-9 w-full border rounded px-2 bg-white"
                                   value={leak.paymentPct}
-                                  onChange={(e) =>
+                                  onChange={(e) => {
                                     setLeak((L) => ({
                                       ...L,
                                       paymentPct: clamp01(Number(e.target.value)),
-                                    }))
-                                  }
+                                    }));
+                                    setChannelBlendApplied(false);
+                                  }}
                                 />
                               </label>
                               <label className="flex flex-col gap-1 font-semibold text-slate-800">
@@ -3288,12 +3294,13 @@ export default function App() {
                                   step={0.01}
                                   className="h-9 w-full border rounded px-2 bg-white"
                                   value={leak.paymentFixed}
-                                  onChange={(e) =>
+                                  onChange={(e) => {
                                     setLeak((L) => ({
                                       ...L,
                                       paymentFixed: Math.max(0, Number(e.target.value)),
-                                    }))
-                                  }
+                                    }));
+                                    setChannelBlendApplied(false);
+                                  }}
                                 />
                               </label>
                               <label className="flex flex-col gap-1 font-semibold text-slate-800">
@@ -3303,12 +3310,13 @@ export default function App() {
                                   step={0.001}
                                   className="h-9 w-full border rounded px-2 bg-white"
                                   value={leak.fxPct}
-                                  onChange={(e) =>
+                                  onChange={(e) => {
                                     setLeak((L) => ({
                                       ...L,
                                       fxPct: clamp01(Number(e.target.value)),
-                                    }))
-                                  }
+                                    }));
+                                    setChannelBlendApplied(false);
+                                  }}
                                 />
                               </label>
                               <label className="flex flex-col gap-1 font-semibold text-slate-800">
@@ -3318,12 +3326,13 @@ export default function App() {
                                   step={0.001}
                                   className="h-9 w-full border rounded px-2 bg-white"
                                   value={leak.refundsPct}
-                                  onChange={(e) =>
+                                  onChange={(e) => {
                                     setLeak((L) => ({
                                       ...L,
                                       refundsPct: clamp01(Number(e.target.value)),
-                                    }))
-                                  }
+                                    }));
+                                    setChannelBlendApplied(false);
+                                  }}
                                 />
                               </label>
                             </div>
@@ -3681,7 +3690,7 @@ export default function App() {
                               slotUsePocketMargins
                             ),
                             title: `${fallbackTitle} (${slotUsePocket ? "pocket" : "list"})`,
-                            subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} � Segments: ${compareUseSavedSegments && obj.segments ? "saved" : "current"} � Leak/refs: ${compareUseSavedLeakRefs && obj.leak ? "saved" : "current"}`,
+                            subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} · Segments: ${compareUseSavedSegments && obj.segments ? "saved" : "current"} · Leak/refs: ${compareUseSavedLeakRefs && obj.leak ? "saved" : "current"}`,
                           };
                         };
 
@@ -3800,7 +3809,7 @@ export default function App() {
                       <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
                         {journal.length === 0 ? (
                           <li className="text-gray-400">
-                            Adjust sliders/toggles to log changes�
+                            Adjust sliders/toggles to log changes…
                           </li>
                         ) : (
                           journal.map((line, i) => <li key={i}>{line}</li>)
@@ -3858,7 +3867,7 @@ export default function App() {
             <div role="tabpanel" id="tab-global-optimizer" aria-labelledby="tab-btn-optimizer" className="col-span-12 lg:col-span-3 space-y-3 md:space-y-4 min-w-0 self-start md:text-[13px] pr-1">
           <Section id="global-optimizer" title="Global Optimizer">
                       <Explanation slot="chart.optimizer">
-                        Desktop ChatGPT: provide copy that frames this as the �decision cockpit� � explain ranges, steps,
+                        Desktop ChatGPT: provide copy that frames this as the “decision cockpit” — explain ranges, steps,
                         charm-ending toggle, and pocket-vs-list guardrails. Call out how to cite binding constraints and what
                         to say when the optimizer fails or returns no feasible ladder.
                       </Explanation>
@@ -4191,19 +4200,19 @@ export default function App() {
                             className="space-y-2 text-slate-600 mt-2"
                           >
                             <div>
-                              <span className="font-semibold">Tier discounts</span>: TODO � describe how promo vs. volume knobs
+                              <span className="font-semibold">Tier discounts</span>: TODO — describe how promo vs. volume knobs
                               affect list-to-pocket math and when to prioritize each tier.
                             </div>
                             <div>
-                              <span className="font-semibold">Global leakages</span>: TODO � explain processor %, fixed fees, FX,
+                              <span className="font-semibold">Global leakages</span>: TODO — explain processor %, fixed fees, FX,
                               and refunds along with the types of businesses that feel each leakage the most.
                             </div>
                             <div>
-                              <span className="font-semibold">Compare all tiers</span>: TODO � narrative on using the mini
+                              <span className="font-semibold">Compare all tiers</span>: TODO — narrative on using the mini
                               waterfalls to defend Good/Better/Best deltas.
                             </div>
                             <div>
-                              <span className="font-semibold">Channel blend</span>: TODO � instructions for blending Stripe vs.
+                              <span className="font-semibold">Channel blend</span>: TODO — instructions for blending Stripe vs.
                               marketplaces and how to talk about the resulting composite leak profile.
                             </div>
                           </div>
@@ -4417,13 +4426,13 @@ export default function App() {
                     </Section>
           <Section id="methods" title="Methods">
                       <p className="text-sm text-gray-700 print-tight">
-                        MNL: U = �0(j) + �?�price + �_A�featA + �_B�featB; outside option
+                        MNL: U = ß0(j) + ß?·price + ß_A·featA + ß_B·featB; outside option
                         intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
                         ridge regularization.
                       </p>
                       {fitInfo && (
                         <div className="text-xs text-gray-600 mt-2">
-                          logLik: {Math.round(fitInfo.logLik)} � iters: {fitInfo.iters} �{" "}
+                          logLik: {Math.round(fitInfo.logLik)} • iters: {fitInfo.iters} •{" "}
                           {fitInfo.converged ? "converged" : "not converged"}
                         </div>
                       )}
@@ -4921,9 +4930,9 @@ export default function App() {
                         feasible ladders (pocket floors)
                       </div>
                       <div className="text-[11px] text-gray-600 mt-1">
-                        baseline {pct0}% -&gt; {pct1}% �{" "}
-                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} �{" "}
-                        {coverageSnapshot.tested.toLocaleString()} combos � step $
+                        baseline {pct0}% -&gt; {pct1}% ·{" "}
+                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} ·{" "}
+                        {coverageSnapshot.tested.toLocaleString()} combos · step $
                         {coverageSnapshot.step}
                       </div>
                     </div>
@@ -5019,10 +5028,10 @@ export default function App() {
             actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
           >
             <Explanation slot="chart.profitFrontier">
-              Desktop ChatGPT: explain how to narrate the profit frontier � what holding Good/Better constant means,
+              Desktop ChatGPT: explain how to narrate the profit frontier — what holding Good/Better constant means,
               how to spot the sweet spot vs. margin floors, and when to use this plot before invoking the optimizer.
               Mention that each point is a full mixed-logit evaluation, so it is ideal for fast sense-checking of the
-              Best tier and for answering �what if we nudged premium $X?� questions.
+              Best tier and for answering “what if we nudged premium $X?” questions.
             </Explanation>
             <div className="text-[11px] text-slate-600">
               Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}; Good/Better fixed, sweep Best.
@@ -5059,16 +5068,16 @@ export default function App() {
             actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
           >
             <Explanation slot="chart.takeRate">
-              Desktop ChatGPT: outline how to use take-rate bars to judge conversion mix, what �None� represents,
+              Desktop ChatGPT: outline how to use take-rate bars to judge conversion mix, what “None” represents,
               and which inputs (prices, features, reference prices) materially shift these bars. Include guidance on
-              how hiring managers should talk through a mix change (e.g., �Value seekers grew +Xpp when we��)
+              how hiring managers should talk through a mix change (e.g., “Value seekers grew +Xpp when we…”)
             </Explanation>
             <div className="text-[11px] text-slate-600">
               Demand-only view: leakages and margin floors are not applied here.
             </div>
             <Suspense
               fallback={
-                <div className="text-xs text-gray-500 p-2">Loading bars�</div>
+                <div className="text-xs text-gray-500 p-2">Loading bars…</div>
               }
             >
               <ErrorBoundary title="Take-Rate chart failed">
@@ -5142,7 +5151,7 @@ export default function App() {
                       />
                       <span>%</span>
                       <span className="text-gray-500 ml-2">
-                        (churn � {(100 - retentionPct).toFixed(1)}%/mo)
+                        (churn ˜ {(100 - retentionPct).toFixed(1)}%/mo)
                       </span>
                     </div>
 
@@ -5166,7 +5175,7 @@ export default function App() {
 
           <Section
             id="tornado"
-            title="Tornado � what moves profit?"
+            title="Tornado — what moves profit?"
             className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
             actions={<ActionCluster chart="tornado" id="tornado-main" csv />}
           >
@@ -5196,7 +5205,7 @@ export default function App() {
                     )
                   }
                 >
-                  <option value="symmetric">�{tornadoPriceBump}% symmetric</option>
+                  <option value="symmetric">±{tornadoPriceBump}% symmetric</option>
                   <option value="data" disabled={!priceRangeState?.map}>
                     {dataRangeOptionLabel}
                   </option>
@@ -5288,7 +5297,7 @@ export default function App() {
             <Suspense
               fallback={
                 <div className="text-xs text-gray-500 p-2">
-                  Loading tornado�
+                  Loading tornado…
                 </div>
               }
             >
