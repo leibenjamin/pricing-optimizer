@@ -91,6 +91,7 @@ const WATERFALL_COLOR_MAP: Record<string, string> = WATERFALL_LEGEND.reduce(
 );
 
 const TIER_ORDER: readonly Tier[] = ["good", "better", "best"] as const;
+type OptimizerKind = "grid-worker" | "grid-inline" | "future";
 
 type PriceRangeState = {
   map: TierRangeMap;
@@ -100,7 +101,6 @@ type BaselineMeta = {
   label: string;
   savedAt: number;
 };
-
 const ONBOARDING_STEPS = [
   {
     id: "start-ladder",
@@ -330,10 +330,15 @@ export default function App() {
     "sliders" | "segments" | "leakages"
   >("sliders");
   const [scenarioBaseline, setScenarioBaseline] = useStickyState<
-    { snapshot: ScenarioImport; savedAt: number } | null
-  >("po:scenario-baseline", null);
+    {
+      snapshot: ReturnType<typeof buildScenarioSnapshot>;
+      kpis: SnapshotKPIs;
+      basis: { usePocketProfit: boolean; usePocketMargins: boolean };
+      meta: BaselineMeta;
+    } | null
+  >("po:scenario-baseline-v2", null);
 
-  // Baseline KPIs for the "Tell me what changed" panel
+  // Baseline KPIs for the "Tell me what changed" panel (derived from scenarioBaseline for backward compatibility)
   const [baselineKPIs, setBaselineKPIs] = useState<SnapshotKPIs | null>(null);
   const [baselineMeta, setBaselineMeta] = useState<BaselineMeta | null>(null);
   const [scorecardView, setScorecardView] = useState<"current" | "optimized">("current");
@@ -1094,6 +1099,7 @@ export default function App() {
             refPrices?: typeof refPrices;
             leak?: typeof leak;
             segments?: typeof segments;
+            channelMix?: typeof channelMix;
             analysis?: {
               tornadoPocket?: boolean;
               tornadoPriceBump?: number;
@@ -1103,6 +1109,8 @@ export default function App() {
               kpiFloorAdj?: number;
               priceRange?: TierRangeMap;
               priceRangeSource?: PriceRangeSource;
+              optRanges?: typeof optRanges;
+              optConstraints?: typeof optConstraints;
             };
           };
         };
@@ -1112,6 +1120,7 @@ export default function App() {
         if (scenario.refPrices) setRefPrices(scenario.refPrices);
         if (scenario.leak) setLeak(scenario.leak);
         if (scenario.segments) setSegments(scenario.segments);
+        if (scenario.channelMix) setChannelMix(scenario.channelMix);
 
         // Restore analysis knobs if present
         if (scenario.analysis) {
@@ -1136,6 +1145,9 @@ export default function App() {
           if (typeof scenario.analysis.kpiFloorAdj === "number") {
             setKpiFloorAdj(scenario.analysis.kpiFloorAdj);
           }
+          if (scenario.analysis.optRanges) setOptRanges(scenario.analysis.optRanges);
+          if (scenario.analysis.optConstraints)
+            setOptConstraints(scenario.analysis.optConstraints);
           if (scenario.analysis.priceRange) {
             const ok = setPriceRangeFromData(
               scenario.analysis.priceRange,
@@ -1402,16 +1414,26 @@ export default function App() {
   // Profit frontier: sweep Best price; keep Good/Better fixed (latent-class mix)
   const frontier = useMemo(() => {
     const points: { bestPrice: number; profit: number }[] = [];
+    const usePocket = !!optConstraints.usePocketProfit;
     for (let p = 5; p <= 60; p += 1) {
       const pricesP = { good: prices.good, better: prices.better, best: p };
       const probsP = choiceShares(pricesP, features, segments, refPrices);
       const take_good = Math.round(N * probsP.good);
       const take_better = Math.round(N * probsP.better);
       const take_best = Math.round(N * probsP.best);
+      const effGood = usePocket
+        ? computePocketPrice(prices.good, "good", leak).pocket
+        : prices.good;
+      const effBetter = usePocket
+        ? computePocketPrice(prices.better, "better", leak).pocket
+        : prices.better;
+      const effBest = usePocket
+        ? computePocketPrice(p, "best", leak).pocket
+        : p;
       const profitP =
-        take_good * (prices.good - costs.good) +
-        take_better * (prices.better - costs.better) +
-        take_best * (p - costs.best);
+        take_good * (effGood - costs.good) +
+        take_better * (effBetter - costs.better) +
+        take_best * (effBest - costs.best);
       points.push({ bestPrice: p, profit: profitP });
     }
     if (points.length === 0)
@@ -1434,6 +1456,8 @@ export default function App() {
     features,
     segments,
     refPrices,
+    leak,
+    optConstraints.usePocketProfit,
   ]);
 
 
@@ -1463,9 +1487,10 @@ export default function App() {
       kpisFromSnapshot(
         { prices, costs, features, segments, refPrices, leak },
         N,
-        false // use list prices for this explainer to match the top KPI strip
+        !!optConstraints.usePocketProfit,
+        optConstraints.usePocketMargins ?? optConstraints.usePocketProfit ?? false
       ),
-    [prices, costs, features, segments, refPrices, leak, N]
+    [prices, costs, features, segments, refPrices, leak, N, optConstraints.usePocketProfit, optConstraints.usePocketMargins]
   );
   const optimizedKPIs = useMemo(
     () => {
@@ -1473,19 +1498,12 @@ export default function App() {
       return kpisFromSnapshot(
         { prices: optResult.prices, costs, features, segments, refPrices, leak },
         N,
-        false
+        !!optConstraints.usePocketProfit,
+        optConstraints.usePocketMargins ?? optConstraints.usePocketProfit ?? false
       );
     },
-    [optResult, costs, features, segments, refPrices, leak, N]
+    [optResult, costs, features, segments, refPrices, leak, N, optConstraints.usePocketProfit, optConstraints.usePocketMargins]
   );
-
-  // Initialize baseline once on first render
-  useEffect(() => {
-    if (!baselineKPIs) {
-      setBaselineKPIs(currentKPIs);
-      setBaselineMeta({ label: "Pinned on load", savedAt: Date.now() });
-    }
-  }, [baselineKPIs, currentKPIs]);
 
   const buildExplainDelta = useCallback(
     (target: SnapshotKPIs | null): ExplainDelta | null => {
@@ -1728,10 +1746,10 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (!quickOpt.best && tornadoView === "optimized") {
+    if (!optResult?.prices && !quickOpt.best && tornadoView === "optimized") {
       setTornadoView("current");
     }
-  }, [quickOpt.best, tornadoView]);
+  }, [optResult?.prices, quickOpt.best, tornadoView]);
 
   const optimizerProfitDelta = useMemo(() => {
     if (!optResult) return null;
@@ -1791,8 +1809,9 @@ export default function App() {
   ]);
 
   const tornadoRowsOptim = useMemo(() => {
-    if (!quickOpt.best) return [];
-    const p = quickOpt.best;
+    const bestLadder = optResult?.prices ?? quickOpt.best;
+    if (!bestLadder) return [];
+    const p = bestLadder;
     const bumps = computePriceBumps(p);
     const avgSpan = avgFromBumps(bumps);
     return tornadoProfit(
@@ -1811,7 +1830,8 @@ export default function App() {
       deltaHigh: r.deltaHigh,
     }));
   }, [
-    quickOpt,
+    optResult,
+    quickOpt.best,
     N,
     costs,
     features,
@@ -1824,7 +1844,7 @@ export default function App() {
     avgFromBumps,
   ]);
 
-  const hasOptimizedTornado = Boolean(quickOpt.best);
+  const hasOptimizedTornado = Boolean(optResult?.prices ?? quickOpt.best);
   const activeTornadoRows =
     tornadoView === "optimized" && hasOptimizedTornado
       ? tornadoRowsOptim
@@ -1872,6 +1892,10 @@ export default function App() {
     retentionPct: number;
     kpiFloorAdj: number;
     priceRange: PriceRangeState | null;
+    optRanges: typeof optRanges;
+    optConstraints: typeof optConstraints;
+    channelMix?: typeof channelMix;
+    optimizerKind?: OptimizerKind;
   }) {
     const segs = normalizeSegmentsForSave(args.segments);
     return {
@@ -1888,6 +1912,9 @@ export default function App() {
         tornadoRangeMode: args.tornadoRangeMode,
         retentionPct: args.retentionPct,
         kpiFloorAdj: args.kpiFloorAdj,
+        optRanges: args.optRanges,
+        optConstraints: args.optConstraints,
+        optimizerKind: args.optimizerKind ?? "grid-worker",
         ...(args.priceRange
           ? {
               priceRange: args.priceRange.map,
@@ -1895,6 +1922,7 @@ export default function App() {
             }
           : {}),
       },
+      ...(args.channelMix ? { channelMix: args.channelMix } : {}),
     };
   }
 
@@ -1905,8 +1933,7 @@ export default function App() {
     const o = x as Record<string, unknown>;
     return (
       typeof o.prices === "object" &&
-      typeof o.costs === "object" &&
-      typeof o.features === "object"
+      typeof o.costs === "object"
     );
   }
 
@@ -1945,6 +1972,70 @@ export default function App() {
       }
     }
   }
+
+  // Initialize baseline once on first render (after helpers are defined)
+  useEffect(() => {
+    if (scenarioBaseline && scenarioBaseline.kpis && !baselineKPIs) {
+      setBaselineKPIs(scenarioBaseline.kpis);
+      setBaselineMeta(scenarioBaseline.meta);
+      return;
+    }
+    if (!baselineKPIs && currentKPIs) {
+      const meta = { label: "Pinned on load", savedAt: Date.now() };
+      const snap = buildScenarioSnapshot({
+        prices,
+        costs,
+        features,
+        refPrices,
+        leak,
+        segments,
+        tornadoPocket,
+        tornadoPriceBump,
+        tornadoPctBump,
+        tornadoRangeMode,
+        retentionPct,
+        kpiFloorAdj,
+        priceRange: priceRangeState,
+        optRanges,
+        optConstraints,
+        channelMix,
+        optimizerKind: "grid-worker",
+      });
+      setBaselineKPIs(currentKPIs);
+      setBaselineMeta(meta);
+      setScenarioBaseline({
+        snapshot: snap,
+        kpis: currentKPIs,
+        basis: {
+          usePocketProfit: !!optConstraints.usePocketProfit,
+          usePocketMargins: !!optConstraints.usePocketMargins,
+        },
+        meta,
+      });
+    }
+  }, [
+    baselineKPIs,
+    currentKPIs,
+    scenarioBaseline,
+    buildScenarioSnapshot,
+    prices,
+    costs,
+    features,
+    refPrices,
+    leak,
+    segments,
+    tornadoPocket,
+    tornadoPriceBump,
+    tornadoPctBump,
+    tornadoRangeMode,
+    retentionPct,
+    kpiFloorAdj,
+    priceRangeState,
+    optRanges,
+    optConstraints,
+    channelMix,
+    setScenarioBaseline,
+  ]);
 
 
   async function handleImportJson(e: ChangeEvent<HTMLInputElement>) {
@@ -1990,6 +2081,8 @@ export default function App() {
           setRetentionPct(sc.analysis.retentionPct);
         if (typeof sc.analysis.kpiFloorAdj === "number")
           setKpiFloorAdj(sc.analysis.kpiFloorAdj);
+        if (sc.analysis.optRanges) setOptRanges(sc.analysis.optRanges);
+        if (sc.analysis.optConstraints) setOptConstraints(sc.analysis.optConstraints);
         if (sc.analysis.priceRange) {
           const ok = setPriceRangeFromData(
             sc.analysis.priceRange,
@@ -2002,6 +2095,7 @@ export default function App() {
       } else {
         fallbackToSyntheticRanges();
       }
+      if (sc.channelMix) setChannelMix(sc.channelMix as typeof channelMix);
 
       pushJ?.(`[${now()}] Imported scenario JSON`);
       toast("success", "Imported scenario");
@@ -2075,6 +2169,10 @@ export default function App() {
       retentionPct,
       kpiFloorAdj,
       priceRange: priceRangeState,
+      optRanges,
+      optConstraints,
+      channelMix,
+      optimizerKind: "grid-worker",
     });
     const blob = new Blob([JSON.stringify(snap, null, 2)], {
       type: "application/json",
@@ -2205,6 +2303,10 @@ export default function App() {
         retentionPct,
         kpiFloorAdj,
         priceRange: priceRangeState,
+        optRanges,
+        optConstraints,
+        channelMix,
+        optimizerKind: "grid-worker",
       });
 
       // 3) POST with retries/backoff for 5xx/429 + per-request timeout
@@ -2274,6 +2376,10 @@ export default function App() {
       retentionPct,
       kpiFloorAdj,
       priceRange: priceRangeState,
+      optRanges,
+      optConstraints,
+      channelMix,
+      optimizerKind: "grid-worker",
     });
     writeSlot(id, snap);
     pushJ?.(`[${now()}] Saved current scenario to slot ${id}`);
@@ -2295,6 +2401,7 @@ export default function App() {
       setSegments(
         mapNormalizedToUI(normalizeSegmentsForSave(sc.segments))
       );
+    if (sc.channelMix) setChannelMix(sc.channelMix as typeof channelMix);
     if (sc.analysis) {
       if (typeof sc.analysis.tornadoPocket === "boolean")
         setTornadoPocket(sc.analysis.tornadoPocket);
@@ -2302,6 +2409,8 @@ export default function App() {
         setTornadoPriceBump(sc.analysis.tornadoPriceBump);
       if (typeof sc.analysis.tornadoPctBump === "number")
         setTornadoPctBump(sc.analysis.tornadoPctBump);
+      if (sc.analysis.optRanges) setOptRanges(sc.analysis.optRanges);
+      if (sc.analysis.optConstraints) setOptConstraints(sc.analysis.optConstraints);
       if (
         sc.analysis.tornadoRangeMode === "symmetric" ||
         sc.analysis.tornadoRangeMode === "data"
@@ -2874,8 +2983,8 @@ export default function App() {
                             setPrices({ good: 9, better: 15, best: 25 });
                             setCosts({ good: 3, better: 5, best: 8 });
                             setRefPrices({ good: 10, better: 18, best: 30 });
-                            setLeak({ promo: { good: 0.05, better: 0.05, best: 0.05 }, volume: { good: 0.03, better: 0.03, best: 0.03 }, paymentPct: 0.029, paymentFixed: 0.3, fxPct: 0, refundsPct: 0.02 });
-                            setOptConstraints({ gapGB: 2, gapBB: 4, marginFloor: { good: 0.25, better: 0.25, best: 0.25 }, charm: false, usePocketProfit: false, usePocketMargins: false });
+                            setLeak({ promo: { good: 0.05, better: 0.05, best: 0.05 }, volume: { good: 0.03, better: 0.03, best: 0.03 }, paymentPct: 0.029, paymentFixed: 0.1, fxPct: 0, refundsPct: 0.02 });
+                            setOptConstraints({ gapGB: 2, gapBB: 3, marginFloor: { good: 0.25, better: 0.25, best: 0.25 }, charm: false, usePocketProfit: false, usePocketMargins: false });
                           }}
                           aria-label="Reset all settings to defaults"
                         >
@@ -3407,16 +3516,36 @@ export default function App() {
                         retentionPct,
                         kpiFloorAdj,
                         priceRange: priceRangeState,
+                        optRanges,
+                        optConstraints,
+                        channelMix,
+                        optimizerKind: "grid-worker",
                       });
-                      setScenarioBaseline({ snapshot, savedAt: Date.now() });
-                      toast("success", "Saved scenario baseline");
+                      const meta = { label: "Pinned now", savedAt: Date.now() };
+                      const kpis = currentKPIs;
+                      if (kpis) {
+                        setScenarioBaseline({
+                          snapshot,
+                          kpis,
+                          basis: {
+                            usePocketProfit: !!optConstraints.usePocketProfit,
+                            usePocketMargins: !!optConstraints.usePocketMargins,
+                          },
+                          meta,
+                        });
+                        setBaselineKPIs(kpis);
+                        setBaselineMeta(meta);
+                        toast("success", "Saved scenario baseline");
+                      } else {
+                        toast("error", "Baseline not saved: KPIs unavailable");
+                      }
                     }}
                   >
                     Set current scenario to baseline now
                   </button>
                   <div className="text-xs text-gray-600">
                     {scenarioBaseline
-                      ? `Baseline saved ${new Date(scenarioBaseline.savedAt).toLocaleString()}`
+                      ? `Baseline saved ${new Date(scenarioBaseline.meta.savedAt).toLocaleString()}`
                       : "No scenario baseline saved yet."}
                   </div>
                 </div>
@@ -3446,66 +3575,53 @@ export default function App() {
                         const curKPIs = kpisFromSnapshot(
                           { prices, costs, features, refPrices, leak, segments },
                           N,
-                          usePocket
+                          usePocket,
+                          optConstraints.usePocketMargins ?? usePocket
                         );
 
                         const objA = readSlot("A");
                         const objB = readSlot("B");
                         const objC = readSlot("C");
 
-                        const slots: Record<"A" | "B" | "C", SnapshotKPIs | null> = {
-                          A: objA
-                            ? {
-                                ...kpisFromSnapshot(
-                                  {
-                                    prices: objA.prices,
-                                    costs: objA.costs,
-                                    features: objA.features,
-                                    refPrices: objA.refPrices ? objA.refPrices : refPrices,
-                                    leak: objA.leak ? objA.leak : leak,
-                                    segments, // reuse current mix
-                                  },
-                                  N,
-                                  usePocket
-                                ),
-                                title: "Saved A",
-                              }
-                            : null,
+                        const slotKpis = (
+                          obj: ReturnType<typeof readSlot>,
+                          fallbackTitle: string
+                        ): SnapshotKPIs | null => {
+                          if (!obj) return null;
+                          const slotSegments = obj.segments
+                            ? mapNormalizedToUI(normalizeSegmentsForSave(obj.segments))
+                            : segments;
+                          const slotRef = obj.refPrices ?? refPrices;
+                          const slotLeak = obj.leak ?? leak;
+                          const slotFeats = obj.features ?? features;
+                          const slotUsePocket =
+                            obj.analysis?.optConstraints?.usePocketProfit ??
+                            usePocket;
+                          const slotUsePocketMargins =
+                            obj.analysis?.optConstraints?.usePocketMargins ??
+                            slotUsePocket;
+                          return {
+                            ...kpisFromSnapshot(
+                              {
+                                prices: obj.prices,
+                                costs: obj.costs,
+                                features: slotFeats,
+                                refPrices: slotRef,
+                                leak: slotLeak,
+                                segments: slotSegments,
+                              },
+                              N,
+                              slotUsePocket,
+                              slotUsePocketMargins
+                            ),
+                            title: `${fallbackTitle} (${slotUsePocket ? "pocket" : "list"})`,
+                          };
+                        };
 
-                          B: objB
-                            ? {
-                                ...kpisFromSnapshot(
-                                  {
-                                    prices: objB.prices,
-                                    costs: objB.costs,
-                                    features: objB.features,
-                                    refPrices: objB.refPrices ? objB.refPrices : refPrices,
-                                    leak: objB.leak ? objB.leak : leak,
-                                    segments,
-                                  },
-                                  N,
-                                  usePocket
-                                ),
-                                title: "Saved B",
-                              }
-                            : null,
-                          C: objC
-                            ? {
-                                ...kpisFromSnapshot(
-                                  {
-                                    prices: objC.prices,
-                                    costs: objC.costs,
-                                    features: objC.features,
-                                    refPrices: objC.refPrices ? objC.refPrices : refPrices,
-                                    leak: objC.leak ? objC.leak : leak,
-                                    segments,
-                                  },
-                                  N,
-                                  usePocket
-                                ),
-                                title: "Saved C",
-                              }
-                            : null,
+                        const slots: Record<"A" | "B" | "C", SnapshotKPIs | null> = {
+                          A: slotKpis(objA, "Saved A"),
+                          B: slotKpis(objB, "Saved B"),
+                          C: slotKpis(objC, "Saved C"),
                         };
 
                         return (
@@ -4090,11 +4206,11 @@ export default function App() {
                               return take.good * (prices.good - costs.good) + take.better * (prices.better - costs.better) + take.best * (prices.best - costs.best);
                             })();
 
-                        const best = quickOpt.best;
-                        const bestProfit = quickOpt.profit;
+                        const best = optResult?.prices;
+                        const bestProfit = optResult?.profit ?? null;
 
-                        if (!best)
-                          return <div className="text-xs text-gray-600">No feasible ladder in the current ranges & floors.</div>;
+                        if (!best || bestProfit === null)
+                          return <div className="text-xs text-gray-600">Run the optimizer to populate the optimized ladder.</div>;
 
                         return (
                           <div className="space-y-3">
@@ -4124,8 +4240,8 @@ export default function App() {
                                     className="w-full border rounded px-3 py-2 text-sm font-semibold bg-white hover:bg-gray-50"
                                     onClick={() => {
                                       lastAppliedPricesRef.current = { ...prices };
-                                      setPrices(best);
-                                      pushJ?.(`Applied optimized ladder: ${best.good}/${best.better}/${best.best}`);
+                                      setPrices(best as typeof prices);
+                                      pushJ?.(`Applied optimized ladder: ${(best as typeof prices).good}/${(best as typeof prices).better}/${(best as typeof prices).best}`);
                                     }}
                                   >
                                     Apply optimized ladder
@@ -4205,12 +4321,52 @@ export default function App() {
                       : "Pinned on load"}
                   </span>
                 </div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                  <span className="text-slate-500">Basis</span>
+                  <span className="font-semibold text-slate-800">
+                    {optConstraints.usePocketProfit ? "Pocket profit" : "List profit"}
+                  </span>
+                </div>
                 <button
                   type="button"
                   className="rounded border border-slate-300 px-2 py-1 font-medium text-slate-700 hover:bg-slate-50"
                   onClick={() => {
-                    setBaselineKPIs(scorecardKPIs);
-                    setBaselineMeta({ label: "Pinned now", savedAt: Date.now() });
+                    const kpis = scorecardKPIs;
+                    const meta = { label: "Pinned now", savedAt: Date.now() };
+                    if (kpis) {
+                      setBaselineKPIs(kpis);
+                      setBaselineMeta(meta);
+                      setScenarioBaseline({
+                        snapshot: buildScenarioSnapshot({
+                          prices,
+                          costs,
+                          features,
+                          refPrices,
+                          leak,
+                          segments,
+                          tornadoPocket,
+                          tornadoPriceBump,
+                          tornadoPctBump,
+                          tornadoRangeMode,
+                          retentionPct,
+                          kpiFloorAdj,
+                          priceRange: priceRangeState,
+                          optRanges,
+                          optConstraints,
+                          channelMix,
+                          optimizerKind: "grid-worker",
+                        }),
+                        kpis,
+                        basis: {
+                          usePocketProfit: !!optConstraints.usePocketProfit,
+                          usePocketMargins: !!optConstraints.usePocketMargins,
+                        },
+                        meta,
+                      });
+                      toast("success", "Baseline pinned");
+                    } else {
+                      toast("error", "Baseline not pinned: KPIs unavailable");
+                    }
                   }}
                 >
                   Set baseline to now
@@ -4357,7 +4513,7 @@ export default function App() {
                 ? gapNotes[0]
                 : `Gaps slack: ${(activePrices.better - activePrices.good - optConstraints.gapGB).toFixed(2)} / ${(activePrices.best - activePrices.better - optConstraints.gapBB).toFixed(2)} (G/B, B/Best)`;
               const floorLine = `Floors: Good ${Math.round(optConstraints.marginFloor.good * 100)}% | Better ${Math.round(optConstraints.marginFloor.better * 100)}% | Best ${Math.round(optConstraints.marginFloor.best * 100)}%`;
-              const optimizerReady = Boolean(quickOpt.best);
+              const optimizerReady = Boolean(optResult?.prices);
               const optimizerLine = optimizerReady
                 ? `Optimizer ready - ranges ${optRanges.good[0]}-${optRanges.good[1]} / ${optRanges.better[0]}-${optRanges.better[1]} / ${optRanges.best[0]}-${optRanges.best[1]}`
                 : "Set ranges and floors, then run the optimizer";
@@ -4533,7 +4689,7 @@ export default function App() {
                     <div className="text-sm font-semibold text-slate-900">
                       {optimizerWhyLines.length > 0
                         ? optimizerWhyLines[0]
-                        : quickOpt.best
+                        : optResult
                         ? "Optimizer ready - run to refresh insights."
                         : "Set ranges & floors, then run the optimizer."}
                     </div>
@@ -4716,7 +4872,10 @@ export default function App() {
               Mention that each point is a full mixed-logit evaluation, so it is ideal for fast sense-checking of the
               Best tier and for answering “what if we nudged premium $X?” questions.
             </Explanation>
-            <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontier… </div>} >
+            <div className="text-[11px] text-slate-600">
+              Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}; Good/Better fixed, sweep Best.
+            </div>
+            <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontier... </div>} >
               <ErrorBoundary title="Frontier chart failed">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-slate-700">Profit frontier</h3>
@@ -4747,6 +4906,9 @@ export default function App() {
               and which inputs (prices, features, reference prices) materially shift these bars. Include guidance on
               how hiring managers should talk through a mix change (e.g., “Value seekers grew +Xpp when we…”)
             </Explanation>
+            <div className="text-[11px] text-slate-600">
+              Demand-only view: leakages and margin floors are not applied here.
+            </div>
             <Suspense
               fallback={
                 <div className="text-xs text-gray-500 p-2">Loading bars…</div>
