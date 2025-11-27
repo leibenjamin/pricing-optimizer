@@ -990,6 +990,63 @@ export default function App() {
     { preset: "App Store (est.)", w: 30 },
   ]);
   const [channelBlendApplied, setChannelBlendApplied] = useState(false);
+  const defaults = {
+    prices: { good: 9, better: 15, best: 25 },
+    costs: { good: 3, better: 5, best: 8 },
+    refPrices: { good: 10, better: 18, best: 30 },
+    leak: { promo: { good: 0.05, better: 0.05, best: 0.05 }, volume: { good: 0.03, better: 0.03, best: 0.03 }, paymentPct: 0.029, paymentFixed: 0.1, fxPct: 0, refundsPct: 0.02 },
+    features: { featA: { good: 1, better: 1, best: 1 }, featB: { good: 0, better: 1, best: 1 } },
+    optConstraints: { gapGB: 2, gapBB: 3, marginFloor: { good: 0.25, better: 0.25, best: 0.25 }, charm: false, usePocketProfit: false, usePocketMargins: false },
+    optRanges: { good: [5, 30] as [number, number], better: [10, 45] as [number, number], best: [15, 60] as [number, number], step: 1 },
+    channelMix: [
+      { preset: "Stripe (cards)", w: 70 },
+      { preset: "App Store (est.)", w: 30 },
+    ],
+  };
+  const clearDefaults = {
+    prices: { good: 0, better: 0, best: 0 },
+    costs: { good: 0, better: 0, best: 0 },
+    refPrices: { good: 0, better: 0, best: 0 },
+    leak: { promo: { good: 0, better: 0, best: 0 }, volume: { good: 0, better: 0, best: 0 }, paymentPct: 0, paymentFixed: 0, fxPct: 0, refundsPct: 0 },
+    features: { featA: { good: 0, better: 0, best: 0 }, featB: { good: 0, better: 0, best: 0 } },
+    optConstraints: { gapGB: 0, gapBB: 0, marginFloor: { good: 0, better: 0, best: 0 }, charm: false, usePocketProfit: false, usePocketMargins: false },
+    optRanges: { good: [0, 0] as [number, number], better: [0, 0] as [number, number], best: [0, 0] as [number, number], step: 1 },
+    channelMix: [],
+  };
+
+  const resetAllSettings = () => {
+    localStorage.removeItem("po:prices");
+    localStorage.removeItem("po:costs");
+    localStorage.removeItem("po:refs");
+    localStorage.removeItem("po:leak");
+    localStorage.removeItem("po:constraints");
+    setPrices(defaults.prices);
+    setCosts(defaults.costs);
+    setRefPrices(defaults.refPrices);
+    setFeatures(defaults.features);
+    setLeak(defaults.leak);
+    setOptConstraints(defaults.optConstraints);
+    setOptRanges(defaults.optRanges);
+    setChannelMix(defaults.channelMix);
+    setChannelBlendApplied(false);
+  };
+
+  const clearAllSettings = () => {
+    localStorage.removeItem("po:prices");
+    localStorage.removeItem("po:costs");
+    localStorage.removeItem("po:refs");
+    localStorage.removeItem("po:leak");
+    localStorage.removeItem("po:constraints");
+    setPrices(clearDefaults.prices);
+    setCosts(clearDefaults.costs);
+    setRefPrices(clearDefaults.refPrices);
+    setFeatures(clearDefaults.features);
+    setLeak(clearDefaults.leak);
+    setOptConstraints(clearDefaults.optConstraints);
+    setOptRanges(clearDefaults.optRanges);
+    setChannelMix(clearDefaults.channelMix);
+    setChannelBlendApplied(false);
+  };
 
   // ---- recent IDs helpers ----
   type RecentItem = { id: string; t: number };
@@ -2763,15 +2820,18 @@ export default function App() {
 
           {leftColumnTab === "load" && (
             <div role="tabpanel" id="tab-load-scenario" aria-labelledby="tab-btn-load" className="space-y-3 md:space-y-4 min-w-0">
-          <Section id="preset-scenarios" title="Preset scenarios" className="order-0">
-                      <div className="text-[11px] text-slate-600 mb-1">
-                        Presets set prices/costs/reference prices and leakages; features and optimizer constraints stay as-is so you can mix/match.
-                      </div>
-                      <PresetPicker
-                        presets={PRESETS}
-                        activeId={scenarioPresetId}
-                        onApply={applyScenarioPreset}
-                        infoId="presets.scenario"
+              <Section id="preset-scenarios" title="Preset scenarios" className="order-0">
+                        <div className="text-[11px] text-slate-600 mb-1">
+                          Presets set prices/costs/reference prices and leakages; features and optimizer constraints stay as-is so you can mix/match.
+                        </div>
+                        <div className="text-[11px] text-slate-600 mb-1">
+                          Tip: after applying a preset, set refs from current or import JSON/CSV to layer on constraints.
+                        </div>
+                        <PresetPicker
+                          presets={PRESETS}
+                          activeId={scenarioPresetId}
+                          onApply={applyScenarioPreset}
+                          infoId="presets.scenario"
                         className="mt-1"
                       />
                     </Section>
@@ -2786,6 +2846,20 @@ export default function App() {
                       onChange={handleImportJson}
                     />
                   </label>
+                  <button
+                    className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                    onClick={resetAllSettings}
+                    title="Reset all fields to sensible defaults"
+                  >
+                    Reset all settings to defaults
+                  </button>
+                  <button
+                    className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                    onClick={clearAllSettings}
+                    title="Clear all fields (set to zero/blank)"
+                  >
+                    Clear all settings
+                  </button>
 
                   <DataImport
                     onPaste={(obj) => {
@@ -3736,30 +3810,34 @@ export default function App() {
                   <button
                     className="border rounded px-2 py-1 text-sm bg-white hover:bg-gray-50"
                     onClick={handleCopyLink}
+                    title="Copy URL with current short link id if present"
                   >
                     Copy link
                   </button>
                   <button
                     className="text-xs border px-2 py-1 rounded"
                     onClick={handleCopyLongUrl}
+                    title="Lightweight URL with ladder + features only"
                   >
                     Copy long URL
                   </button>
                   <button
                     className="text-xs border px-2 py-1 rounded"
                     onClick={handleExportJson}
+                    title="Full snapshot JSON (including constraints and analysis knobs)"
                   >
                     Export JSON
                   </button>
                   <button
                     className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
                     onClick={handleExportCsv}
+                    title="CSV of ladder/leak/segments (no constraints/features/analysis)"
                   >
                     Export Sales Parameters CSV
                   </button>
                 </div>
                 <div className="text-[11px] text-slate-600">
-                  JSON/short link includes prices/costs/features/refs/leak/segments + optimizer ranges/constraints, tornado/retention, price ranges, and channel blend. CSV/long URL are lighter (no constraints/analysis knobs/features); CSV carries ladder/leak/segments only.
+                  JSON/short link includes prices/costs/features/refs/leak/segments + optimizer ranges/constraints, tornado/retention, price ranges, channel blend, and optimizer engine. CSV/long URL are lighter: CSV carries ladder/leak/segments only (no constraints/features/analysis), long URL carries ladder + feature flags only.
                 </div>
               </Section>
           <Section id="recent-short-links" title="Recent short links" className="order-5">
@@ -4166,6 +4244,7 @@ export default function App() {
                               <span>
                                 Use <em>pocket</em> price for margin floors
                               </span>
+                              <InfoTip id="optimizer.pocketMargins" ariaLabel="What are pocket margins?" />
                             </label>
                             <label className="flex items-center gap-2">
                               <span className="w-28">Optimizer engine</span>
@@ -4197,6 +4276,7 @@ export default function App() {
                                 }
                               />
                               <span>Compute profit using pocket price</span>
+                              <InfoTip id="optimizer.pocketProfit" ariaLabel="What is pocket profit?" />
                             </label>
                           </div>
                         </details>

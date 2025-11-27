@@ -78,6 +78,10 @@ export const EXPLAIN: Record<string, string> = {
     <b>Tornado sensitivity</b> varies one factor at a time around a base case and
     shows profit deltas (low/high). Use it to spot which inputs matter most; validate
     ranges with business owners before decisions.`,
+  "optimizer.pocketMargins": `
+    Check floors on <b>pocket</b> prices (after promo/payment/FX/refunds). Disable if you want floors on list prices instead.`,
+  "optimizer.pocketProfit": `
+    Optimize for <b>pocket</b> profit (net of promo/payment/FX/refunds). Disable to optimize list contribution.`,
 
   // --- Presets ---
   "presets.scenario": `
