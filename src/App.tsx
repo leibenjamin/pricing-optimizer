@@ -1761,6 +1761,10 @@ export default function App() {
   }, [optResult, optConstraints.usePocketProfit, prices, computeScenarioProfit]);
   const optimizerWhyLines = useMemo(() => {
     if (!optResult) return [];
+    const stale =
+      prices.good !== optResult.prices.good ||
+      prices.better !== optResult.prices.better ||
+      prices.best !== optResult.prices.best;
     return explainOptimizerResult({
       basePrices: prices,
       optimizedPrices: optResult.prices,
@@ -1774,7 +1778,9 @@ export default function App() {
         usePocketProfit: optConstraints.usePocketProfit,
       },
       profitDelta: optimizerProfitDelta?.delta ?? 0,
-    });
+    }).concat(
+      stale ? ["Optimizer run is based on an earlier ladder; rerun to refresh with current state."] : []
+  );
   }, [optResult, prices, costs, leak, optConstraints, optimizerProfitDelta]);
 
   // ---- Tornado data (current & optimized) ----
