@@ -1010,7 +1010,8 @@ export default function App() {
     writeRecents([{ id, t: now }, ...seen]);
   };
   const [compareUseSavedSegments, setCompareUseSavedSegments] = useState(true);
-  const [compareUseSavedLeakRefs, setCompareUseSavedLeakRefs] = useState(true);
+  const [compareUseSavedLeak, setCompareUseSavedLeak] = useState(true);
+  const [compareUseSavedRefs, setCompareUseSavedRefs] = useState(true);
 
   type SlotId = "A" | "B" | "C";
   const SLOT_KEYS: Record<SlotId, string> = {
@@ -1752,6 +1753,7 @@ export default function App() {
       gapBB: optConstraints.gapBB,
       marginFloor: optConstraints.marginFloor,
       usePocketForFloors: usePocketFloors,
+      charm: !!optConstraints.charm,
     };
 
     return gridOptimize(
@@ -3620,10 +3622,18 @@ export default function App() {
                         <label className="inline-flex items-center gap-1">
                           <input
                             type="checkbox"
-                            checked={compareUseSavedLeakRefs}
-                            onChange={(e) => setCompareUseSavedLeakRefs(e.target.checked)}
+                            checked={compareUseSavedLeak}
+                            onChange={(e) => setCompareUseSavedLeak(e.target.checked)}
                           />
-                          Use saved leak & refs for slots
+                          Use saved leak for slots
+                        </label>
+                        <label className="inline-flex items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={compareUseSavedRefs}
+                            onChange={(e) => setCompareUseSavedRefs(e.target.checked)}
+                          />
+                          Use saved reference prices for slots
                         </label>
                         <span className="text-slate-500">
                           Uncheck to reuse current leak/refs when comparing.
@@ -3666,8 +3676,8 @@ export default function App() {
                               ? mapNormalizedToUI(normalizeSegmentsForSave(obj.segments))
                               : segments
                             : segments;
-                          const slotRef = compareUseSavedLeakRefs && obj.refPrices ? obj.refPrices : refPrices;
-                          const slotLeak = compareUseSavedLeakRefs && obj.leak ? obj.leak : leak;
+                          const slotRef = compareUseSavedRefs && obj.refPrices ? obj.refPrices : refPrices;
+                          const slotLeak = compareUseSavedLeak && obj.leak ? obj.leak : leak;
                           const slotFeats = obj.features ?? features;
                           const slotUsePocket =
                             obj.analysis?.optConstraints?.usePocketProfit ??
@@ -3690,7 +3700,7 @@ export default function App() {
                               slotUsePocketMargins
                             ),
                             title: `${fallbackTitle} (${slotUsePocket ? "pocket" : "list"})`,
-                            subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} · Segments: ${compareUseSavedSegments && obj.segments ? "saved" : "current"} · Leak/refs: ${compareUseSavedLeakRefs && obj.leak ? "saved" : "current"}`,
+                            subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} · Segments: ${compareUseSavedSegments && obj.segments ? "saved" : "current"} · Leak: ${compareUseSavedLeak && obj.leak ? "saved" : "current"} · Refs: ${compareUseSavedRefs && obj.refPrices ? "saved" : "current"}`,
                           };
                         };
 
