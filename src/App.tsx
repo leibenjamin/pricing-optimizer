@@ -1878,7 +1878,7 @@ export default function App() {
   }
 
   // --- JSON snapshot (portable) ---
-  function buildScenarioSnapshot(args: {
+  const buildScenarioSnapshot = useCallback((args: {
     prices: typeof prices;
     costs: typeof costs;
     features: typeof features;
@@ -1896,7 +1896,7 @@ export default function App() {
     optConstraints: typeof optConstraints;
     channelMix?: typeof channelMix;
     optimizerKind?: OptimizerKind;
-  }) {
+  }) => {
     const segs = normalizeSegmentsForSave(args.segments);
     return {
       prices: args.prices,
@@ -1924,7 +1924,7 @@ export default function App() {
       },
       ...(args.channelMix ? { channelMix: args.channelMix } : {}),
     };
-  }
+  }, []);
 
   // --- Import guard for JSON ---
   type ScenarioImport = ReturnType<typeof buildScenarioSnapshot>;
