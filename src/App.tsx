@@ -2846,6 +2846,8 @@ export default function App() {
                       onChange={handleImportJson}
                     />
                   </label>
+                  <InfoTip id="import.resetAll" ariaLabel="Reset all settings to defaults" />
+                  <InfoTip id="import.clearAll" ariaLabel="Clear all settings to blank" />
                   <button
                     className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
                     onClick={resetAllSettings}

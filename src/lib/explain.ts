@@ -82,6 +82,20 @@ export const EXPLAIN: Record<string, string> = {
     Check floors on <b>pocket</b> prices (after promo/payment/FX/refunds). Disable if you want floors on list prices instead.`,
   "optimizer.pocketProfit": `
     Optimize for <b>pocket</b> profit (net of promo/payment/FX/refunds). Disable to optimize list contribution.`,
+  "optimizer.engine": `
+    <b>Optimizer engine</b> selects which solver to use. Grid (worker) runs in a Web Worker; Grid (inline) runs on the main thread. Future engines can be slotted in here.`,
+  "optimizer.ranges": `
+    <b>Search ranges</b> bound Good/Better/Best. Narrow to speed up runs; widen to explore more. Step controls grid granularity.`,
+  "optimizer.gaps": `
+    <b>Gap floors</b> enforce minimum spacing between tiers (Better ≥ Good + gapGB, Best ≥ Better + gapBB). Keeps ladders sensible.`,
+  "optimizer.floors": `
+    <b>Margin floors</b> require each tier to clear a minimum margin. Toggle pocket mode to test floors after leakages.`,
+  "optimizer.charm": `
+    <b>Charm endings</b> snap to .99 style prices if doing so doesn’t raise the left digit. Used in some B2C contexts for perceived pricing.`,
+  "import.resetAll": `
+    Resets ladder, refs, leakages, features, ranges, constraints, and channel blend to sensible defaults. Clears saved values in localStorage for those keys.`,
+  "import.clearAll": `
+    Clears ladder/refs/leak/features to zero, clears constraints/ranges/blend, and removes saved values. Use before importing a fresh scenario.`,
 
   // --- Presets ---
   "presets.scenario": `
