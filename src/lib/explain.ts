@@ -108,6 +108,20 @@ export const EXPLAIN: Record<string, string> = {
     Feasible points clear margin floors; infeasible points violate floors or gaps. Use basis toggle to see pocket vs list profit along the sweep.`,
   "reset.defaults": `
     Reset ladder, refs, leak, features, ranges, constraints, and channel blend back to defaults. Does not touch saved baselines or compare slots.`,
+  "takeRate.bars": `
+    <b>Take-rate bars</b> show demand mix (None/Good/Better/Best) from the logit model using current prices, features, segments, and reference prices. Leakages/constraints do not affect demand directly.`,
+  "cohort.retention": `
+    <b>Monthly retention</b> drives cohort rehearsal. We apply pocket margins per cohort month and decay by the retention slider to simulate 12 months.`,
+  "waterfall.compareAll": `
+    Small multiples show pocket math for Good/Better/Best side by side. Use to ensure leak assumptions look reasonable across tiers.`,
+  "compare.toggles": `
+    Use saved vs current toggles to isolate the effect of prices or leak/refs/segments separately when comparing slots.`,
+  "optimizer.rangesLabel": `
+    Ranges define the search space for each tier. Tight ranges = faster runs; wide ranges = broader exploration.`,
+  "optimizer.gapsLabel": `
+    Gap floors enforce ladder spacing to avoid overlapping tiers.`,
+  "optimizer.floorsLabel": `
+    Margin floors are minimum required margins per tier. Pocket mode applies leakages before checking floors.`,
 
   // --- Presets ---
   "presets.scenario": `

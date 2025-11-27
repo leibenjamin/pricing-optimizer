@@ -5177,6 +5177,7 @@ export default function App() {
             <div className="text-[11px] text-slate-600">
               Demand-only view: leakages and margin floors are not applied here.
             </div>
+            <InfoTip id="takeRate.bars" ariaLabel="How take-rate bars are computed" />
             <Suspense
               fallback={
                 <div className="text-xs text-gray-500 p-2">Loading bars…</div>
