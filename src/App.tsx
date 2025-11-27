@@ -1,4 +1,4 @@
-﻿// src/App.tsx
+// src/App.tsx
 
 import { Suspense, lazy, type ReactNode, type ChangeEvent } from "react";
 // replace direct imports:
@@ -379,10 +379,10 @@ export default function App() {
               <div className="flex items-start gap-2">
                 <div className="mt-0.5">
                   {t.kind === "error"
-                    ? "âš ï¸"
+                    ? "⚠️"
                     : t.kind === "success"
-                    ? "âœ…"
-                    : "â„¹ï¸"}
+                    ? "✅"
+                    : "ℹ️"}
                 </div>
                 <div className="flex-1">{t.msg}</div>
                 <button
@@ -392,7 +392,7 @@ export default function App() {
                     setToasts((ts) => ts.filter((x) => x.id !== t.id))
                   }
                 >
-                  âœ•
+                  ✕
                 </button>
               </div>
             </div>
@@ -438,7 +438,7 @@ export default function App() {
     // Keyboard shortcuts (Alt+1..4 = PNG, Shift+Alt+1..4 = CSV, Ctrl/Cmd+P = print)
     useEffect(() => {
       const onKey = (e: KeyboardEvent) => {
-        // Respect native print with Ctrl/Cmd+P (donâ€™t intercept)
+        // Respect native print with Ctrl/Cmd+P (don’t intercept)
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") return;
 
         const idx = Number(e.key) - 1; // '1' -> 0
@@ -495,7 +495,7 @@ export default function App() {
                   key={g.chartId}
                   className="flex items-center gap-1 border rounded-md px-1 py-0.5"
                   aria-label={g.aria}
-                  title={`${g.label} â€¢ Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
+                  title={`${g.label} • Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
                 >
                   {/* Chip label scrolls to the section */}
                   <button
@@ -988,6 +988,7 @@ export default function App() {
     { preset: "Stripe (cards)", w: 70 },
     { preset: "App Store (est.)", w: 30 },
   ]);
+  const [channelBlendApplied, setChannelBlendApplied] = useState(false);
 
   // ---- recent IDs helpers ----
   type RecentItem = { id: string; t: number };
@@ -1007,6 +1008,8 @@ export default function App() {
     const seen = readRecents().filter((r) => r.id !== id);
     writeRecents([{ id, t: now }, ...seen]);
   };
+  const [compareUseSavedSegments, setCompareUseSavedSegments] = useState(true);
+  const [compareUseSavedLeakRefs, setCompareUseSavedLeakRefs] = useState(true);
 
   type SlotId = "A" | "B" | "C";
   const SLOT_KEYS: Record<SlotId, string> = {
@@ -1120,6 +1123,10 @@ export default function App() {
         if (scenario.refPrices) setRefPrices(scenario.refPrices);
         if (scenario.leak) setLeak(scenario.leak);
         if (scenario.segments) setSegments(scenario.segments);
+        if (scenario.channelMix) {
+          setChannelMix(scenario.channelMix);
+          setChannelBlendApplied(true);
+        }
         if (scenario.channelMix) setChannelMix(scenario.channelMix);
 
         // Restore analysis knobs if present
@@ -1194,11 +1201,13 @@ export default function App() {
   const N = 1000;
 
   // Result of last run
+  const [optimizerKind, setOptimizerKind] = useState<OptimizerKind>("grid-worker");
   const [optResult, setOptResult] = useState<{
     prices: { good: number; better: number; best: number };
     profit: number;
     kpis: SnapshotKPIs;
   } | null>(null);
+  const [lastOptAt, setLastOptAt] = useState<number | null>(null);
 
   const computeScenarioProfit = useCallback(
     (ladder: Prices, usePocket: boolean) => {
@@ -1257,6 +1266,7 @@ export default function App() {
       .then((out) => {
         // ignore if a newer run started
         if (runIdRef.current !== runId) return;
+        setLastOptAt(Date.now());
         const resultKPIs = kpisFromSnapshot(
           { prices: out.prices, costs, features, segments, refPrices, leak },
           N,
@@ -1265,9 +1275,9 @@ export default function App() {
         );
         setOptResult({ prices: out.prices, profit: out.profit, kpis: resultKPIs });
         pushJ(
-          `[${now()}] Optimizer âœ“ best ladder $${out.prices.good}/$${
+          `[${now()}] Optimizer ✓ best ladder $${out.prices.good}/$${
             out.prices.better
-          }/$${out.prices.best} (profitâ‰ˆ$${Math.round(out.profit)})`
+          }/$${out.prices.best} (profit≈$${Math.round(out.profit)})`
         );
         toast("success", "Optimizer finished");
       })
@@ -1310,6 +1320,7 @@ export default function App() {
   const cancelRef = useRef<null | (() => void)>(null);
 
   const [kpiFloorAdj, setKpiFloorAdj] = useState(0); // -10..+10 (pp)
+  const [coverageUsePocket, setCoverageUsePocket] = useState(true);
   const coverageSnapshot = useMemo(() => {
     const floors0 = optConstraints.marginFloor;
     const adj = (x: number) =>
@@ -1320,8 +1331,8 @@ export default function App() {
       best: adj(floors0.best),
     };
     const constraints = { gapGB: optConstraints.gapGB, gapBB: optConstraints.gapBB };
-    const base = pocketCoverage(optRanges, costs, floors0, constraints, leak);
-    const moved = pocketCoverage(optRanges, costs, floors1, constraints, leak);
+    const base = pocketCoverage(optRanges, costs, floors0, constraints, leak, coverageUsePocket);
+    const moved = pocketCoverage(optRanges, costs, floors1, constraints, leak, coverageUsePocket);
     const pct0 = Math.round(base.coverage * 100);
     const pct1 = Math.round(moved.coverage * 100);
     return {
@@ -1332,7 +1343,7 @@ export default function App() {
       step: optRanges.step,
       floors: floors1,
     };
-  }, [optConstraints.marginFloor, optConstraints.gapGB, optConstraints.gapBB, optRanges, costs, leak, kpiFloorAdj]);
+  }, [optConstraints.marginFloor, optConstraints.gapGB, optConstraints.gapBB, optRanges, costs, leak, kpiFloorAdj, coverageUsePocket]);
 
   const lastAppliedPricesRef = useRef<{
     good: number;
@@ -1421,38 +1432,54 @@ export default function App() {
   // Profit frontier: sweep Best price; keep Good/Better fixed (latent-class mix)
   const frontier = useMemo(() => {
     const points: { bestPrice: number; profit: number }[] = [];
-    const usePocket = !!optConstraints.usePocketProfit;
+    const feasible: { bestPrice: number; profit: number }[] = [];
+    const infeasible: { bestPrice: number; profit: number }[] = [];
+    const usePocketProfit = !!optConstraints.usePocketProfit;
+    const usePocketMargins = !!(optConstraints.usePocketMargins ?? optConstraints.usePocketProfit);
+    const floors = optConstraints.marginFloor;
     for (let p = 5; p <= 60; p += 1) {
       const pricesP = { good: prices.good, better: prices.better, best: p };
       const probsP = choiceShares(pricesP, features, segments, refPrices);
       const take_good = Math.round(N * probsP.good);
       const take_better = Math.round(N * probsP.better);
       const take_best = Math.round(N * probsP.best);
-      const effGood = usePocket
+      const effGoodProfit = usePocketProfit
         ? computePocketPrice(prices.good, "good", leak).pocket
         : prices.good;
-      const effBetter = usePocket
+      const effBetterProfit = usePocketProfit
         ? computePocketPrice(prices.better, "better", leak).pocket
         : prices.better;
-      const effBest = usePocket
+      const effBestProfit = usePocketProfit
         ? computePocketPrice(p, "best", leak).pocket
         : p;
       const profitP =
-        take_good * (effGood - costs.good) +
-        take_better * (effBetter - costs.better) +
-        take_best * (effBest - costs.best);
+        take_good * (effGoodProfit - costs.good) +
+        take_better * (effBetterProfit - costs.better) +
+        take_best * (effBestProfit - costs.best);
       points.push({ bestPrice: p, profit: profitP });
+
+      // Feasibility based on margin floors
+      const effGoodFloor = usePocketMargins ? computePocketPrice(prices.good, "good", leak).pocket : prices.good;
+      const effBetterFloor = usePocketMargins ? computePocketPrice(prices.better, "better", leak).pocket : prices.better;
+      const effBestFloor = usePocketMargins ? computePocketPrice(p, "best", leak).pocket : p;
+      const mG = (effGoodFloor - costs.good) / Math.max(effGoodFloor, 1e-6);
+      const mB = (effBetterFloor - costs.better) / Math.max(effBetterFloor, 1e-6);
+      const mH = (effBestFloor - costs.best) / Math.max(effBestFloor, 1e-6);
+      const ok = mG >= floors.good && mB >= floors.better && mH >= floors.best;
+      (ok ? feasible : infeasible).push({ bestPrice: p, profit: profitP });
     }
     if (points.length === 0)
       return {
         points,
+        feasiblePoints: feasible,
+        infeasiblePoints: infeasible,
         optimum: null as { bestPrice: number; profit: number } | null,
       };
     const optimum = points.reduce(
       (a, b) => (b.profit > a.profit ? b : a),
       points[0]
     );
-    return { points, optimum };
+    return { points, feasiblePoints: feasible, infeasiblePoints: infeasible, optimum };
   }, [
     N,
     prices.good,
@@ -1465,6 +1492,8 @@ export default function App() {
     refPrices,
     leak,
     optConstraints.usePocketProfit,
+    optConstraints.usePocketMargins,
+    optConstraints.marginFloor,
   ]);
 
 
@@ -1699,7 +1728,7 @@ export default function App() {
       if (!stats) return `${label} --`;
       return `${label} $${stats.min.toFixed(2)}-$${stats.max.toFixed(2)}`;
     });
-    return `${prefix}: ${rows.join(" Â· " )}`;
+    return `${prefix}: ${rows.join(" · " )}`;
   }, [priceRangeState]);
 
   const dataRangeOptionLabel =
@@ -2002,13 +2031,13 @@ export default function App() {
         tornadoPctBump,
         tornadoRangeMode,
         retentionPct,
-        kpiFloorAdj,
-        priceRange: priceRangeState,
-        optRanges,
-        optConstraints,
-        channelMix,
-        optimizerKind: "grid-worker",
-      });
+      kpiFloorAdj,
+      priceRange: priceRangeState,
+      optRanges,
+      optConstraints,
+      channelMix,
+      optimizerKind,
+    });
       setBaselineKPIs(currentKPIs);
       setBaselineMeta(meta);
       setScenarioBaseline({
@@ -2021,29 +2050,7 @@ export default function App() {
         meta,
       });
     }
-  }, [
-    baselineKPIs,
-    currentKPIs,
-    scenarioBaseline,
-    buildScenarioSnapshot,
-    prices,
-    costs,
-    features,
-    refPrices,
-    leak,
-    segments,
-    tornadoPocket,
-    tornadoPriceBump,
-    tornadoPctBump,
-    tornadoRangeMode,
-    retentionPct,
-    kpiFloorAdj,
-    priceRangeState,
-    optRanges,
-    optConstraints,
-    channelMix,
-    setScenarioBaseline,
-  ]);
+  }, [baselineKPIs, currentKPIs, scenarioBaseline, buildScenarioSnapshot, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, retentionPct, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, setScenarioBaseline, optimizerKind]);
 
 
   async function handleImportJson(e: ChangeEvent<HTMLInputElement>) {
@@ -2103,7 +2110,10 @@ export default function App() {
       } else {
         fallbackToSyntheticRanges();
       }
-      if (sc.channelMix) setChannelMix(sc.channelMix as typeof channelMix);
+      if (sc.channelMix) {
+        setChannelMix(sc.channelMix as typeof channelMix);
+        setChannelBlendApplied(true);
+      }
 
       pushJ?.(`[${now()}] Imported scenario JSON`);
       toast("success", "Imported scenario");
@@ -2138,7 +2148,7 @@ export default function App() {
       await navigator.clipboard.writeText(window.location.href);
       toast?.("success", "URL copied to clipboard");
     } catch {
-      toast?.("error", "Copy failed—select and copy the address bar");
+      toast?.("error", "Copy failed�select and copy the address bar");
     }
   }
 
@@ -2180,7 +2190,7 @@ export default function App() {
       optRanges,
       optConstraints,
       channelMix,
-      optimizerKind: "grid-worker",
+      optimizerKind,
     });
     const blob = new Blob([JSON.stringify(snap, null, 2)], {
       type: "application/json",
@@ -2290,7 +2300,7 @@ export default function App() {
 
   async function saveScenarioShortLink() {
     try {
-      // 1) Cheap warmup â€” if it fails, we continue anyway
+      // 1) Cheap warmup — if it fails, we continue anyway
       const ok = await preflight("/api/get?s=ping");
       if (!ok) {
         pushJ(`[${now()}] Preflight failed (continuing to save)`);
@@ -2314,7 +2324,7 @@ export default function App() {
         optRanges,
         optConstraints,
         channelMix,
-        optimizerKind: "grid-worker",
+        optimizerKind,
       });
 
       // 3) POST with retries/backoff for 5xx/429 + per-request timeout
@@ -2346,7 +2356,7 @@ export default function App() {
         try {
           const bodyUnknown: unknown = await res.json();
           if (isSaveError(bodyUnknown)) {
-            if (bodyUnknown.error) detail += ` â€” ${bodyUnknown.error}`;
+            if (bodyUnknown.error) detail += ` — ${bodyUnknown.error}`;
             if (Array.isArray(bodyUnknown.issues) && bodyUnknown.issues.length) {
               const i0 = bodyUnknown.issues[0];
               const at = i0?.path ? ` at ${i0.path.join(".")}` : "";
@@ -2387,7 +2397,7 @@ export default function App() {
       optRanges,
       optConstraints,
       channelMix,
-      optimizerKind: "grid-worker",
+      optimizerKind,
     });
     writeSlot(id, snap);
     pushJ?.(`[${now()}] Saved current scenario to slot ${id}`);
@@ -2519,12 +2529,12 @@ export default function App() {
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h1 className="text-xl font-semibold">Pricing Optimizer</h1>
                 <span className="text-xs text-gray-500">
-                  v0.3 • Latent-class choice model (3 segments)
+                  v0.3 � Latent-class choice model (3 segments)
                 </span>
               </div>
               <p className="mt-1 text-sm text-slate-600">
-                Good/Better/Best ladder • pocket price waterfall • profit frontier •
-                tornado sensitivity • cohorts
+                Good/Better/Best ladder � pocket price waterfall � profit frontier �
+                tornado sensitivity � cohorts
               </p>
               <div className="no-print mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
                 <button
@@ -2536,7 +2546,7 @@ export default function App() {
                   Take tour
                 </button>
                 <span className="text-xs text-slate-500">
-                  4 steps · highlights each key section
+                  4 steps � highlights each key section
                 </span>
               </div>
             </div>
@@ -2752,6 +2762,9 @@ export default function App() {
           {leftColumnTab === "load" && (
             <div role="tabpanel" id="tab-load-scenario" aria-labelledby="tab-btn-load" className="space-y-3 md:space-y-4 min-w-0">
           <Section id="preset-scenarios" title="Preset scenarios" className="order-0">
+                      <div className="text-[11px] text-slate-600 mb-1">
+                        Presets set prices/costs/reference prices and leakages; features and optimizer constraints stay as-is so you can mix/match.
+                      </div>
                       <PresetPicker
                         presets={PRESETS}
                         activeId={scenarioPresetId}
@@ -2810,7 +2823,7 @@ export default function App() {
                 footer={
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-gray-600">
-                      The estimator runs in a Web Worker and won’t block the UI. Your CSV never leaves the browser.
+                      The estimator runs in a Web Worker and won�t block the UI. Your CSV never leaves the browser.
                     </p>
                     <button
                       className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
@@ -2822,7 +2835,7 @@ export default function App() {
                 }
               >
                 <div className="text-xs text-gray-700 mb-2">
-                  1) Upload your sales CSV &nbsp;→&nbsp; 2) Map columns &nbsp;→&nbsp; 3) Estimate.
+                  1) Upload your sales CSV &nbsp;?&nbsp; 2) Map columns &nbsp;?&nbsp; 3) Estimate.
                   Use compact column names if possible; unknowns can be left blank.
                 </div>
                 <SalesImport
@@ -2846,6 +2859,7 @@ export default function App() {
                       )}, iters=${diagnostics.iters}, converged=${diagnostics.converged})`
                     );
                     toast("success", "Applied latent-class estimate");
+                    toast("info", "Segments updated. Pin a new baseline for meaningful deltas.");
                   }}
                   onToast={(kind, msg) => toast(kind, msg)}
                   onDone={() => setShowSalesImport(false)}
@@ -2993,11 +3007,15 @@ export default function App() {
                             setRefPrices({ good: 10, better: 18, best: 30 });
                             setLeak({ promo: { good: 0.05, better: 0.05, best: 0.05 }, volume: { good: 0.03, better: 0.03, best: 0.03 }, paymentPct: 0.029, paymentFixed: 0.1, fxPct: 0, refundsPct: 0.02 });
                             setOptConstraints({ gapGB: 2, gapBB: 3, marginFloor: { good: 0.25, better: 0.25, best: 0.25 }, charm: false, usePocketProfit: false, usePocketMargins: false });
+                            setChannelBlendApplied(false);
                           }}
                           aria-label="Reset all settings to defaults"
                         >
                           Reset defaults
                         </button>
+                        <span className="text-[11px] text-slate-500">
+                          Resets ladder, refs, leak (incl. paymentFixed $0.10), gaps (gapBB=3), constraints, and clears channel blend.
+                        </span>
                       </div>
                     </Section>
               )}
@@ -3408,6 +3426,14 @@ export default function App() {
                             <summary className="cursor-pointer select-none text-xs font-semibold">
                               Channel blend (optional)
                             </summary>
+                            <div className="text-[11px] text-slate-600 mb-1">
+                              Blend leak presets by channel; applied to leakages and saved in JSON/links. CSV export does not include blends.
+                            </div>
+                            {channelBlendApplied && (
+                              <div className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 mb-2">
+                                Blend applied to leakages
+                              </div>
+                            )}
                             <div className="mt-2 space-y-2">
                               {channelMix.map((row, i) => (
                                 <div key={i} className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2">
@@ -3487,6 +3513,7 @@ export default function App() {
                                       }));
                                       const blended = blendLeaks(rows);
                                       setLeak(blended);
+                                      setChannelBlendApplied(true);
                                     }}
                                   >
                                     Blend now -&gt; apply to leakages
@@ -3522,13 +3549,13 @@ export default function App() {
                         tornadoPctBump,
                         tornadoRangeMode,
                         retentionPct,
-                        kpiFloorAdj,
-                        priceRange: priceRangeState,
-                        optRanges,
-                        optConstraints,
-                        channelMix,
-                        optimizerKind: "grid-worker",
-                      });
+                      kpiFloorAdj,
+                      priceRange: priceRangeState,
+                      optRanges,
+                      optConstraints,
+                      channelMix,
+                      optimizerKind,
+                    });
                       const meta = { label: "Pinned now", savedAt: Date.now() };
                       const kpis = currentKPIs;
                       if (kpis) {
@@ -3567,6 +3594,32 @@ export default function App() {
                       <div className="text-[11px] text-slate-600 mb-1">
                         Slots use saved prices/costs/refs/leak/segments and the saved pocket/list basis if present; Current uses live state.
                       </div>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-1">
+                        <label className="inline-flex items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={compareUseSavedSegments}
+                            onChange={(e) => setCompareUseSavedSegments(e.target.checked)}
+                          />
+                          Use saved segments for slots
+                        </label>
+                        <span className="text-slate-500">
+                          Uncheck to reuse current segments when comparing.
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-2">
+                        <label className="inline-flex items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={compareUseSavedLeakRefs}
+                            onChange={(e) => setCompareUseSavedLeakRefs(e.target.checked)}
+                          />
+                          Use saved leak & refs for slots
+                        </label>
+                        <span className="text-slate-500">
+                          Uncheck to reuse current leak/refs when comparing.
+                        </span>
+                      </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
                         <span className="text-gray-600">Save current to:</span>
                         {(["A", "B", "C"] as const).map((id) => (
@@ -3600,10 +3653,12 @@ export default function App() {
                         ): SnapshotKPIs | null => {
                           if (!obj) return null;
                           const slotSegments = obj.segments
-                            ? mapNormalizedToUI(normalizeSegmentsForSave(obj.segments))
+                            ? compareUseSavedSegments
+                              ? mapNormalizedToUI(normalizeSegmentsForSave(obj.segments))
+                              : segments
                             : segments;
-                          const slotRef = obj.refPrices ?? refPrices;
-                          const slotLeak = obj.leak ?? leak;
+                          const slotRef = compareUseSavedLeakRefs && obj.refPrices ? obj.refPrices : refPrices;
+                          const slotLeak = compareUseSavedLeakRefs && obj.leak ? obj.leak : leak;
                           const slotFeats = obj.features ?? features;
                           const slotUsePocket =
                             obj.analysis?.optConstraints?.usePocketProfit ??
@@ -3626,6 +3681,7 @@ export default function App() {
                               slotUsePocketMargins
                             ),
                             title: `${fallbackTitle} (${slotUsePocket ? "pocket" : "list"})`,
+                            subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} � Segments: ${compareUseSavedSegments && obj.segments ? "saved" : "current"} � Leak/refs: ${compareUseSavedLeakRefs && obj.leak ? "saved" : "current"}`,
                           };
                         };
 
@@ -3682,6 +3738,9 @@ export default function App() {
                   >
                     Export Sales Parameters CSV
                   </button>
+                </div>
+                <div className="text-[11px] text-slate-600">
+                  JSON/short link includes prices/costs/features/refs/leak/segments + optimizer ranges/constraints, tornado/retention, price ranges, and channel blend. CSV/long URL are lighter (no constraints/analysis knobs/features); CSV carries ladder/leak/segments only.
                 </div>
               </Section>
           <Section id="recent-short-links" title="Recent short links" className="order-5">
@@ -3741,7 +3800,7 @@ export default function App() {
                       <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
                         {journal.length === 0 ? (
                           <li className="text-gray-400">
-                            Adjust sliders/toggles to log changes…
+                            Adjust sliders/toggles to log changes�
                           </li>
                         ) : (
                           journal.map((line, i) => <li key={i}>{line}</li>)
@@ -3799,7 +3858,7 @@ export default function App() {
             <div role="tabpanel" id="tab-global-optimizer" aria-labelledby="tab-btn-optimizer" className="col-span-12 lg:col-span-3 space-y-3 md:space-y-4 min-w-0 self-start md:text-[13px] pr-1">
           <Section id="global-optimizer" title="Global Optimizer">
                       <Explanation slot="chart.optimizer">
-                        Desktop ChatGPT: provide copy that frames this as the “decision cockpit” — explain ranges, steps,
+                        Desktop ChatGPT: provide copy that frames this as the �decision cockpit� � explain ranges, steps,
                         charm-ending toggle, and pocket-vs-list guardrails. Call out how to cite binding constraints and what
                         to say when the optimizer fails or returns no feasible ladder.
                       </Explanation>
@@ -4089,6 +4148,18 @@ export default function App() {
                                 Use <em>pocket</em> price for margin floors
                               </span>
                             </label>
+                            <label className="flex items-center gap-2">
+                              <span className="w-28">Optimizer engine</span>
+                              <select
+                                className="border rounded px-2 h-8 flex-1"
+                                value={optimizerKind}
+                                onChange={(e) => setOptimizerKind(e.target.value as OptimizerKind)}
+                              >
+                                <option value="grid-worker">Grid (worker)</option>
+                                <option value="grid-inline">Grid (inline)</option>
+                                <option value="future" disabled>Future (coming)</option>
+                              </select>
+                            </label>
 
                             <p className="text-[11px] text-gray-500 sm:col-span-2 print-tight">
                               When enabled, margins are checked on pocket (after
@@ -4120,19 +4191,19 @@ export default function App() {
                             className="space-y-2 text-slate-600 mt-2"
                           >
                             <div>
-                              <span className="font-semibold">Tier discounts</span>: TODO — describe how promo vs. volume knobs
+                              <span className="font-semibold">Tier discounts</span>: TODO � describe how promo vs. volume knobs
                               affect list-to-pocket math and when to prioritize each tier.
                             </div>
                             <div>
-                              <span className="font-semibold">Global leakages</span>: TODO — explain processor %, fixed fees, FX,
+                              <span className="font-semibold">Global leakages</span>: TODO � explain processor %, fixed fees, FX,
                               and refunds along with the types of businesses that feel each leakage the most.
                             </div>
                             <div>
-                              <span className="font-semibold">Compare all tiers</span>: TODO — narrative on using the mini
+                              <span className="font-semibold">Compare all tiers</span>: TODO � narrative on using the mini
                               waterfalls to defend Good/Better/Best deltas.
                             </div>
                             <div>
-                              <span className="font-semibold">Channel blend</span>: TODO — instructions for blending Stripe vs.
+                              <span className="font-semibold">Channel blend</span>: TODO � instructions for blending Stripe vs.
                               marketplaces and how to talk about the resulting composite leak profile.
                             </div>
                           </div>
@@ -4243,38 +4314,79 @@ export default function App() {
                                 <div>Best: ${best.best}</div>
                                 <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(bestProfit).toLocaleString()}</div>
                               </div>
-                              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
-                                <div className="font-semibold">Delta</div>
-                                <div className="text-lg font-bold leading-tight">
-                                  {bestProfit - curProfit >= 0 ? "+" : "-"}${Math.abs(Math.round(bestProfit - curProfit)).toLocaleString()}
-                                </div>
-                                <div className="text-[11px] text-slate-600">vs current profit</div>
-                                <div className="flex flex-col gap-2">
-                                  <button
-                                    className="w-full border rounded px-3 py-2 text-sm font-semibold bg-white hover:bg-gray-50"
-                                    onClick={() => {
-                                      lastAppliedPricesRef.current = { ...prices };
-                                      setPrices(best as typeof prices);
-                                      pushJ?.(`Applied optimized ladder: ${(best as typeof prices).good}/${(best as typeof prices).better}/${(best as typeof prices).best}`);
-                                    }}
-                                  >
-                                    Apply optimized ladder
-                                  </button>
-                                  <button
-                                    className="w-full text-sm border rounded px-3 py-2 bg-white hover:bg-gray-50 disabled:opacity-50"
-                                    disabled={!lastAppliedPricesRef.current}
-                                    onClick={() => {
-                                      const prev = lastAppliedPricesRef.current;
-                                      if (!prev) return;
-                                      setPrices(prev);
-                                      lastAppliedPricesRef.current = null;
-                                      pushJ?.("Undo: restored ladder to previous prices");
-                                    }}
-                                  >
-                                    Undo apply ladder
-                                  </button>
-                                </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
+                              <div className="font-semibold">Delta</div>
+                              <div className="text-lg font-bold leading-tight">
+                                {bestProfit - curProfit >= 0 ? "+" : "-"}${Math.abs(Math.round(bestProfit - curProfit)).toLocaleString()}
                               </div>
+                              <div className="text-[11px] text-slate-600">vs current profit</div>
+                              <div className="flex flex-col gap-2">
+                                <button
+                                  className="w-full border rounded px-3 py-2 text-sm font-semibold bg-white hover:bg-gray-50"
+                                  onClick={() => {
+                                    lastAppliedPricesRef.current = { ...prices };
+                                    setPrices(best as typeof prices);
+                                    pushJ?.(`Applied optimized ladder: ${(best as typeof prices).good}/${(best as typeof prices).better}/${(best as typeof prices).best}`);
+                                  }}
+                                >
+                                  Apply optimized ladder
+                                </button>
+                                <button
+                                  className="w-full text-sm border rounded px-3 py-2 bg-white hover:bg-gray-50 disabled:opacity-50"
+                                  disabled={!lastAppliedPricesRef.current}
+                                  onClick={() => {
+                                    const prev = lastAppliedPricesRef.current;
+                                    if (!prev) return;
+                                    setPrices(prev);
+                                    lastAppliedPricesRef.current = null;
+                                    pushJ?.("Undo: restored ladder to previous prices");
+                                  }}
+                                >
+                                  Undo apply ladder
+                                </button>
+                                {lastOptAt && (!baselineMeta || lastOptAt > baselineMeta.savedAt) ? (
+                                  <button
+                                    className="w-full text-xs border rounded px-3 py-2 bg-white hover:bg-gray-50"
+                                    onClick={() => {
+                                      if (!optResult?.kpis) return;
+                                      const meta = { label: "Pinned from optimizer", savedAt: Date.now() };
+                                      setBaselineKPIs(optResult.kpis);
+                                      setBaselineMeta(meta);
+                                      setScenarioBaseline({
+                                        snapshot: buildScenarioSnapshot({
+                                          prices,
+                                          costs,
+                                          features,
+                                          refPrices,
+                                          leak,
+                                          segments,
+                                          tornadoPocket,
+                                          tornadoPriceBump,
+                                          tornadoPctBump,
+                                          tornadoRangeMode,
+                                          retentionPct,
+                                          kpiFloorAdj,
+                                          priceRange: priceRangeState,
+                                          optRanges,
+                                          optConstraints,
+                                          channelMix,
+                                          optimizerKind,
+                                        }),
+                                        kpis: optResult.kpis,
+                                        basis: {
+                                          usePocketProfit: !!optConstraints.usePocketProfit,
+                                          usePocketMargins: !!optConstraints.usePocketMargins,
+                                        },
+                                        meta,
+                                      });
+                                      toast("success", "Baseline pinned from optimizer");
+                                    }}
+                                  >
+                                    Pin this as baseline
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
                             </div>
 
                             <div className="mt-1 text-xs max-w-md space-y-1">
@@ -4294,7 +4406,7 @@ export default function App() {
                                   return <li>Largest profit driver near optimum: {td ? td : "n/a"}</li>;
                                 })()}
                                 <li>
-                                  Floors: pocket margin ≥ {Math.round(optConstraints.marginFloor.good * 100)}% /{" "}
+                                  Floors: pocket margin = {Math.round(optConstraints.marginFloor.good * 100)}% /{" "}
                                   {Math.round(optConstraints.marginFloor.better * 100)}% / {Math.round(optConstraints.marginFloor.best * 100)}% (G/B/Best).
                                 </li>
                               </ul>
@@ -4305,13 +4417,13 @@ export default function App() {
                     </Section>
           <Section id="methods" title="Methods">
                       <p className="text-sm text-gray-700 print-tight">
-                        MNL: U = β₀(j) + βₚ·price + β_A·featA + β_B·featB; outside option
+                        MNL: U = �0(j) + �?�price + �_A�featA + �_B�featB; outside option
                         intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
                         ridge regularization.
                       </p>
                       {fitInfo && (
                         <div className="text-xs text-gray-600 mt-2">
-                          logLik: {Math.round(fitInfo.logLik)} • iters: {fitInfo.iters} •{" "}
+                          logLik: {Math.round(fitInfo.logLik)} � iters: {fitInfo.iters} �{" "}
                           {fitInfo.converged ? "converged" : "not converged"}
                         </div>
                       )}
@@ -4333,6 +4445,12 @@ export default function App() {
                     {baselineMeta
                       ? `${baselineMeta.label} - ${new Date(baselineMeta.savedAt).toLocaleString()}`
                       : "Pinned on load"}
+                  </span>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                  <span className="text-slate-500">Basis</span>
+                  <span className="font-semibold text-slate-800">
+                    {scenarioBaseline?.basis?.usePocketProfit ? "Pocket" : "List"}
                   </span>
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1">
@@ -4368,7 +4486,7 @@ export default function App() {
                           optRanges,
                           optConstraints,
                           channelMix,
-                          optimizerKind: "grid-worker",
+                          optimizerKind,
                         }),
                         kpis,
                         basis: {
@@ -4734,7 +4852,20 @@ export default function App() {
             actions={<ActionCluster chart="coverage" id="coverage-heatmap" csv />}
           >
             <div className="text-[11px] text-slate-600 mb-1">
-              Basis: pocket margins only; leakages always applied.
+              Basis: {coverageUsePocket ? "Pocket margins (after leakages)" : "List margins (before leakages)"}.
+            </div>
+            <div className="flex items-center gap-3 text-xs mb-2">
+              <label className="inline-flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={coverageUsePocket}
+                  onChange={(e) => setCoverageUsePocket(e.target.checked)}
+                />
+                Use pocket margins for coverage
+              </label>
+              <span className="text-[11px] text-slate-500">
+                Toggle to inspect list vs pocket feasibility; optimizer runs use the pocket toggle above.
+              </span>
             </div>
             <Explanation slot="kpi.pocketCoverage">
               <div className="font-semibold text-[11px] text-slate-700">
@@ -4790,9 +4921,9 @@ export default function App() {
                         feasible ladders (pocket floors)
                       </div>
                       <div className="text-[11px] text-gray-600 mt-1">
-                        baseline {pct0}% -&gt; {pct1}% ·{" "}
-                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} ·{" "}
-                        {coverageSnapshot.tested.toLocaleString()} combos · step $
+                        baseline {pct0}% -&gt; {pct1}% �{" "}
+                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} �{" "}
+                        {coverageSnapshot.tested.toLocaleString()} combos � step $
                         {coverageSnapshot.step}
                       </div>
                     </div>
@@ -4824,24 +4955,25 @@ export default function App() {
                     </div>
                     <div>
                       <span className="font-semibold text-gray-800">Grid and gaps:</span>{" "}
-                      Good → Better gap {optConstraints.gapGB}, Better → Best gap {optConstraints.gapBB}; step $
+                      Good ? Better gap {optConstraints.gapGB}, Better ? Best gap {optConstraints.gapBB}; step $
                       {optRanges.step} across {coverageSnapshot.tested.toLocaleString()} ladder combinations.
                     </div>
                   </div>
 
                   <div className="mt-3">
                     {(() => {
-                      const { cells, gTicks, bTicks, bestUsed } =
-                        feasibilitySliceGB(
-                          optRanges,
-                          costs,
-                          floors1,
-                          {
-                            gapGB: optConstraints.gapGB,
-                            gapBB: optConstraints.gapBB,
-                          },
-                          leak
-                        );
+                        const { cells, gTicks, bTicks, bestUsed } =
+                          feasibilitySliceGB(
+                            optRanges,
+                            costs,
+                            floors1,
+                            {
+                              gapGB: optConstraints.gapGB,
+                              gapBB: optConstraints.gapBB,
+                            },
+                            leak,
+                            coverageUsePocket
+                          );
                       return (
                         <>
                           <details className="mb-1">
@@ -4887,13 +5019,14 @@ export default function App() {
             actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
           >
             <Explanation slot="chart.profitFrontier">
-              Desktop ChatGPT: explain how to narrate the profit frontier — what holding Good/Better constant means,
+              Desktop ChatGPT: explain how to narrate the profit frontier � what holding Good/Better constant means,
               how to spot the sweet spot vs. margin floors, and when to use this plot before invoking the optimizer.
               Mention that each point is a full mixed-logit evaluation, so it is ideal for fast sense-checking of the
-              Best tier and for answering “what if we nudged premium $X?” questions.
+              Best tier and for answering �what if we nudged premium $X?� questions.
             </Explanation>
             <div className="text-[11px] text-slate-600">
               Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}; Good/Better fixed, sweep Best.
+              Constraints (gaps/floors) are shown as feasible (green) vs infeasible (gray).
             </div>
             <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontier... </div>} >
               <ErrorBoundary title="Frontier chart failed">
@@ -4909,6 +5042,10 @@ export default function App() {
                 <FrontierChartReal
                   chartId="frontier-main"
                   points={frontier.points}
+                  overlay={{
+                    feasiblePoints: frontier.feasiblePoints,
+                    infeasiblePoints: frontier.infeasiblePoints,
+                  }}
                   optimum={frontier.optimum}
                 />
               </ErrorBoundary>
@@ -4922,16 +5059,16 @@ export default function App() {
             actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
           >
             <Explanation slot="chart.takeRate">
-              Desktop ChatGPT: outline how to use take-rate bars to judge conversion mix, what “None” represents,
+              Desktop ChatGPT: outline how to use take-rate bars to judge conversion mix, what �None� represents,
               and which inputs (prices, features, reference prices) materially shift these bars. Include guidance on
-              how hiring managers should talk through a mix change (e.g., “Value seekers grew +Xpp when we…”)
+              how hiring managers should talk through a mix change (e.g., �Value seekers grew +Xpp when we��)
             </Explanation>
             <div className="text-[11px] text-slate-600">
               Demand-only view: leakages and margin floors are not applied here.
             </div>
             <Suspense
               fallback={
-                <div className="text-xs text-gray-500 p-2">Loading bars…</div>
+                <div className="text-xs text-gray-500 p-2">Loading bars�</div>
               }
             >
               <ErrorBoundary title="Take-Rate chart failed">
@@ -4956,7 +5093,7 @@ export default function App() {
           >
             <Explanation slot="chart.cohort">
               Desktop ChatGPT: describe what the cohort rehearsal simulates (retention slider, pocket margin over a
-              12‑month period) and when a PM should tweak retention vs. pricing. Highlight that this is where to
+              12-month period) and when a PM should tweak retention vs. pricing. Highlight that this is where to
               narrate sustainability of profit rather than just one-period lift.
             </Explanation>
             {(() => {
@@ -5005,7 +5142,7 @@ export default function App() {
                       />
                       <span>%</span>
                       <span className="text-gray-500 ml-2">
-                        (churn ≈ {(100 - retentionPct).toFixed(1)}%/mo)
+                        (churn � {(100 - retentionPct).toFixed(1)}%/mo)
                       </span>
                     </div>
 
@@ -5029,7 +5166,7 @@ export default function App() {
 
           <Section
             id="tornado"
-            title="Tornado — what moves profit?"
+            title="Tornado � what moves profit?"
             className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
             actions={<ActionCluster chart="tornado" id="tornado-main" csv />}
           >
@@ -5059,7 +5196,7 @@ export default function App() {
                     )
                   }
                 >
-                  <option value="symmetric">±{tornadoPriceBump}% symmetric</option>
+                  <option value="symmetric">�{tornadoPriceBump}% symmetric</option>
                   <option value="data" disabled={!priceRangeState?.map}>
                     {dataRangeOptionLabel}
                   </option>
@@ -5151,7 +5288,7 @@ export default function App() {
             <Suspense
               fallback={
                 <div className="text-xs text-gray-500 p-2">
-                  Loading tornado…
+                  Loading tornado�
                 </div>
               }
             >

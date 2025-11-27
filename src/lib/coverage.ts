@@ -18,7 +18,8 @@ export function pocketCoverage(
   costs: Prices,
   floors: Floors,
   gaps: Gaps,
-  leak: Leakages
+  leak: Leakages,
+  usePocket = true
 ): { coverage: number; tested: number } {
   let ok = 0;
   let tested = 0;
@@ -29,15 +30,14 @@ export function pocketCoverage(
     for (let b = bStart; b <= ranges.better[1]; b += step) {
       const hStart = Math.max(b + (gaps.gapBB ?? 0), ranges.best[0]);
       for (let h = hStart; h <= ranges.best[1]; h += step) {
-        // pocket price at each tier
-        const pG = computePocketPrice(g, "good", leak).pocket;
-        const pB = computePocketPrice(b, "better", leak).pocket;
-        const pH = computePocketPrice(h, "best", leak).pocket;
+        const effG = usePocket ? computePocketPrice(g, "good", leak).pocket : g;
+        const effB = usePocket ? computePocketPrice(b, "better", leak).pocket : b;
+        const effH = usePocket ? computePocketPrice(h, "best", leak).pocket : h;
 
-        // pocket margins (as % of pocket price)
-        const mG = (pG - costs.good) / Math.max(pG, 1e-6);
-        const mB = (pB - costs.better) / Math.max(pB, 1e-6);
-        const mH = (pH - costs.best) / Math.max(pH, 1e-6);
+        // margins (as % of chosen basis)
+        const mG = (effG - costs.good) / Math.max(effG, 1e-6);
+        const mB = (effB - costs.better) / Math.max(effB, 1e-6);
+        const mH = (effH - costs.best) / Math.max(effH, 1e-6);
 
         tested++;
         if (mG >= floors.good && mB >= floors.better && mH >= floors.best) ok++;
@@ -56,7 +56,8 @@ export function feasibilitySliceGB(
   costs: Prices,
   floors: Floors,
   gaps: Gaps,
-  leak: Leakages
+  leak: Leakages,
+  usePocket = true
 ): { cells: FeasCell[]; gTicks: number[]; bTicks: number[]; bestUsed: number } {
   const step = Math.max(0.5, ranges.step);
   const gTicks: number[] = [];
@@ -86,12 +87,12 @@ export function feasibilitySliceGB(
         continue;
       }
       // Pocket margin check
-      const pG = computePocketPrice(g, "good", leak).pocket;
-      const pB = computePocketPrice(b, "better", leak).pocket;
-      const pH = computePocketPrice(h, "best", leak).pocket;
-      const mG = (pG - costs.good) / Math.max(pG, 1e-6);
-      const mB = (pB - costs.better) / Math.max(pB, 1e-6);
-      const mH = (pH - costs.best) / Math.max(pH, 1e-6);
+      const effG = usePocket ? computePocketPrice(g, "good", leak).pocket : g;
+      const effB = usePocket ? computePocketPrice(b, "better", leak).pocket : b;
+      const effH = usePocket ? computePocketPrice(h, "best", leak).pocket : h;
+      const mG = (effG - costs.good) / Math.max(effG, 1e-6);
+      const mB = (effB - costs.better) / Math.max(effB, 1e-6);
+      const mH = (effH - costs.best) / Math.max(effH, 1e-6);
       const ok = mG >= floors.good && mB >= floors.better && mH >= floors.best;
       cells.push({ g, b, ok });
     }

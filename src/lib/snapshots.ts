@@ -125,6 +125,7 @@ export type SnapshotKPIs = {
   segShares: number[];
   // optional UI label (used by Compare Board cards)
   title?: string;
+  subtitle?: string;
 };
 
 // --- ADD: compute KPIs without creating a full Snapshot record ---

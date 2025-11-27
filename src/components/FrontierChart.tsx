@@ -46,6 +46,10 @@ export interface FrontierPoint {
   bestPrice: number;
   profit: number;
 }
+export interface FrontierOverlay {
+  feasiblePoints?: FrontierPoint[];
+  infeasiblePoints?: FrontierPoint[];
+}
 
 type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
 
@@ -53,10 +57,12 @@ export default function FrontierChartReal({
   points,
   optimum,
   chartId,
+  overlay,
 }: {
   points: FrontierPoint[];
   optimum: FrontierPoint | null;
   chartId?: string;
+  overlay?: FrontierOverlay;
 }) {
   const divRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ECharts | null>(null);
@@ -128,6 +134,28 @@ export default function FrontierChartReal({
             fontSize: labelFont,
           },
         } as LineSeriesOption,
+        ...(overlay?.feasiblePoints && overlay.feasiblePoints.length
+          ? [
+              {
+                type: "scatter",
+                data: overlay.feasiblePoints.map((p) => [p.bestPrice, p.profit]),
+                symbolSize: 6,
+                itemStyle: { color: "#10b981" },
+                name: "Feasible",
+              } as ScatterSeriesOption,
+            ]
+          : []),
+        ...(overlay?.infeasiblePoints && overlay.infeasiblePoints.length
+          ? [
+              {
+                type: "scatter",
+                data: overlay.infeasiblePoints.map((p) => [p.bestPrice, p.profit]),
+                symbolSize: 6,
+                itemStyle: { color: "#cbd5e1" },
+                name: "Infeasible",
+              } as ScatterSeriesOption,
+            ]
+          : []),
         ...(optimum
           ? [
               {
