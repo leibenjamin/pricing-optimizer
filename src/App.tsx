@@ -1197,6 +1197,7 @@ export default function App() {
   const [optResult, setOptResult] = useState<{
     prices: { good: number; better: number; best: number };
     profit: number;
+    kpis: SnapshotKPIs;
   } | null>(null);
 
   const computeScenarioProfit = useCallback(
@@ -1256,7 +1257,13 @@ export default function App() {
       .then((out) => {
         // ignore if a newer run started
         if (runIdRef.current !== runId) return;
-        setOptResult({ prices: out.prices, profit: out.profit });
+        const resultKPIs = kpisFromSnapshot(
+          { prices: out.prices, costs, features, segments, refPrices, leak },
+          N,
+          !!optConstraints.usePocketProfit,
+          optConstraints.usePocketMargins ?? !!optConstraints.usePocketProfit
+        );
+        setOptResult({ prices: out.prices, profit: out.profit, kpis: resultKPIs });
         pushJ(
           `[${now()}] Optimizer âœ“ best ladder $${out.prices.good}/$${
             out.prices.better
@@ -1495,14 +1502,9 @@ export default function App() {
   const optimizedKPIs = useMemo(
     () => {
       if (!optResult) return null;
-      return kpisFromSnapshot(
-        { prices: optResult.prices, costs, features, segments, refPrices, leak },
-        N,
-        !!optConstraints.usePocketProfit,
-        optConstraints.usePocketMargins ?? optConstraints.usePocketProfit ?? false
-      );
+      return optResult.kpis;
     },
-    [optResult, costs, features, segments, refPrices, leak, N, optConstraints.usePocketProfit, optConstraints.usePocketMargins]
+    [optResult]
   );
 
   const buildExplainDelta = useCallback(
@@ -3552,10 +3554,13 @@ export default function App() {
               </Section>
           <Section id="compare-board" title="Scenario Compare (A/B/C)" className="order-3">
                       <Explanation slot="chart.compareBoard">
-                        Desktop ChatGPT: describe how to position these A/B/C slots during interviews — e.g., “Save current,
-                        branch, then reload while screen-sharing.” Mention how KPIs update and how to interpret gaps between
+                        Desktop ChatGPT: describe how to position these A/B/C slots during interviews - e.g., "Save current,
+                        branch, then reload while screen-sharing." Mention how KPIs update and how to interpret gaps between
                         saved ladders.
                       </Explanation>
+                      <div className="text-[11px] text-slate-600 mb-1">
+                        Slots use saved prices/costs/refs/leak/segments and the saved pocket/list basis if present; Current uses live state.
+                      </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
                         <span className="text-gray-600">Save current to:</span>
                         {(["A", "B", "C"] as const).map((id) => (
@@ -4178,8 +4183,11 @@ export default function App() {
                           <span className="text-[10px] uppercase tracking-wide text-slate-500">Demo aid</span>
                         </div>
                         <p className="mt-1 leading-snug">
-                          Use this to narrate “before vs after.” Apply the optimized ladder to push prices back to Scenario Panel,
+                          Use this to narrate "before vs after." Apply the optimized ladder to push prices back to Scenario Panel,
                           undo to revert, then call out the delta and which constraints or drivers mattered most.
+                        </p>
+                        <p className="mt-1 text-slate-600">
+                          Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}.
                         </p>
                       </div>
                       {(() => {
@@ -4645,6 +4653,9 @@ export default function App() {
           <Section id="callouts" title="Callouts snapshot">
             {optResult ? (
               <>
+                <div className="text-[11px] text-slate-600">
+                  Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}.
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <div className="rounded-xl border border-blue-100 bg-blue-50/40 px-3 py-2">
                     <div className="text-[11px] uppercase text-slate-600">
@@ -4716,6 +4727,9 @@ export default function App() {
             title="KPI - Pocket floor coverage"
             actions={<ActionCluster chart="coverage" id="coverage-heatmap" csv />}
           >
+            <div className="text-[11px] text-slate-600 mb-1">
+              Basis: pocket margins only; leakages always applied.
+            </div>
             <Explanation slot="kpi.pocketCoverage">
               <div className="font-semibold text-[11px] text-slate-700">
                 How to read pocket floor coverage
