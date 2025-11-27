@@ -89,6 +89,11 @@ function pct(n: number) {
 function SnapshotCard({ kpis }: { kpis: SnapshotKPIs }) {
   return (
     <>
+      {kpis.title && (
+        <div className="text-[11px] text-gray-500 mb-1">
+          {kpis.title}
+        </div>
+      )}
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-2">
         <Kpi label="Revenue" value={money(kpis.revenue)} />
