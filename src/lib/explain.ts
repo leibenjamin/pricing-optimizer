@@ -96,6 +96,18 @@ export const EXPLAIN: Record<string, string> = {
     Resets ladder, refs, leakages, features, ranges, constraints, and channel blend to sensible defaults. Clears saved values in localStorage for those keys.`,
   "import.clearAll": `
     Clears ladder/refs/leak/features to zero, clears constraints/ranges/blend, and removes saved values. Use before importing a fresh scenario.`,
+  "compare.segments": `
+    Choose whether to use <b>saved segments</b> from each slot or your current segments for KPI calculations.`,
+  "compare.leak": `
+    Choose whether to use <b>saved leakages</b> (promo/payment/FX/refunds) from each slot or current leakages.`,
+  "compare.refs": `
+    Choose whether to use <b>saved reference prices</b> from each slot or current reference prices.`,
+  "coverage.basis": `
+    Coverage can be calculated on <b>pocket</b> margins (after leakages) or <b>list</b> margins. Pocket is stricter; list is a quick sanity check.`,
+  "frontier.overlay": `
+    Feasible points clear margin floors; infeasible points violate floors or gaps. Use basis toggle to see pocket vs list profit along the sweep.`,
+  "reset.defaults": `
+    Reset ladder, refs, leak, features, ranges, constraints, and channel blend back to defaults. Does not touch saved baselines or compare slots.`,
 
   // --- Presets ---
   "presets.scenario": `

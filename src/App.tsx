@@ -3093,6 +3093,7 @@ export default function App() {
                         </button>
                         <span className="text-[11px] text-slate-500">
                           Resets ladder, refs, leak (incl. paymentFixed $0.10), gaps (gapBB=3), constraints, and clears channel blend.
+                          <InfoTip id="reset.defaults" ariaLabel="What does reset affect?" />
                         </span>
                       </div>
                     </Section>
@@ -3276,6 +3277,7 @@ export default function App() {
                             <div className="flex items-center justify-between gap-2">
                               <span className="font-semibold text-slate-800">Tier discounts (%)</span>
                               <span className="text-[11px] text-slate-500">Per selected tier</span>
+                              <InfoTip id="waterfall.step.promo" ariaLabel="What are tier discounts?" />
                             </div>
                             <div className="space-y-1">
                               {(["good", "better", "best"] as const).map((t) => (
@@ -3473,6 +3475,9 @@ export default function App() {
                             <summary className="cursor-pointer select-none text-xs font-semibold">
                               Compare all tiers
                             </summary>
+                            <div className="text-[11px] text-slate-600">
+                              Small multiples let you sanity-check pocket math across Good/Better/Best simultaneously.
+                            </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
                               {(["good", "better", "best"] as const).map((t) => {
                                 const list =
@@ -3521,6 +3526,9 @@ export default function App() {
                                 Blend applied to leakages
                               </div>
                             )}
+                            <div className="text-[11px] text-slate-600 mb-1">
+                              Each row weights a leak preset; normalize % then blend to see a composite fee/discount profile.
+                            </div>
                             <div className="mt-2 space-y-2">
                               {channelMix.map((row, i) => (
                                 <div key={i} className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2">
@@ -4954,6 +4962,7 @@ export default function App() {
           >
             <div className="text-[11px] text-slate-600 mb-1">
               Basis: {coverageUsePocket ? "Pocket margins (after leakages)" : "List margins (before leakages)"}.
+              <InfoTip id="coverage.basis" ariaLabel="How is coverage basis used?" />
             </div>
             <div className="flex items-center gap-3 text-xs mb-2">
               <label className="inline-flex items-center gap-1">
@@ -5128,6 +5137,7 @@ export default function App() {
             <div className="text-[11px] text-slate-600">
               Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}; Good/Better fixed, sweep Best.
               Constraints (gaps/floors) are shown as feasible (green) vs infeasible (gray).
+              <InfoTip id="frontier.overlay" ariaLabel="About frontier feasibility overlay" />
             </div>
             <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontier... </div>} >
               <ErrorBoundary title="Frontier chart failed">
@@ -5344,30 +5354,31 @@ export default function App() {
                 <span>pp</span>
               </label>
 
-              <div className="flex items-center gap-1">
-                <span>View</span>
-                <div className="inline-flex overflow-hidden rounded border">
-                  <button
-                    type="button"
-                    className={`px-2 h-7 ${tornadoView === "current" ? "bg-gray-900 text-white" : "bg-white"}`}
-                    onClick={() => setTornadoView("current")}
-                  >
-                    Current
-                  </button>
-                  <button
-                    type="button"
-                    className={`px-2 h-7 ${
-                      tornadoView === "optimized" && hasOptimizedTornado
-                        ? "bg-gray-900 text-white"
-                        : "bg-white"
-                    } ${!hasOptimizedTornado ? "opacity-50 cursor-not-allowed" : ""}`}
-                    onClick={() => hasOptimizedTornado && setTornadoView("optimized")}
-                    disabled={!hasOptimizedTornado}
-                  >
-                    Optimized
-                  </button>
-                </div>
-              </div>
+                          <div className="flex items-center gap-1">
+                            <span>View</span>
+                            <div className="inline-flex overflow-hidden rounded border">
+                              <button
+                                type="button"
+                                className={`px-2 h-7 ${tornadoView === "current" ? "bg-gray-900 text-white" : "bg-white"}`}
+                                onClick={() => setTornadoView("current")}
+                              >
+                                Current
+                              </button>
+                              <button
+                                type="button"
+                                className={`px-2 h-7 ${
+                                  tornadoView === "optimized" && hasOptimizedTornado
+                                    ? "bg-gray-900 text-white"
+                                    : "bg-white"
+                                } ${!hasOptimizedTornado ? "opacity-50 cursor-not-allowed" : ""}`}
+                                onClick={() => hasOptimizedTornado && setTornadoView("optimized")}
+                                disabled={!hasOptimizedTornado}
+                              >
+                                Optimized
+                              </button>
+                              <InfoTip id="chart.tornado" ariaLabel="How to read tornado chart?" />
+                            </div>
+                          </div>
             </div>
 
             <div className="text-[11px] text-slate-600 mb-2">
