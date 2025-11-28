@@ -16,6 +16,14 @@ export type Constraints = {
   minTakeRate?: number;
 };
 
+export type GridDiagnostics = {
+  coarseStep: number;
+  refinementStep: number;
+  tested: number;
+  coarsened: boolean;
+  skippedGuardrails: number;
+};
+
 export type SearchRanges = {
   good: [number, number];
   better: [number, number];
@@ -89,7 +97,7 @@ export function gridSearch(
   N: number,
   C: Constraints,
   leak?: Leakages
-): { prices: Ladder; profit: number; diagnostics: { coarseStep: number; refinementStep: number; tested: number; coarsened: boolean; skippedGuardrails: number } } {
+): { prices: Ladder; profit: number; diagnostics: GridDiagnostics } {
   let step = ranges.step;
   const spanCounts = (range: [number, number], s: number) => Math.max(1, Math.floor((range[1] - range[0]) / Math.max(s, 1e-6)) + 1);
   const maxCombos = 500_000;

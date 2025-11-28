@@ -23,7 +23,7 @@ import {
   type Prices,
 } from "./lib/segments";
 import { choiceShares } from "./lib/choice";
-import { type SearchRanges } from "./lib/optimize";
+import { type SearchRanges, type GridDiagnostics } from "./lib/optimize";
 import { runOptimizeInWorker } from "./lib/optWorker";
 
 import { computePocketPrice, type Leakages, type Tier } from "./lib/waterfall";
@@ -67,6 +67,7 @@ import { preflight, fetchWithRetry } from "./lib/net";
 
 import CompareBoard from "./components/CompareBoard";
 import { kpisFromSnapshot, type SnapshotKPIs } from "./lib/snapshots";
+import { runRobustnessScenarios, type UncertaintyScenario } from "./lib/robustness";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -101,6 +102,11 @@ type BaselineMeta = {
   label: string;
   savedAt: number;
 };
+const ROBUST_SCENARIOS: UncertaintyScenario[] = [
+  { name: "Base", segmentScalePrice: 1 },
+  { name: "More price sensitive", segmentScalePrice: 1.2, leakDeltaPct: 0.05 },
+  { name: "Less price sensitive", segmentScalePrice: 0.8, leakDeltaPct: -0.05 },
+];
 const ONBOARDING_STEPS = [
   {
     id: "start-ladder",
@@ -1270,6 +1276,7 @@ export default function App() {
     prices: { good: number; better: number; best: number };
     profit: number;
     kpis: SnapshotKPIs;
+    diagnostics?: GridDiagnostics;
   } | null>(null);
   const [lastOptAt, setLastOptAt] = useState<number | null>(null);
 
@@ -1337,7 +1344,7 @@ export default function App() {
           !!optConstraints.usePocketProfit,
           optConstraints.usePocketMargins ?? !!optConstraints.usePocketProfit
         );
-        setOptResult({ prices: out.prices, profit: out.profit, kpis: resultKPIs });
+        setOptResult({ prices: out.prices, profit: out.profit, kpis: resultKPIs, diagnostics: out.diagnostics });
         pushJ(
           `[${now()}] Optimizer best ladder $${out.prices.good}/$${out.prices.better}/$${out.prices.best} (profit $${Math.round(out.profit)})`
         );
@@ -1840,6 +1847,24 @@ export default function App() {
     optConstraints,
   ]);
 
+  const robustnessResults = useMemo(
+    () =>
+      optResult
+        ? runRobustnessScenarios({
+            scenarios: ROBUST_SCENARIOS,
+            baseRanges: optRanges,
+            baseConstraints: optConstraints,
+            baseSegments: segments,
+            baseFeatures: features,
+            baseRefPrices: refPrices,
+            baseCosts: costs,
+            baseLeak: leak,
+            N,
+            baseLadder: optResult.prices,
+          })
+        : [],
+    [optResult, optRanges, optConstraints, segments, features, refPrices, costs, leak, N]
+  );
   useEffect(() => {
     if (!optResult?.prices && !quickOpt.best && tornadoView === "optimized") {
       setTornadoView("current");
@@ -4117,6 +4142,23 @@ export default function App() {
                               Apply
                             </button>
                           </div>
+
+                          {(optResult?.diagnostics || quickOpt.diagnostics) && (() => {
+                            const diag: GridDiagnostics | undefined = optResult?.diagnostics ?? (quickOpt.diagnostics as GridDiagnostics | undefined);
+                            if (!diag) return null;
+                            const guardrailNote =
+                              diag.skippedGuardrails > 0
+                                ? `${diag.skippedGuardrails.toLocaleString()} ladders skipped by guardrails (none-share/take-rate/floors). `
+                                : "";
+                            const coarsenNote = diag.coarsened ? "Grid auto-coarsened for performance. " : "";
+                            return (
+                              <div className="text-[11px] text-slate-600 mt-2">
+                                Tested {diag.tested.toLocaleString()} ladders; coarse step ${diag.coarseStep.toFixed(2)} →
+                                refine ${diag.refinementStep.toFixed(2)}. {coarsenNote}
+                                {guardrailNote}
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {/* Result line (one-liner) */}
@@ -4525,9 +4567,65 @@ export default function App() {
                         ridge regularization.
                       </p>
                       {fitInfo && (
-                        <div className="text-xs text-gray-600 mt-2">
-                          logLik: {Math.round(fitInfo.logLik)} - iters: {fitInfo.iters} -{" "}
-                          {fitInfo.converged ? "converged" : "not converged"}
+                        <div className="text-xs text-gray-700 mt-2 space-y-1 bg-slate-50 border border-slate-200 rounded p-2">
+                          <div className="font-semibold text-[11px] text-slate-800">Latest fit (sales import)</div>
+                          <div>
+                            Train/Test logLik: {Math.round(fitInfo.trainLogLik ?? fitInfo.logLik)} /{" "}
+                            {fitInfo.testLogLik != null ? Math.round(fitInfo.testLogLik) : "n/a"}; iters {fitInfo.iters};{" "}
+                            {fitInfo.converged ? "converged" : "not converged"}
+                          </div>
+                          {typeof fitInfo.pseudoR2 === "number" && (
+                            <div>Pseudo R^2 (test): {(fitInfo.pseudoR2 * 100).toFixed(1)}%</div>
+                          )}
+                          {typeof fitInfo.accuracy === "number" && (
+                            <div>Accuracy (test): {(fitInfo.accuracy * 100).toFixed(1)}%</div>
+                          )}
+                          {fitInfo.dataDiagnostics?.warnings?.length ? (
+                            <div className="text-amber-800">
+                              Warnings:
+                              <ul className="list-disc ml-4 space-y-0.5">
+                                {fitInfo.dataDiagnostics.warnings.slice(0, 4).map((w, i) => (
+                                  <li key={i}>{w}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+                    </Section>
+          <Section id="optimizer-robustness" title="Optimizer robustness">
+                      <div className="text-[11px] text-slate-700 bg-slate-50 border border-dashed border-slate-200 rounded px-3 py-2">
+                        Stress scenarios scale price sensitivity and leakages to show how fragile the recommendation is.
+                        We re-run the grid under each scenario and compare profits at your optimized ladder vs the per-scenario optimum.
+                      </div>
+                      {robustnessResults.length === 0 ? (
+                        <div className="text-xs text-gray-600">Run the optimizer to populate robustness scenarios.</div>
+                      ) : (
+                        <div className="overflow-auto">
+                          <table className="min-w-full text-[11px] border border-slate-200 rounded">
+                            <thead className="bg-slate-100 text-slate-700">
+                              <tr>
+                                <th className="px-2 py-1 text-left">Scenario</th>
+                                <th className="px-2 py-1 text-left">Profit @ optimized ladder</th>
+                                <th className="px-2 py-1 text-left">Scenario-optimal profit</th>
+                                <th className="px-2 py-1 text-left">Price shift vs optimized</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {robustnessResults.map((r) => (
+                                <tr key={r.name} className="odd:bg-white even:bg-slate-50">
+                                  <td className="px-2 py-1 font-semibold text-slate-800">{r.name}</td>
+                                  <td className="px-2 py-1">
+                                    {r.profitAtBase != null ? fmtUSD(r.profitAtBase) : "n/a"}
+                                  </td>
+                                  <td className="px-2 py-1">{fmtUSD(r.bestProfit)}</td>
+                                  <td className="px-2 py-1 text-slate-700">
+                                    {r.priceDelta != null ? `$${r.priceDelta.toFixed(2)} avg abs delta` : "n/a"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       )}
                     </Section>

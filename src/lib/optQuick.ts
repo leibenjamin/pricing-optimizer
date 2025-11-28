@@ -1,6 +1,7 @@
 // src/lib/optQuick.ts
 import { choiceShares } from "./choice";
 import { computePocketPrice, type Leakages } from "./waterfall";
+import type { GridDiagnostics } from "./optimize";
 
 export type Prices = { good: number; better: number; best: number };
 export type Costs = Prices;
@@ -78,7 +79,7 @@ export function gridOptimize(
   refs: Prices,
   leak: Leakages,
   C: Constraints
-) {
+): { best: Prices | null; profit: number; diagnostics: GridDiagnostics } {
   const maxCombos = 300_000;
   let step = ranges.step;
   const count = (r: [number, number], s: number) => Math.max(1, Math.floor((r[1] - r[0]) / Math.max(s, 1e-6)) + 1);
@@ -144,5 +145,16 @@ export function gridOptimize(
     }
   }
 
-  return { best, profit: bestProfit, diagnostics: { tested, skippedGuardrails, step } };
+  const refinementStep = Math.max(step / 2, 0.25);
+  return {
+    best,
+    profit: bestProfit,
+    diagnostics: {
+      tested,
+      skippedGuardrails,
+      coarsened: false,
+      coarseStep: step,
+      refinementStep,
+    },
+  };
 }
