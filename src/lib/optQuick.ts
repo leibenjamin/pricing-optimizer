@@ -9,8 +9,11 @@ export type Constraints = {
   gapGB: number;
   gapBB: number;
   marginFloor: { good: number; better: number; best: number };
-  usePocketForFloors?: boolean;
+  usePocketMargins?: boolean;
+  usePocketProfit?: boolean;
   charm?: boolean;
+  maxNoneShare?: number;
+  minTakeRate?: number;
 };
 
 function charm99(p: number) {
@@ -20,19 +23,9 @@ function charm99(p: number) {
 }
 const snap = (p: number, charm?: boolean) => (charm ? charm99(p) : p);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function profitList(N: number, prices: Prices, costs: Costs, features: any, segments: any, refs: Prices) {
-  const probs = choiceShares(prices, features, segments, refs);
-  const take = {
-    good: Math.round(N * probs.good),
-    better: Math.round(N * probs.better),
-    best: Math.round(N * probs.best),
-  };
-  return take.good * (prices.good - costs.good) + take.better * (prices.better - costs.better) + take.best * (prices.best - costs.best);
-}
+const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 
-export function profitPocket(
-  N: number,
+function evalLadder(
   prices: Prices,
   costs: Costs,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -40,33 +33,40 @@ export function profitPocket(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   segments: any,
   refs: Prices,
-  leak: Leakages
-) {
+  leak: Leakages,
+  C: Constraints,
+  N: number
+): number | null {
+  const maxNone = C.maxNoneShare ?? 0.9;
+  const minTake = C.minTakeRate ?? 0.02;
+  const effG = C.usePocketMargins ? computePocketPrice(prices.good, "good", leak).pocket : prices.good;
+  const effB = C.usePocketMargins ? computePocketPrice(prices.better, "better", leak).pocket : prices.better;
+  const effH = C.usePocketMargins ? computePocketPrice(prices.best, "best", leak).pocket : prices.best;
+
+  const mG = (effG - costs.good) / Math.max(effG, 1e-6);
+  const mB = (effB - costs.better) / Math.max(effB, 1e-6);
+  const mH = (effH - costs.best) / Math.max(effH, 1e-6);
+  if (mG < C.marginFloor.good || mB < C.marginFloor.better || mH < C.marginFloor.best) return null;
+
   const probs = choiceShares(prices, features, segments, refs);
-  const take = {
-    good: Math.round(N * probs.good),
-    better: Math.round(N * probs.better),
-    best: Math.round(N * probs.best),
+  if (probs.none > maxNone) return null;
+  const take = probs.good + probs.better + probs.best;
+  if (take < minTake) return null;
+
+  const pG = C.usePocketProfit ? computePocketPrice(prices.good, "good", leak).pocket : prices.good;
+  const pB = C.usePocketProfit ? computePocketPrice(prices.better, "better", leak).pocket : prices.better;
+  const pH = C.usePocketProfit ? computePocketPrice(prices.best, "best", leak).pocket : prices.best;
+
+  const q = {
+    good: Math.round(probs.good * N),
+    better: Math.round(probs.better * N),
+    best: Math.round(probs.best * N),
   };
-  const pG = computePocketPrice(prices.good, "good", leak).pocket;
-  const pB = computePocketPrice(prices.better, "better", leak).pocket;
-  const pH = computePocketPrice(prices.best, "best", leak).pocket;
-  return take.good * (pG - costs.good) + take.better * (pB - costs.better) + take.best * (pH - costs.best);
+
+  return q.good * (pG - costs.good) + q.better * (pB - costs.better) + q.best * (pH - costs.best);
 }
 
-function passesFloors(prices: Prices, costs: Costs, leak: Leakages, floors: Constraints["marginFloor"], usePocket: boolean) {
-  const PG = usePocket ? computePocketPrice(prices.good, "good", leak).pocket : prices.good;
-  const PB = usePocket ? computePocketPrice(prices.better, "better", leak).pocket : prices.better;
-  const PH = usePocket ? computePocketPrice(prices.best, "best", leak).pocket : prices.best;
-
-  const mG = (PG - costs.good) / Math.max(PG, 1e-6);
-  const mB = (PB - costs.better) / Math.max(PB, 1e-6);
-  const mH = (PH - costs.best) / Math.max(PH, 1e-6);
-
-  return mG >= floors.good && mB >= floors.better && mH >= floors.best;
-}
-
-/** Brute grid search with gaps & margin floors. Returns best prices + profit. */
+/** Brute grid search with gaps, margin floors, guardrails, charm endings. */
 export function gridOptimize(
   N: number,
   ranges: { good: [number, number]; better: [number, number]; best: [number, number]; step: number },
@@ -77,33 +77,72 @@ export function gridOptimize(
   segments: any,
   refs: Prices,
   leak: Leakages,
-  C: Constraints,
-  usePocketForProfit: boolean
+  C: Constraints
 ) {
+  const maxCombos = 300_000;
+  let step = ranges.step;
+  const count = (r: [number, number], s: number) => Math.max(1, Math.floor((r[1] - r[0]) / Math.max(s, 1e-6)) + 1);
+  let combos = count(ranges.good, step) * count(ranges.better, step) * count(ranges.best, step);
+  while (combos > maxCombos) {
+    step *= 2;
+    combos = count(ranges.good, step) * count(ranges.better, step) * count(ranges.best, step);
+  }
+
   let best: Prices | null = null;
   let bestProfit = -Infinity;
+  let tested = 0;
+  let skippedGuardrails = 0;
 
-  for (let g = ranges.good[0]; g <= ranges.good[1]; g += ranges.step) {
+  for (let g = ranges.good[0]; g <= ranges.good[1]; g += step) {
     const pGood = snap(g, C.charm);
-    for (let b = Math.max(pGood + C.gapGB, ranges.better[0]); b <= ranges.better[1]; b += ranges.step) {
+    for (let b = Math.max(pGood + C.gapGB, ranges.better[0]); b <= ranges.better[1]; b += step) {
       const pBetter = snap(b, C.charm);
       if (pBetter < pGood + C.gapGB) continue;
-      for (let h = Math.max(pBetter + C.gapBB, ranges.best[0]); h <= ranges.best[1]; h += ranges.step) {
+      for (let h = Math.max(pBetter + C.gapBB, ranges.best[0]); h <= ranges.best[1]; h += step) {
         const pBest = snap(h, C.charm);
         if (pBest < pBetter + C.gapBB) continue;
         const prices = { good: pGood, better: pBetter, best: pBest };
-        if (!passesFloors(prices, costs, leak, C.marginFloor, !!C.usePocketForFloors)) continue;
-
-        const p = usePocketForProfit
-          ? profitPocket(N, prices, costs, features, segments, refs, leak)
-          : profitList(N, prices, costs, features, segments, refs);
-
-        if (p > bestProfit) {
-          bestProfit = p;
+        const p = evalLadder(prices, costs, features, segments, refs, leak, C, N);
+        tested += 1;
+        if (p == null) {
+          skippedGuardrails += 1;
+          continue;
+        }
+        const profit = p;
+        if (profit > bestProfit) {
+          bestProfit = profit;
           best = prices;
         }
       }
     }
   }
-  return { best, profit: bestProfit };
+
+  // Small refinement around best ladder
+  if (best) {
+    const refStep = Math.max(step / 2, 0.25);
+    for (const dg of [-refStep, 0, refStep]) {
+      for (const db of [-refStep, 0, refStep]) {
+        for (const dh of [-refStep, 0, refStep]) {
+          const g = clamp(best.good + dg, ranges.good[0], ranges.good[1]);
+          const b = clamp(best.better + db, ranges.better[0], ranges.better[1]);
+          const h = clamp(best.best + dh, ranges.best[0], ranges.best[1]);
+          if (b < g + C.gapGB || h < b + C.gapBB) continue;
+          const prices = { good: snap(g, C.charm), better: snap(b, C.charm), best: snap(h, C.charm) };
+          const p = evalLadder(prices, costs, features, segments, refs, leak, C, N);
+          tested += 1;
+          if (p == null) {
+            skippedGuardrails += 1;
+            continue;
+          }
+          const profit = p;
+          if (profit > bestProfit) {
+            bestProfit = profit;
+            best = prices;
+          }
+        }
+      }
+    }
+  }
+
+  return { best, profit: bestProfit, diagnostics: { tested, skippedGuardrails, step } };
 }

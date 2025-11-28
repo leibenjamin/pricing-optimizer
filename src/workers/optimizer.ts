@@ -18,14 +18,14 @@ export type OptimizeIn = {
 }
 
 export type OptimizeOut =
-  | { ok: true; runId: number; prices: Prices; profit: number }
+  | { ok: true; runId: number; prices: Prices; profit: number; diagnostics?: ReturnType<typeof gridSearch>["diagnostics"] }
   | { ok: false; runId: number; error: string }
 
 self.onmessage = (ev: MessageEvent<OptimizeIn>) => {
   const msg = ev.data
   try {
     const best = gridSearch(msg.ranges, msg.costs, msg.feats, msg.segs, msg.refPrices, msg.N, msg.C, msg.leak)
-    const out: OptimizeOut = { ok: true, runId: msg.runId, prices: best.prices, profit: best.profit }
+    const out: OptimizeOut = { ok: true, runId: msg.runId, prices: best.prices, profit: best.profit, diagnostics: best.diagnostics }
     ;(self as unknown as Worker).postMessage(out)
   } catch (e) {
     const err = e instanceof Error ? e.message : "Worker error"

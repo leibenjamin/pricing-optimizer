@@ -25,7 +25,18 @@ const TIER_LABELS: Record<TierKey, string> = {
 };
 
 type SegmentOut = { name: string; weight: number; beta: { price: number; featA: number; featB: number } };
-type Diagnostics = { logLik: number; iters: number; converged: boolean };
+type DataDiagnostics = import("../workers/estimator").FitDone["dataDiagnostics"];
+type Diagnostics = {
+  logLik: number;
+  iters: number;
+  converged: boolean;
+  trainLogLik?: number;
+  testLogLik?: number;
+  pseudoR2?: number;
+  accuracy?: number;
+  dataDiagnostics?: DataDiagnostics;
+  chosenK?: number;
+};
 type FitStats = {
   priceRange?: TierRangeMap;
   priceRangeSource?: "synthetic" | "imported" | "shared";
@@ -42,6 +53,8 @@ export default function SalesImport(props: {
   const [sample, setSample] = useState<ReadonlyArray<Record<string, string | number | boolean | null | undefined>>>([]);
   const [mapping, setMapping] = useState<SalesMapping>({});
   const [busy, setBusy] = useState(false);
+  const [classes, setClasses] = useState(1);
+  const [fitDiag, setFitDiag] = useState<Diagnostics | null>(null);
   const fileTextRef = useRef<string>("");
   const choiceSelectRef = useRef<HTMLSelectElement | null>(null);
 
@@ -119,6 +132,7 @@ export default function SalesImport(props: {
       return;
     }
     setBusy(true);
+    setFitDiag(null);
     try {
       // Parse to long rows
       const parser = new Worker(new URL("../workers/salesParser.ts", import.meta.url), { type: "module" });
@@ -178,16 +192,26 @@ export default function SalesImport(props: {
             finishErr(new Error(msg.error));
             return;
           }
-          if (msg.kind === "fitDone") {
-            finishOk(
-              msg.asSegments,
-              { logLik: msg.logLik, iters: msg.iters, converged: msg.converged }
-            );
-          }
-        };
+        if (msg.kind === "fitDone") {
+          finishOk(
+            msg.asSegments,
+            {
+              logLik: msg.logLik,
+              iters: msg.iters,
+              converged: msg.converged,
+              trainLogLik: msg.trainLogLik,
+              testLogLik: msg.testLogLik,
+              pseudoR2: msg.pseudoR2,
+              accuracy: msg.accuracy,
+              dataDiagnostics: msg.dataDiagnostics,
+              chosenK: msg.chosenK,
+            }
+          );
+        }
+      };
 
         estimator.onerror = (e) => finishErr(e);
-        estimator.postMessage({ kind: "fit", rows: longRows, ridge: 1e-4, maxIters: 200 });
+        estimator.postMessage({ kind: "fit", rows: longRows, ridge: 1e-4, maxIters: 200, classes });
       });
 
 
@@ -195,6 +219,7 @@ export default function SalesImport(props: {
       const hasRange = hasMeaningfulRange(priceRangeByTier);
 
       onToast?.("success", "Estimated coefficients from sales data");
+      setFitDiag(fit.diagnostics);
       onApply({
         ...fit,
         stats: hasRange
@@ -613,6 +638,21 @@ export default function SalesImport(props: {
       {/* Bottom actions (sticky inside card) */}
       <div className="mt-3 border-t pt-2 sticky bottom-0 bg-white/90 backdrop-blur supports-backdrop-filter:bg-white/70">
         <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1 text-[11px]">
+            Classes
+            <select
+              className="border rounded px-2 h-7 bg-white"
+              value={classes}
+              onChange={(e) => setClasses(Math.max(1, Math.min(3, Number(e.target.value) || 1)))}
+            >
+              {[1, 2, 3].map((k) => (
+                <option key={k} value={k}>
+                  {k}-class
+                </option>
+              ))}
+            </select>
+          </label>
+
           <button
             className="text-xs md:text-sm border px-3 py-1.5 rounded bg-white hover:bg-gray-50 disabled:opacity-50"
             disabled={!mappingCheck.ok || !headers.length || busy}
@@ -644,9 +684,29 @@ export default function SalesImport(props: {
             className="ml-2 text-[11px] underline text-blue-600"
             onClick={() => choiceSelectRef.current?.focus()}
           >
-            Check “choice” column mapping
+            Check "choice" column mapping
           </button>
         </div>
+
+        {fitDiag && (
+          <div className="mt-2 text-[11px] text-slate-700 bg-slate-50 border border-slate-200 rounded p-2 space-y-1">
+            <div className="font-semibold text-[12px] text-slate-800">Fit diagnostics</div>
+            <div>LogLik (train/test): {Math.round(fitDiag.trainLogLik ?? fitDiag.logLik)} / {Math.round(fitDiag.testLogLik ?? 0)}</div>
+            {typeof fitDiag.pseudoR2 === "number" && <div>Pseudo R^2: {(fitDiag.pseudoR2 * 100).toFixed(1)}%</div>}
+            {typeof fitDiag.accuracy === "number" && <div>Accuracy (test): {(fitDiag.accuracy * 100).toFixed(1)}%</div>}
+            {fitDiag.chosenK ? <div>Classes used: {fitDiag.chosenK}</div> : null}
+            {fitDiag.dataDiagnostics?.warnings?.length ? (
+              <div className="text-amber-800">
+                Warnings:
+                <ul className="list-disc ml-4 space-y-0.5">
+                  {fitDiag.dataDiagnostics.warnings.slice(0, 4).map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        )}
 
         {/* Guard rails: price column quality */}
         {preflight && (

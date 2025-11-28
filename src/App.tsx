@@ -983,6 +983,11 @@ export default function App() {
     logLik: number;
     iters: number;
     converged: boolean;
+    trainLogLik?: number;
+    testLogLik?: number;
+    pseudoR2?: number;
+    accuracy?: number;
+    dataDiagnostics?: import("./workers/estimator").FitDone["dataDiagnostics"];
   } | null>(null);
 
   const [channelMix, setChannelMix] = useState([
@@ -1809,7 +1814,8 @@ export default function App() {
       gapGB: optConstraints.gapGB,
       gapBB: optConstraints.gapBB,
       marginFloor: optConstraints.marginFloor,
-      usePocketForFloors: usePocketFloors,
+      usePocketMargins: usePocketFloors,
+      usePocketProfit,
       charm: !!optConstraints.charm,
     };
 
@@ -1821,8 +1827,7 @@ export default function App() {
       segments,
       refPrices,
       leak,
-      C,
-      /* usePocketForProfit: */ usePocketProfit
+      C
     );
   }, [
     N,
