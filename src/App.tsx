@@ -3783,7 +3783,7 @@ export default function App() {
                               slotUsePocketMargins
                             ),
                             title: `${fallbackTitle} (${slotUsePocket ? "pocket" : "list"})`,
-                            subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} � Segments: ${compareUseSavedSegments && obj.segments ? "saved" : "current"} � Leak: ${compareUseSavedLeak && obj.leak ? "saved" : "current"} � Refs: ${compareUseSavedRefs && obj.refPrices ? "saved" : "current"}`,
+                            subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} · Segments: ${compareUseSavedSegments && obj.segments ? "saved" : "current"} · Leak: ${compareUseSavedLeak && obj.leak ? "saved" : "current"} · Refs: ${compareUseSavedRefs && obj.refPrices ? "saved" : "current"}`,
                           };
                         };
 
@@ -4297,20 +4297,16 @@ export default function App() {
                             className="space-y-2 text-slate-600 mt-2"
                           >
                             <div>
-                              <span className="font-semibold">Tier discounts</span>: TODO � describe how promo vs. volume knobs
-                              affect list-to-pocket math and when to prioritize each tier.
+                              <span className="font-semibold">Tier discounts</span>: Promo/volume discounts shave list down to pocket. Prioritize heavier discounts on tiers where you need mix or where payment fees bite less (higher-ticket tiers).
                             </div>
                             <div>
-                              <span className="font-semibold">Global leakages</span>: TODO � explain processor %, fixed fees, FX,
-                              and refunds along with the types of businesses that feel each leakage the most.
+                              <span className="font-semibold">Global leakages</span>: Payment %/fixed fees, FX, and refunds vary by channel. Low-ticket/high-fee businesses feel payment %; cross-border sales feel FX; high-return categories feel refunds.
                             </div>
                             <div>
-                              <span className="font-semibold">Compare all tiers</span>: TODO � narrative on using the mini
-                              waterfalls to defend Good/Better/Best deltas.
+                              <span className="font-semibold">Compare all tiers</span>: Mini waterfalls help defend Good/Better/Best deltas—ensure pocket spreads match your positioning and guardrails.
                             </div>
                             <div>
-                              <span className="font-semibold">Channel blend</span>: TODO � instructions for blending Stripe vs.
-                              marketplaces and how to talk about the resulting composite leak profile.
+                              <span className="font-semibold">Channel blend</span>: Blend presets (e.g., Stripe vs. marketplace) to see a composite leak profile; narrate how channel mix shifts pocket and floors.
                             </div>
                           </div>
                         </details>
