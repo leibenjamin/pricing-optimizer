@@ -379,10 +379,10 @@ export default function App() {
               <div className="flex items-start gap-2">
                 <div className="mt-0.5">
                   {t.kind === "error"
-                    ? "⚠️"
+                    ? "??"
                     : t.kind === "success"
-                    ? "✅"
-                    : "ℹ️"}
+                    ? "?"
+                    : "??"}
                 </div>
                 <div className="flex-1">{t.msg}</div>
                 <button
@@ -392,7 +392,7 @@ export default function App() {
                     setToasts((ts) => ts.filter((x) => x.id !== t.id))
                   }
                 >
-                  ✕
+                  ?
                 </button>
               </div>
             </div>
@@ -438,7 +438,7 @@ export default function App() {
     // Keyboard shortcuts (Alt+1..4 = PNG, Shift+Alt+1..4 = CSV, Ctrl/Cmd+P = print)
     useEffect(() => {
       const onKey = (e: KeyboardEvent) => {
-        // Respect native print with Ctrl/Cmd+P (don’t intercept)
+        // Respect native print with Ctrl/Cmd+P (don�t intercept)
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") return;
 
         const idx = Number(e.key) - 1; // '1' -> 0
@@ -495,7 +495,7 @@ export default function App() {
                   key={g.chartId}
                   className="flex items-center gap-1 border rounded-md px-1 py-0.5"
                   aria-label={g.aria}
-                  title={`${g.label} • Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
+                  title={`${g.label} � Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
                 >
                   {/* Chip label scrolls to the section */}
                   <button
@@ -1786,7 +1786,7 @@ export default function App() {
       if (!stats) return `${label} --`;
       return `${label} $${stats.min.toFixed(2)}-$${stats.max.toFixed(2)}`;
     });
-    return `${prefix}: ${rows.join(" · " )}`;
+    return `${prefix}: ${rows.join(" | " )}`;
   }, [priceRangeState]);
 
   const dataRangeOptionLabel =
@@ -2207,7 +2207,7 @@ export default function App() {
       await navigator.clipboard.writeText(window.location.href);
       toast?.("success", "URL copied to clipboard");
     } catch {
-      toast?.("error", "Copy failed�select and copy the address bar");
+      toast?.("error", "Copy failed - select and copy the address bar");
     }
   }
 
@@ -2359,7 +2359,7 @@ export default function App() {
 
   async function saveScenarioShortLink() {
     try {
-      // 1) Cheap warmup — if it fails, we continue anyway
+      // 1) Cheap warmup - if it fails, we continue anyway
       const ok = await preflight("/api/get?s=ping");
       if (!ok) {
         pushJ(`[${now()}] Preflight failed (continuing to save)`);
@@ -2415,7 +2415,7 @@ export default function App() {
         try {
           const bodyUnknown: unknown = await res.json();
           if (isSaveError(bodyUnknown)) {
-            if (bodyUnknown.error) detail += ` — ${bodyUnknown.error}`;
+            if (bodyUnknown.error) detail += ` - ${bodyUnknown.error}`;
             if (Array.isArray(bodyUnknown.issues) && bodyUnknown.issues.length) {
               const i0 = bodyUnknown.issues[0];
               const at = i0?.path ? ` at ${i0.path.join(".")}` : "";
@@ -2588,12 +2588,12 @@ export default function App() {
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h1 className="text-xl font-semibold">Pricing Optimizer</h1>
                 <span className="text-xs text-gray-500">
-                  v0.3 � Latent-class choice model (3 segments)
+                  v0.3 - Latent-class choice model (3 segments)
                 </span>
               </div>
               <p className="mt-1 text-sm text-slate-600">
-                Good/Better/Best ladder � pocket price waterfall � profit frontier �
-                tornado sensitivity � cohorts
+                Good/Better/Best ladder - pocket price waterfall - profit frontier -
+                tornado sensitivity - cohorts
               </p>
               <div className="no-print mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
                 <button
@@ -2605,7 +2605,7 @@ export default function App() {
                   Take tour
                 </button>
                 <span className="text-xs text-slate-500">
-                  4 steps � highlights each key section
+                  4 steps - highlights each key section
                 </span>
               </div>
             </div>
@@ -3783,7 +3783,7 @@ export default function App() {
                               slotUsePocketMargins
                             ),
                             title: `${fallbackTitle} (${slotUsePocket ? "pocket" : "list"})`,
-                            subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} · Segments: ${compareUseSavedSegments && obj.segments ? "saved" : "current"} · Leak: ${compareUseSavedLeak && obj.leak ? "saved" : "current"} · Refs: ${compareUseSavedRefs && obj.refPrices ? "saved" : "current"}`,
+                            subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} | Segments: ${compareUseSavedSegments && obj.segments ? "saved" : "current"} | Leak: ${compareUseSavedLeak && obj.leak ? "saved" : "current"} | Refs: ${compareUseSavedRefs && obj.refPrices ? "saved" : "current"}`,
                           };
                         };
 
@@ -3906,7 +3906,7 @@ export default function App() {
                       <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
                         {journal.length === 0 ? (
                           <li className="text-gray-400">
-                            Adjust sliders/toggles to log changes�
+                            Adjust sliders/toggles to log changes...
                           </li>
                         ) : (
                           journal.map((line, i) => <li key={i}>{line}</li>)
@@ -4126,7 +4126,7 @@ export default function App() {
                           {optResult ? (
                             <span>
                               Best ladder ${optResult.prices.good}/$
-                              {optResult.prices.better}/${optResult.prices.best} -&gt; Profit
+                              {optResult.prices.better}/${optResult.prices.best} ? Profit
                               delta ${Math.round(optResult.profit)}
                             </span>
                           ) : (
@@ -4303,7 +4303,7 @@ export default function App() {
                               <span className="font-semibold">Global leakages</span>: Payment %/fixed fees, FX, and refunds vary by channel. Low-ticket/high-fee businesses feel payment %; cross-border sales feel FX; high-return categories feel refunds.
                             </div>
                             <div>
-                              <span className="font-semibold">Compare all tiers</span>: Mini waterfalls help defend Good/Better/Best deltas—ensure pocket spreads match your positioning and guardrails.
+                              <span className="font-semibold">Compare all tiers</span>: Mini waterfalls help defend Good/Better/Best deltas-ensure pocket spreads match your positioning and guardrails.
                             </div>
                             <div>
                               <span className="font-semibold">Channel blend</span>: Blend presets (e.g., Stripe vs. marketplace) to see a composite leak profile; narrate how channel mix shifts pocket and floors.
@@ -4519,13 +4519,13 @@ export default function App() {
                     </Section>
           <Section id="methods" title="Methods">
                       <p className="text-sm text-gray-700 print-tight">
-                        MNL: U = �0(j) + �?�price + �_A�featA + �_B�featB; outside option
+                        MNL: U = �0(j) + �p|price + �A|featA + �B|featB; outside option
                         intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
                         ridge regularization.
                       </p>
                       {fitInfo && (
                         <div className="text-xs text-gray-600 mt-2">
-                          logLik: {Math.round(fitInfo.logLik)} � iters: {fitInfo.iters} �{" "}
+                          logLik: {Math.round(fitInfo.logLik)} - iters: {fitInfo.iters} -{" "}
                           {fitInfo.converged ? "converged" : "not converged"}
                         </div>
                       )}
@@ -5024,9 +5024,9 @@ export default function App() {
                         feasible ladders (pocket floors)
                       </div>
                       <div className="text-[11px] text-gray-600 mt-1">
-                        baseline {pct0}% -&gt; {pct1}% �{" "}
-                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} �{" "}
-                        {coverageSnapshot.tested.toLocaleString()} combos � step $
+                        baseline {pct0}% -&gt; {pct1}% -{" "}
+                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} -{" "}
+                        {coverageSnapshot.tested.toLocaleString()} combos - step $
                         {coverageSnapshot.step}
                       </div>
                     </div>
@@ -5058,7 +5058,7 @@ export default function App() {
                     </div>
                     <div>
                       <span className="font-semibold text-gray-800">Grid and gaps:</span>{" "}
-                      Good ? Better gap {optConstraints.gapGB}, Better ? Best gap {optConstraints.gapBB}; step $
+                      Good -&gt; Better gap {optConstraints.gapGB}, Better -&gt; Best gap {optConstraints.gapBB}; step $
                       {optRanges.step} across {coverageSnapshot.tested.toLocaleString()} ladder combinations.
                     </div>
                   </div>
@@ -5122,7 +5122,7 @@ export default function App() {
             actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
           >
             <Explanation slot="chart.profitFrontier">
-              Frontier sweeps Best while holding Good/Better fixed and computes profit at each step. Look for the peak, check which points are infeasible (gray) due to floors/gaps, and use this to answer quick �what if we nudged premium $X?� before running the full optimizer.
+              Frontier sweeps Best while holding Good/Better fixed and computes profit at each step. Look for the peak, check which points are infeasible (gray) due to floors/gaps, and use this to answer quick "what if we nudged premium $X?" before running the full optimizer.
             </Explanation>
             <div className="text-[11px] text-slate-600">
               Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}; Good/Better fixed, sweep Best.
@@ -5168,7 +5168,7 @@ export default function App() {
             <InfoTip id="takeRate.bars" ariaLabel="How take-rate bars are computed" />
             <Suspense
               fallback={
-                <div className="text-xs text-gray-500 p-2">Loading bars�</div>
+                <div className="text-xs text-gray-500 p-2">Loading bars...</div>
               }
             >
               <ErrorBoundary title="Take-Rate chart failed">
@@ -5265,7 +5265,7 @@ export default function App() {
 
           <Section
             id="tornado"
-            title="Tornado � what moves profit?"
+            title="Tornado - what moves profit?"
             className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
             actions={<ActionCluster chart="tornado" id="tornado-main" csv />}
           >
@@ -5293,7 +5293,7 @@ export default function App() {
                     )
                   }
                 >
-                  <option value="symmetric">�{tornadoPriceBump}% symmetric</option>
+                  <option value="symmetric">+/-{tornadoPriceBump}% symmetric</option>
                   <option value="data" disabled={!priceRangeState?.map}>
                     {dataRangeOptionLabel}
                   </option>
@@ -5386,7 +5386,7 @@ export default function App() {
             <Suspense
               fallback={
                 <div className="text-xs text-gray-500 p-2">
-                  Loading tornado�
+                  Loading tornado...
                 </div>
               }
             >
