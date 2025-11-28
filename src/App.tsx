@@ -3680,7 +3680,7 @@ export default function App() {
               </Section>
           <Section id="compare-board" title="Scenario Compare (A/B/C)" className="order-3">
                       <Explanation slot="chart.compareBoard">
-                        Save the current ladder into A/B/C, branch your changes, then reload slots while narrating differences. KPIs auto-recompute; use the toggles to control whether saved or current segments/leak/refs are used so you know exactly what�s being compared.
+                        Save the current ladder into A/B/C, branch your changes, then reload slots while narrating differences. KPIs auto-recompute; use the toggles to control whether saved or current segments/leak/refs are used so you know exactly what's being compared.
                       </Explanation>
                       <div className="text-[11px] text-slate-600 mb-1">
                         Slots use saved prices/costs/refs/leak/segments and the saved pocket/list basis if present; Current uses live state.
@@ -3695,9 +3695,6 @@ export default function App() {
                           Use saved segments for slots
                         </label>
                         <InfoTip id="compare.toggles" ariaLabel="How compare toggles work" />
-                        <span className="text-slate-500">
-                          Uncheck to reuse current segments when comparing.
-                        </span>
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-2">
                         <label className="inline-flex items-center gap-1">
@@ -3709,6 +3706,8 @@ export default function App() {
                           Use saved leak for slots
                         </label>
                         <InfoTip id="compare.leak" ariaLabel="Use saved leak?" />
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-3">
                         <label className="inline-flex items-center gap-1">
                           <input
                             type="checkbox"
@@ -3718,9 +3717,6 @@ export default function App() {
                           Use saved reference prices for slots
                         </label>
                         <InfoTip id="compare.refs" ariaLabel="Use saved reference prices?" />
-                        <span className="text-slate-500">
-                          Uncheck to reuse current leak/refs when comparing.
-                        </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
                         <span className="text-gray-600">Save current to:</span>
@@ -4519,7 +4515,7 @@ export default function App() {
                     </Section>
           <Section id="methods" title="Methods">
                       <p className="text-sm text-gray-700 print-tight">
-                        MNL: U = �0(j) + �p|price + �A|featA + �B|featB; outside option
+                        MNL: U = ß0(j) + ß?·price + ß_A·featA + ß_B·featB; outside option
                         intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
                         ridge regularization.
                       </p>
@@ -5241,7 +5237,7 @@ export default function App() {
                       />
                       <span>%</span>
                       <span className="text-gray-500 ml-2">
-                        (churn � {(100 - retentionPct).toFixed(1)}%/mo)
+                        (churn ~ {(100 - retentionPct).toFixed(1)}%/mo)
                       </span>
                     </div>
 
