@@ -3803,131 +3803,131 @@ export default function App() {
                   </div>
                 </div>
               </Section>
-          <Section id="compare-board" title="Scenario Compare (A/B/C)" className="order-3">
-                      <Explanation slot="chart.compareBoard">
-                        Save the current ladder into A/B/C, branch your changes, then reload slots while narrating differences. KPIs auto-recompute; use the toggles to control whether saved or current segments/leak/refs are used so you know exactly what's being compared.
-                      </Explanation>
-                      <div className="text-[11px] text-slate-600 mb-1">
-                        Slots use saved prices/costs/refs/leak/segments and the saved pocket/list basis if present; Current uses live state.
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-1">
-                        <label className="inline-flex items-center gap-1">
-                          <input
-                            type="checkbox"
-                            checked={compareUseSavedSegments}
-                            onChange={(e) => setCompareUseSavedSegments(e.target.checked)}
-                          />
-                          Use saved segments for slots
-                        </label>
-                        <InfoTip id="compare.toggles" ariaLabel="How compare toggles work" />
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-2">
-                        <label className="inline-flex items-center gap-1">
-                          <input
-                            type="checkbox"
-                            checked={compareUseSavedLeak}
-                            onChange={(e) => setCompareUseSavedLeak(e.target.checked)}
-                          />
-                          Use saved leak for slots
-                        </label>
-                        <InfoTip id="compare.leak" ariaLabel="Use saved leak?" />
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-3">
-                        <label className="inline-flex items-center gap-1">
-                          <input
-                            type="checkbox"
-                            checked={compareUseSavedRefs}
-                            onChange={(e) => setCompareUseSavedRefs(e.target.checked)}
-                          />
-                          Use saved reference prices for slots
-                        </label>
-                        <InfoTip id="compare.refs" ariaLabel="Use saved reference prices?" />
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
-                        <span className="text-gray-600">Save current to:</span>
-                        {(["A", "B", "C"] as const).map((id) => (
-                          <button
-                            key={id}
-                            className="border rounded px-2 py-1 bg-white hover:bg-gray-50"
-                            onClick={() => saveToSlot(id)}
-                          >
-                            Save to {id}
-                          </button>
-                        ))}
-                      </div>
+            <Section id="compare-board" title="Scenario Compare (A/B/C)" className="order-3">
+              <Explanation slot="chart.compareBoard">
+                Save the current ladder into A/B/C, branch your changes, then reload slots while narrating differences. KPIs auto-recompute; use the toggles to control whether saved or current segments/leak/refs are used so you know exactly what's being compared.
+              </Explanation>
+              <div className="text-[11px] text-slate-600 mb-1">
+                Slots use saved prices/costs/refs/leak/segments and the saved pocket/list basis if present; Current uses live state.
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-1">
+                <label className="inline-flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={compareUseSavedSegments}
+                    onChange={(e) => setCompareUseSavedSegments(e.target.checked)}
+                  />
+                  Use saved segments for slots
+                </label>
+                <InfoTip id="compare.toggles" ariaLabel="How compare toggles work" />
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-2">
+                <label className="inline-flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={compareUseSavedLeak}
+                    onChange={(e) => setCompareUseSavedLeak(e.target.checked)}
+                  />
+                  Use saved leak for slots
+                </label>
+                <InfoTip id="compare.leak" ariaLabel="Use saved leak?" />
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-3">
+                <label className="inline-flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={compareUseSavedRefs}
+                    onChange={(e) => setCompareUseSavedRefs(e.target.checked)}
+                  />
+                  Use saved reference prices for slots
+                </label>
+                <InfoTip id="compare.refs" ariaLabel="Use saved reference prices?" />
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
+                <span className="text-gray-600">Save current to:</span>
+                {(["A", "B", "C"] as const).map((id) => (
+                  <button
+                    key={id}
+                    className="border rounded px-2 py-1 bg-white hover:bg-gray-50"
+                    onClick={() => saveToSlot(id)}
+                  >
+                    Save to {id}
+                  </button>
+                ))}
+              </div>
 
-                      {(() => {
-                        // derive KPIs for the board
-                        const usePocket = !!optConstraints.usePocketProfit;
-                        const curKPIs = kpisFromSnapshot(
-                          { prices, costs, features, refPrices, leak, segments },
-                          N,
-                          usePocket,
-                          optConstraints.usePocketMargins ?? usePocket
-                        );
+              {(() => {
+                // derive KPIs for the board
+                const usePocket = !!optConstraints.usePocketProfit;
+                const curKPIs = kpisFromSnapshot(
+                  { prices, costs, features, refPrices, leak, segments },
+                  N,
+                  usePocket,
+                  optConstraints.usePocketMargins ?? usePocket
+                );
 
-                        const objA = readSlot("A");
-                        const objB = readSlot("B");
-                        const objC = readSlot("C");
+                const objA = readSlot("A");
+                const objB = readSlot("B");
+                const objC = readSlot("C");
 
-                        const slotKpis = (
-                          obj: ReturnType<typeof readSlot>,
-                          fallbackTitle: string
-                        ): SnapshotKPIs | null => {
-                          if (!obj) return null;
-                          const slotSegments = obj.segments
-                            ? compareUseSavedSegments
-                              ? mapNormalizedToUI(normalizeSegmentsForSave(obj.segments))
-                              : segments
-                            : segments;
-                          const slotRef = compareUseSavedRefs && obj.refPrices ? obj.refPrices : refPrices;
-                          const slotLeak = compareUseSavedLeak && obj.leak ? obj.leak : leak;
-                          const slotFeats = obj.features ?? features;
-                          const slotUsePocket =
-                            obj.analysis?.optConstraints?.usePocketProfit ??
-                            usePocket;
-                          const slotUsePocketMargins =
-                            obj.analysis?.optConstraints?.usePocketMargins ??
-                            slotUsePocket;
-                          return {
-                            ...kpisFromSnapshot(
-                              {
-                                prices: obj.prices,
-                                costs: obj.costs,
-                                features: slotFeats,
-                                refPrices: slotRef,
-                                leak: slotLeak,
-                                segments: slotSegments,
-                              },
-                              N,
-                              slotUsePocket,
-                              slotUsePocketMargins
-                            ),
-                            title: `${fallbackTitle} (${slotUsePocket ? "pocket" : "list"})`,
-                            subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} | Segments: ${compareUseSavedSegments && obj.segments ? "saved" : "current"} | Leak: ${compareUseSavedLeak && obj.leak ? "saved" : "current"} | Refs: ${compareUseSavedRefs && obj.refPrices ? "saved" : "current"}`,
-                          };
-                        };
+                const slotKpis = (
+                  obj: ReturnType<typeof readSlot>,
+                  fallbackTitle: string
+                ): SnapshotKPIs | null => {
+                  if (!obj) return null;
+                  const slotSegments = obj.segments
+                    ? compareUseSavedSegments
+                      ? mapNormalizedToUI(normalizeSegmentsForSave(obj.segments))
+                      : segments
+                    : segments;
+                  const slotRef = compareUseSavedRefs && obj.refPrices ? obj.refPrices : refPrices;
+                  const slotLeak = compareUseSavedLeak && obj.leak ? obj.leak : leak;
+                  const slotFeats = obj.features ?? features;
+                  const slotUsePocket =
+                    obj.analysis?.optConstraints?.usePocketProfit ??
+                    usePocket;
+                  const slotUsePocketMargins =
+                    obj.analysis?.optConstraints?.usePocketMargins ??
+                    slotUsePocket;
+                  return {
+                    ...kpisFromSnapshot(
+                      {
+                        prices: obj.prices,
+                        costs: obj.costs,
+                        features: slotFeats,
+                        refPrices: slotRef,
+                        leak: slotLeak,
+                        segments: slotSegments,
+                      },
+                      N,
+                      slotUsePocket,
+                      slotUsePocketMargins
+                    ),
+                    title: `${fallbackTitle} (${slotUsePocket ? "pocket" : "list"})`,
+                    subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} | Segments: ${compareUseSavedSegments && obj.segments ? "saved" : "current"} | Leak: ${compareUseSavedLeak && obj.leak ? "saved" : "current"} | Refs: ${compareUseSavedRefs && obj.refPrices ? "saved" : "current"}`,
+                  };
+                };
 
-                        const slots: Record<"A" | "B" | "C", SnapshotKPIs | null> = {
-                          A: slotKpis(objA, "Saved A"),
-                          B: slotKpis(objB, "Saved B"),
-                          C: slotKpis(objC, "Saved C"),
-                        };
+                const slots: Record<"A" | "B" | "C", SnapshotKPIs | null> = {
+                  A: slotKpis(objA, "Saved A"),
+                  B: slotKpis(objB, "Saved B"),
+                  C: slotKpis(objC, "Saved C"),
+                };
 
-                        return (
-                          <CompareBoard
-                            slots={slots}
-                            current={curKPIs}
-                            onLoad={(id: "A" | "B" | "C") => loadFromSlot(id)}
-                            onClear={(id: "A" | "B" | "C") => {
-                              clearSlot(id);
-                              toast("info", `Cleared slot ${id}`);
-                              setJournal((j) => [...j]);
-                            }}
-                          />
-                        );
-                      })()}
-                    </Section>
+                return (
+                  <CompareBoard
+                    slots={slots}
+                    current={curKPIs}
+                    onLoad={(id: "A" | "B" | "C") => loadFromSlot(id)}
+                    onClear={(id: "A" | "B" | "C") => {
+                      clearSlot(id);
+                      toast("info", `Cleared slot ${id}`);
+                      setJournal((j) => [...j]);
+                    }}
+                  />
+                );
+              })()}
+            </Section>
               <Section id="share-links" title="Share & export">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <button
@@ -3970,973 +3970,973 @@ export default function App() {
                   JSON/short link includes prices/costs/features/refs/leak/segments + optimizer ranges/constraints, tornado/retention, price ranges, channel blend, and optimizer engine. CSV/long URL are lighter: CSV carries ladder/leak/segments only (no constraints/features/analysis), long URL carries ladder + feature flags only.
                 </div>
               </Section>
-          <Section id="recent-short-links" title="Recent short links" className="order-5">
-                      <details className="text-xs">
-                        <summary className="cursor-pointer select-none font-medium mb-2">
-                          Show recents
-                        </summary>
+            <Section id="recent-short-links" title="Recent short links" className="order-5">
+              <details className="text-xs">
+                <summary className="cursor-pointer select-none font-medium mb-2">
+                  Show recents
+                </summary>
 
-                        <ul className="text-xs space-y-1">
-                          {readRecents().length === 0 ? (
-                            <li className="text-gray-500">None yet</li>
-                          ) : (
-                            readRecents().map((r) => (
-                              <li
-                                key={r.id}
-                                className="flex items-center justify-between gap-2"
-                              >
-                                <button
-                                  className="underline"
-                                  title={new Date(r.t).toLocaleString()}
-                                  onClick={() => {
-                                    const url = `${location.origin}${location.pathname}?s=${r.id}`;
-                                    location.assign(url); // reload page with this id
-                                  }}
-                                >
-                                  {r.id}
-                                </button>
-                                <button
-                                  className="border rounded px-2 py-0.5"
-                                  onClick={() => {
-                                    const url = `${location.origin}${location.pathname}?s=${r.id}`;
-                                    navigator.clipboard.writeText(url).catch(() => {});
-                                    pushJ(`[${now()}] Copied short link ${r.id}`);
-                                  }}
-                                >
-                                  Copy
-                                </button>
-                              </li>
-                            ))
-                          )}
-                        </ul>
-                        <div className="mt-2">
-                          <button
-                            className="text-xs border rounded px-2 py-1"
-                            onClick={() => {
-                              localStorage.removeItem(RECENT_KEY);
-                              pushJ(`[${now()}] Cleared recent short links`);
-                              location.reload();
-                            }}
-                          >
-                            Clear recents
-                          </button>
-                        </div>
-                      </details>
-                    </Section>
-          <Section id="scenario-journal" title="Scenario Journal" className="order-4">
-                      <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
-                        {journal.length === 0 ? (
-                          <li className="text-gray-400">
-                            Adjust sliders/toggles to log changes...
-                          </li>
-                        ) : (
-                          journal.map((line, i) => <li key={i}>{line}</li>)
-                        )}
-                        <li>
-                          Revenue (N=1000): <strong>{fmtUSD(revenue)}</strong>
-                        </li>
-                        <li>
-                          Profit (N=1000): <strong>{fmtUSD(profit)}</strong>
-                        </li>
-                        <li>
-                          Active customers:{" "}
-                          <strong>{activeCustomers.toLocaleString()}</strong>
-                        </li>
-                        <li>
-                          ARPU (active only): <strong>{fmtUSD(arpu)}</strong>
-                        </li>
-                        <li>
-                          Profit / customer (all N):{" "}
-                          <strong>{fmtUSD(profitPerCustomer)}</strong>
-                        </li>
-                        <li>
-                          Gross margin: <strong>{fmtPct(grossMarginPct)}</strong>
-                        </li>
-                      </ul>
-                      <div className="mt-2 flex gap-2">
+                <ul className="text-xs space-y-1">
+                  {readRecents().length === 0 ? (
+                    <li className="text-gray-500">None yet</li>
+                  ) : (
+                    readRecents().map((r) => (
+                      <li
+                        key={r.id}
+                        className="flex items-center justify-between gap-2"
+                      >
                         <button
-                          className="text-xs border px-2 py-1 rounded"
-                          onClick={() => setJournal([])}
-                        >
-                          Clear
-                        </button>
-                        <button
-                          className="text-xs border px-2 py-1 rounded"
+                          className="underline"
+                          title={new Date(r.t).toLocaleString()}
                           onClick={() => {
-                            const blob = new Blob([journal.slice().reverse().join("\n")], {
-                              type: "text/plain",
-                            });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = "scenario-journal.txt";
-                            a.click();
-                            URL.revokeObjectURL(url);
+                            const url = `${location.origin}${location.pathname}?s=${r.id}`;
+                            location.assign(url); // reload page with this id
                           }}
                         >
-                          Download .txt
+                          {r.id}
                         </button>
-                      </div>
-                    </Section>
-            </div>
-          )}
-
-          {leftColumnTab === "optimize" && (
-            <div role="tabpanel" id="tab-global-optimizer" aria-labelledby="tab-btn-optimizer" className="col-span-12 lg:col-span-3 space-y-3 md:space-y-4 min-w-0 self-start md:text-[13px] pr-1">
-          <Section id="global-optimizer" title="Global Optimizer">
-                      <Explanation slot="chart.optimizer">
-                        Set ranges, gaps, and margin floors, then run the grid optimizer (worker). Use pocket toggles to enforce floors and profit after leakages. Charm endings snap to .99 if applicable. If no feasible ladder is found, widen ranges or ease floors/gaps. Cite binding constraints when explaining results.
-                      </Explanation>
-                      {/* Compact header: inline ranges + actions */}
-                      <div className="flex flex-col gap-3">
-                        {/* Header row wraps nicely on small screens */}
-                        <div className="flex flex-wrap items-end gap-3 text-xs">
-                          <span className="font-semibold mr-2 basis-full sm:basis-auto">
-                            Ranges ($)
-                          </span>
-
-                          {/* Good */}
-                          <label className="flex items-center gap-1">
-                            <span className="w-12">Good</span>
-                            <input
-                              type="number"
-                              className="border rounded px-2 h-8 w-16"
-                              aria-label="Good min"
-                              value={optRanges.good[0]}
-                              onChange={(e) =>
-                                setOptRanges((r) => ({
-                                  ...r,
-                                  good: [Number(e.target.value), r.good[1]] as [
-                                    number,
-                                    number
-                                  ],
-                                }))
-                              }
-                            />
-                            <span>-</span>
-                            <input
-                              type="number"
-                              className="border rounded px-2 h-8 w-16"
-                              aria-label="Good max"
-                              value={optRanges.good[1]}
-                              onChange={(e) =>
-                                setOptRanges((r) => ({
-                                  ...r,
-                                  good: [r.good[0], Number(e.target.value)] as [
-                                    number,
-                                    number
-                                  ],
-                                }))
-                              }
-                            />
-                          </label>
-
-                          {/* Better */}
-                          <label className="flex items-center gap-1">
-                            <span className="w-12">Better</span>
-                            <input
-                              type="number"
-                              className="border rounded px-2 h-8 w-16"
-                              aria-label="Better min"
-                              value={optRanges.better[0]}
-                              onChange={(e) =>
-                                setOptRanges((r) => ({
-                                  ...r,
-                                  better: [Number(e.target.value), r.better[1]] as [
-                                    number,
-                                    number
-                                  ],
-                                }))
-                              }
-                            />
-                            <span>-</span>
-                            <input
-                              type="number"
-                              className="border rounded px-2 h-8 w-16"
-                              aria-label="Better max"
-                              value={optRanges.better[1]}
-                              onChange={(e) =>
-                                setOptRanges((r) => ({
-                                  ...r,
-                                  better: [r.better[0], Number(e.target.value)] as [
-                                    number,
-                                    number
-                                  ],
-                                }))
-                              }
-                            />
-                          </label>
-
-                          {/* Best */}
-                          <label className="flex items-center gap-1">
-                            <span className="w-12">Best</span>
-                            <input
-                              type="number"
-                              className="border rounded px-2 h-8 w-16"
-                              aria-label="Best min"
-                              value={optRanges.best[0]}
-                              onChange={(e) =>
-                                setOptRanges((r) => ({
-                                  ...r,
-                                  best: [Number(e.target.value), r.best[1]] as [
-                                    number,
-                                    number
-                                  ],
-                                }))
-                              }
-                            />
-                            <span>-</span>
-                            <input
-                              type="number"
-                              className="border rounded px-2 h-8 w-16"
-                              aria-label="Best max"
-                              value={optRanges.best[1]}
-                              onChange={(e) =>
-                                setOptRanges((r) => ({
-                                  ...r,
-                                  best: [r.best[0], Number(e.target.value)] as [
-                                    number,
-                                    number
-                                  ],
-                                }))
-                              }
-                            />
-                          </label>
-
-                          {/* Step */}
-                          <label className="flex items-center gap-1">
-                            <span className="w-16">Step between Prices</span>
-                            <input
-                              type="number"
-                              className="border rounded px-2 h-8 w-16"
-                              aria-label="Step"
-                              value={optRanges.step}
-                              onChange={(e) =>
-                                setOptRanges((r) => ({
-                                  ...r,
-                                  step: Math.max(0.25, Number(e.target.value)),
-                                }))
-                              }
-                            />
-                          </label>
-
-                          {/* Actions */}
-                          <div className="ml-auto flex items-center gap-2">
-                            <button
-                              className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50"
-                              onClick={runOptimizer}
-                              disabled={isOptRunning}
-                            >
-                              {isOptRunning ? "Running..." : "Run"}
-                            </button>
-                            <button
-                              className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50 disabled:opacity-50"
-                              onClick={applyOptimizedPrices}
-                              disabled={!optResult || isOptRunning}
-                            >
-                              Apply
-                            </button>
-                          </div>
-
-                          {(optResult?.diagnostics || quickOpt.diagnostics) && (() => {
-                            const diag: GridDiagnostics | undefined = optResult?.diagnostics ?? (quickOpt.diagnostics as GridDiagnostics | undefined);
-                            if (!diag) return null;
-                            const guardrailNote =
-                              diag.skippedGuardrails > 0
-                                ? `${diag.skippedGuardrails.toLocaleString()} ladders skipped by guardrails (none-share/take-rate/floors). `
-                                : "";
-                            const coarsenNote = diag.coarsened ? "Grid auto-coarsened for performance. " : "";
-                            return (
-                              <div className="text-[11px] text-slate-600 mt-2">
-                                Tested {diag.tested.toLocaleString()} ladders; coarse step ${diag.coarseStep.toFixed(2)} →
-                                refine ${diag.refinementStep.toFixed(2)}. {coarsenNote}
-                                {guardrailNote}
-                              </div>
-                            );
-                          })()}
-                        </div>
-
-                        {/* Result line (one-liner) */}
-                        <div className="text-xs text-gray-700">
-                          {optError && (
-                            <span className="text-red-600 mr-2">Error: {optError}</span>
-                          )}
-                          {optResult ? (
-                            <span>
-                              Best ladder ${optResult.prices.good}/$
-                              {optResult.prices.better}/${optResult.prices.best} — Profit
-                              delta ${Math.round(optResult.profit)}
-                            </span>
-                          ) : (
-                            <span className="text-gray-500">No result yet</span>
-                          )}
-                        </div>
-                        {optResult && optimizerWhyLines.length > 0 && (
-                          <div className="mt-2 rounded border border-dashed border-gray-200 bg-slate-50 p-3">
-                            <div className="text-xs font-semibold text-slate-700 mb-1">
-                              Why these prices?
-                            </div>
-                            <ul className="list-disc ml-4 space-y-1 text-[11px] text-gray-700">
-                              {optimizerWhyLines.map((line, idx) => (
-                                <li key={idx}>{line}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        <details className="text-[11px] text-gray-600">
-                          <summary className="cursor-pointer select-none">
-                            How ranges & floors work
-                          </summary>
-                          <div className="mt-1 print-tight">
-                            Optimizer searches the grid defined by ranges and step. Gap
-                            constraints keep ladder spacing consistent. Floors can be
-                            checked on list or <em>pocket</em> margin. Use Apply to write
-                            prices back to the Scenario Panel.
-                          </div>
-                        </details>
-
-                        {/* Advanced constraints (collapsible) */}
-                        <details className="rounded border border-gray-200 p-3 bg-gray-50/60">
-                          <summary className="cursor-pointer select-none text-xs font-medium">
-                            Advanced constraints
-                          </summary>
-
-                          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
-                            <label className="flex items-center gap-2">
-                              <span className="w-28">Gap G-&gt;B</span>
-                              <input
-                                type="number"
-                                className="border rounded px-2 h-8 flex-1"
-                                value={optConstraints.gapGB}
-                                onChange={(e) =>
-                                  setOptConstraints((c) => ({
-                                    ...c,
-                                    gapGB: Number(e.target.value),
-                                  }))
-                                }
-                              />
-                            </label>
-                            <label className="flex items-center gap-2">
-                              <span className="w-28">Gap B-&gt;Best</span>
-                              <input
-                                type="number"
-                                className="border rounded px-2 h-8 flex-1"
-                                value={optConstraints.gapBB}
-                                onChange={(e) =>
-                                  setOptConstraints((c) => ({
-                                    ...c,
-                                    gapBB: Number(e.target.value),
-                                  }))
-                                }
-                              />
-                            </label>
-
-                            <div>
-                              <div className="text-[11px] font-semibold mb-1">
-                                Margin floors
-                              </div>
-                              <div className="grid grid-cols-3 gap-2">
-                                {(["good", "better", "best"] as const).map((t) => (
-                                  <label key={t} className="text-[11px]">
-                                    {t}
-                                    <input
-                                      type="number"
-                                      className="mt-1 w-full border rounded px-1 py-0.5"
-                                      value={optConstraints.marginFloor[t]}
-                                      step={0.01}
-                                      onChange={(e) =>
-                                        setOptConstraints((c) => ({
-                                          ...c,
-                                          marginFloor: {
-                                            ...c.marginFloor,
-                                            [t]: Number(e.target.value),
-                                          },
-                                        }))
-                                      }
-                                    />
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
-                            <label className="flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={optConstraints.charm}
-                                onChange={(e) =>
-                                  setOptConstraints((c) => ({
-                                    ...c,
-                                    charm: e.target.checked,
-                                  }))
-                                }
-                              />
-                              <span>Charm endings (.99)</span>
-                            </label>
-
-                            <label className="flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={optConstraints.usePocketMargins}
-                                onChange={(e) =>
-                                  setOptConstraints((c) => ({
-                                    ...c,
-                                    usePocketMargins: e.target.checked,
-                                  }))
-                                }
-                              />
-                              <span>
-                                Use <em>pocket</em> price for margin floors
-                              </span>
-                              <InfoTip id="optimizer.pocketMargins" ariaLabel="What are pocket margins?" />
-                            </label>
-                            <label className="flex items-center gap-2">
-                              <span className="w-28">Optimizer engine</span>
-                              <select
-                                className="border rounded px-2 h-8 flex-1"
-                                value={optimizerKind}
-                                onChange={(e) => setOptimizerKind(e.target.value as OptimizerKind)}
-                              >
-                                <option value="grid-worker">Grid (worker)</option>
-                                <option value="grid-inline">Grid (inline)</option>
-                                <option value="future" disabled>Future (coming)</option>
-                              </select>
-                            </label>
-
-                            <p className="text-[11px] text-gray-500 sm:col-span-2 print-tight">
-                              When enabled, margins are checked on pocket (after
-                              promo/payment/FX/refunds) instead of list.
-                            </p>
-
-                            <label className="flex items-center gap-2 sm:col-span-2">
-                              <input
-                                type="checkbox"
-                                checked={optConstraints.usePocketProfit}
-                                onChange={(e) =>
-                                  setOptConstraints((c) => ({
-                                    ...c,
-                                    usePocketProfit: e.target.checked,
-                                  }))
-                                }
-                              />
-                              <span>Compute profit using pocket price</span>
-                              <InfoTip id="optimizer.pocketProfit" ariaLabel="What is pocket profit?" />
-                            </label>
-                          </div>
-                        </details>
-
-                        <details className="mt-4 rounded border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs">
-                          <summary className="cursor-pointer select-none font-medium">
-                            Field guide (copy placeholder)
-                          </summary>
-                          <div
-                            data-copy-slot="waterfall.fieldGuide"
-                            className="space-y-2 text-slate-600 mt-2"
-                          >
-                            <div>
-                              <span className="font-semibold">Tier discounts</span>: Promo/volume discounts shave list down to pocket. Prioritize heavier discounts on tiers where you need mix or where payment fees bite less (higher-ticket tiers).
-                            </div>
-                            <div>
-                              <span className="font-semibold">Global leakages</span>: Payment %/fixed fees, FX, and refunds vary by channel. Low-ticket/high-fee businesses feel payment %; cross-border sales feel FX; high-return categories feel refunds.
-                            </div>
-                            <div>
-                              <span className="font-semibold">Compare all tiers</span>: Mini waterfalls help defend Good/Better/Best deltas-ensure pocket spreads match your positioning and guardrails.
-                            </div>
-                            <div>
-                              <span className="font-semibold">Channel blend</span>: Blend presets (e.g., Stripe vs. marketplace) to see a composite leak profile; narrate how channel mix shifts pocket and floors.
-                            </div>
-                          </div>
-                        </details>
-                      </div>
-                    </Section>
-          <Section id="reference-prices" title="Reference prices for Optimizer">
-                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2 items-center">
-                        <label className="text-sm">Good</label>
-                        <input
-                          type="number"
-                          className="col-span-2 border rounded px-2 py-1 h-9 w-full"
-                          value={refPrices.good}
-                          onChange={(e) =>
-                            setRefPrices((p) => ({ ...p, good: Number(e.target.value) }))
-                          }
-                        />
-                        <label className="text-sm">Better</label>
-                        <input
-                          type="number"
-                          className="col-span-2 border rounded px-2 py-1 h-9 w-full"
-                          value={refPrices.better}
-                          onChange={(e) =>
-                            setRefPrices((p) => ({
-                              ...p,
-                              better: Number(e.target.value),
-                            }))
-                          }
-                        />
-                        <label className="text-sm">Best</label>
-                        <input
-                          type="number"
-                          className="col-span-2 border rounded px-2 py-1 h-9 w-full"
-                          value={refPrices.best}
-                          onChange={(e) =>
-                            setRefPrices((p) => ({ ...p, best: Number(e.target.value) }))
-                          }
-                        />
-                      </div>
-
-                      <div className="mt-3">
                         <button
-                          className="border rounded-md px-3 py-1.5 text-xs bg-white hover:bg-gray-50"
-                          onClick={setRefsFromCurrent}
+                          className="border rounded px-2 py-0.5"
+                          onClick={() => {
+                            const url = `${location.origin}${location.pathname}?s=${r.id}`;
+                            navigator.clipboard.writeText(url).catch(() => {});
+                            pushJ(`[${now()}] Copied short link ${r.id}`);
+                          }}
                         >
-                          Set from current prices
+                          Copy
                         </button>
-                      </div>
-                    </Section>
-          <Section
-            id="kpi-pocket-coverage"
-            title="KPI - Pocket floor coverage"
-            actions={<ActionCluster chart="coverage" id="coverage-heatmap" csv />}
-          >
-            <div className="text-[11px] text-slate-600 mb-1">
-              Basis: {coverageUsePocket ? "Pocket margins (after leakages)" : "List margins (before leakages)"}.
-              <InfoTip id="coverage.basis" ariaLabel="How is coverage basis used?" />
-            </div>
-            <div className="flex items-center gap-3 text-xs mb-2">
-              <label className="inline-flex items-center gap-1">
-                <input
-                  type="checkbox"
-                  checked={coverageUsePocket}
-                  onChange={(e) => setCoverageUsePocket(e.target.checked)}
-                />
-                Use pocket margins for coverage
-              </label>
-              <span className="text-[11px] text-slate-500">
-                Toggle to inspect list vs pocket feasibility; optimizer runs use the pocket toggle above.
-              </span>
-            </div>
-            <Explanation slot="kpi.pocketCoverage">
-              <div className="font-semibold text-[11px] text-slate-700">
-                How to read pocket floor coverage
-              </div>
-              <ul className="mt-1 list-disc space-y-1 pl-4">
+                      </li>
+                    ))
+                  )}
+                </ul>
+                <div className="mt-2">
+                  <button
+                    className="text-xs border rounded px-2 py-1"
+                    onClick={() => {
+                      localStorage.removeItem(RECENT_KEY);
+                      pushJ(`[${now()}] Cleared recent short links`);
+                      location.reload();
+                    }}
+                  >
+                    Clear recents
+                  </button>
+                </div>
+              </details>
+            </Section>
+            <Section id="scenario-journal" title="Scenario Journal" className="order-4">
+              <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
+                {journal.length === 0 ? (
+                  <li className="text-gray-400">
+                    Adjust sliders/toggles to log changes...
+                  </li>
+                ) : (
+                  journal.map((line, i) => <li key={i}>{line}</li>)
+                )}
                 <li>
-                  Coverage is the share of Good/Better/Best ladders inside the search grid that clear pocket-margin floors
-                  after promo/FX/refund leakages.
+                  Revenue (N=1000): <strong>{fmtUSD(revenue)}</strong>
                 </li>
                 <li>
-                  The sensitivity slider bumps every floor up or down (in percentage points) to stress-test how fragile feasibility is
-                  before you run the optimizer.
+                  Profit (N=1000): <strong>{fmtUSD(profit)}</strong>
                 </li>
                 <li>
-                  Apply floors pushes the adjusted floors into the optimizer guardrails so the global search aligns with what you are validating here.
+                  Active customers:{" "}
+                  <strong>{activeCustomers.toLocaleString()}</strong>
+                </li>
+                <li>
+                  ARPU (active only): <strong>{fmtUSD(arpu)}</strong>
+                </li>
+                <li>
+                  Profit / customer (all N):{" "}
+                  <strong>{fmtUSD(profitPerCustomer)}</strong>
+                </li>
+                <li>
+                  Gross margin: <strong>{fmtPct(grossMarginPct)}</strong>
                 </li>
               </ul>
-            </Explanation>
-            <div className="flex items-center gap-2 text-xs mb-2">
-              <span className="text-gray-600">Floor sensitivity:</span>
-              <input
-                type="range"
-                min={-10}
-                max={10}
-                value={kpiFloorAdj}
-                onChange={(e) => setKpiFloorAdj(Number(e.target.value))}
-              />
-              <span className="w-10 text-right">{kpiFloorAdj} pp</span>
-            </div>
+              <div className="mt-2 flex gap-2">
+                <button
+                  className="text-xs border px-2 py-1 rounded"
+                  onClick={() => setJournal([])}
+                >
+                  Clear
+                </button>
+                <button
+                  className="text-xs border px-2 py-1 rounded"
+                  onClick={() => {
+                    const blob = new Blob([journal.slice().reverse().join("\n")], {
+                      type: "text/plain",
+                    });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "scenario-journal.txt";
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  Download .txt
+                </button>
+              </div>
+            </Section>
+              </div>
+            )}
 
-            {(() => {
-              const pct0 = coverageSnapshot.pct0;
-              const pct1 = coverageSnapshot.pct1;
-              const delta = coverageSnapshot.delta;
-              const tone =
-                pct1 >= 70
-                  ? "text-green-700 bg-green-50 border-green-200"
-                  : pct1 >= 40
-                  ? "text-amber-700 bg-amber-50 border-amber-200"
-                  : "text-red-700 bg-red-50 border-red-200";
-              const floors1 = coverageSnapshot.floors;
-              return (
-                <>
-                  <div
-                    className={`rounded border px-4 py-3 inline-flex items-center gap-4 ${tone}`}
-                  >
-                    <div>
-                      <div className="text-2xl font-semibold leading-tight">
-                        {pct1}%
-                      </div>
-                      <div className="text-xs">
-                        feasible ladders (pocket floors)
-                      </div>
-                      <div className="text-[11px] text-gray-600 mt-1">
-                        baseline {pct0}% -&gt; {pct1}% -{" "}
-                        {delta >= 0 ? `+${delta}pp` : `${delta}pp`} -{" "}
-                        {coverageSnapshot.tested.toLocaleString()} combos - step $
-                        {coverageSnapshot.step}
-                      </div>
-                    </div>
+            {leftColumnTab === "optimize" && (
+              <div role="tabpanel" id="tab-global-optimizer" aria-labelledby="tab-btn-optimizer" className="col-span-12 lg:col-span-3 space-y-3 md:space-y-4 min-w-0 self-start md:text-[13px] pr-1">
+            <Section id="global-optimizer" title="Global Optimizer">
+              <Explanation slot="chart.optimizer">
+                Set ranges, gaps, and margin floors, then run the grid optimizer (worker). Use pocket toggles to enforce floors and profit after leakages. Charm endings snap to .99 if applicable. If no feasible ladder is found, widen ranges or ease floors/gaps. Cite binding constraints when explaining results.
+              </Explanation>
+              {/* Compact header: inline ranges + actions */}
+              <div className="flex flex-col gap-3">
+                {/* Header row wraps nicely on small screens */}
+                <div className="flex flex-wrap items-end gap-3 text-xs">
+                  <span className="font-semibold mr-2 basis-full sm:basis-auto">
+                    Ranges ($)
+                  </span>
+
+                  {/* Good */}
+                  <label className="flex items-center gap-1">
+                    <span className="w-12">Good</span>
+                    <input
+                      type="number"
+                      className="border rounded px-2 h-8 w-16"
+                      aria-label="Good min"
+                      value={optRanges.good[0]}
+                      onChange={(e) =>
+                        setOptRanges((r) => ({
+                          ...r,
+                          good: [Number(e.target.value), r.good[1]] as [
+                            number,
+                            number
+                          ],
+                        }))
+                      }
+                    />
+                    <span>-</span>
+                    <input
+                      type="number"
+                      className="border rounded px-2 h-8 w-16"
+                      aria-label="Good max"
+                      value={optRanges.good[1]}
+                      onChange={(e) =>
+                        setOptRanges((r) => ({
+                          ...r,
+                          good: [r.good[0], Number(e.target.value)] as [
+                            number,
+                            number
+                          ],
+                        }))
+                      }
+                    />
+                  </label>
+
+                  {/* Better */}
+                  <label className="flex items-center gap-1">
+                    <span className="w-12">Better</span>
+                    <input
+                      type="number"
+                      className="border rounded px-2 h-8 w-16"
+                      aria-label="Better min"
+                      value={optRanges.better[0]}
+                      onChange={(e) =>
+                        setOptRanges((r) => ({
+                          ...r,
+                          better: [Number(e.target.value), r.better[1]] as [
+                            number,
+                            number
+                          ],
+                        }))
+                      }
+                    />
+                    <span>-</span>
+                    <input
+                      type="number"
+                      className="border rounded px-2 h-8 w-16"
+                      aria-label="Better max"
+                      value={optRanges.better[1]}
+                      onChange={(e) =>
+                        setOptRanges((r) => ({
+                          ...r,
+                          better: [r.better[0], Number(e.target.value)] as [
+                            number,
+                            number
+                          ],
+                        }))
+                      }
+                    />
+                  </label>
+
+                  {/* Best */}
+                  <label className="flex items-center gap-1">
+                    <span className="w-12">Best</span>
+                    <input
+                      type="number"
+                      className="border rounded px-2 h-8 w-16"
+                      aria-label="Best min"
+                      value={optRanges.best[0]}
+                      onChange={(e) =>
+                        setOptRanges((r) => ({
+                          ...r,
+                          best: [Number(e.target.value), r.best[1]] as [
+                            number,
+                            number
+                          ],
+                        }))
+                      }
+                    />
+                    <span>-</span>
+                    <input
+                      type="number"
+                      className="border rounded px-2 h-8 w-16"
+                      aria-label="Best max"
+                      value={optRanges.best[1]}
+                      onChange={(e) =>
+                        setOptRanges((r) => ({
+                          ...r,
+                          best: [r.best[0], Number(e.target.value)] as [
+                            number,
+                            number
+                          ],
+                        }))
+                      }
+                    />
+                  </label>
+
+                  {/* Step */}
+                  <label className="flex items-center gap-1">
+                    <span className="w-16">Step between Prices</span>
+                    <input
+                      type="number"
+                      className="border rounded px-2 h-8 w-16"
+                      aria-label="Step"
+                      value={optRanges.step}
+                      onChange={(e) =>
+                        setOptRanges((r) => ({
+                          ...r,
+                          step: Math.max(0.25, Number(e.target.value)),
+                        }))
+                      }
+                    />
+                  </label>
+
+                  {/* Actions */}
+                  <div className="ml-auto flex items-center gap-2">
                     <button
-                      className="text-xs border rounded px-3 py-1 bg-white hover:bg-gray-50"
-                      onClick={() => {
-                        setOptConstraints((c) => ({
-                          ...c,
-                          marginFloor: { ...floors1 },
-                        }));
-                        toast(
-                          "success",
-                          `Applied floors: Good ${Math.round(
-                            floors1.good * 100
-                          )}%, Better ${Math.round(
-                            floors1.better * 100
-                          )}%, Best ${Math.round(floors1.best * 100)}%`
-                        );
-                      }}
+                      className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50"
+                      onClick={runOptimizer}
+                      disabled={isOptRunning}
                     >
-                      Apply floors
+                      {isOptRunning ? "Running..." : "Run"}
+                    </button>
+                    <button
+                      className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50 disabled:opacity-50"
+                      onClick={applyOptimizedPrices}
+                      disabled={!optResult || isOptRunning}
+                    >
+                      Apply
                     </button>
                   </div>
-                  <div className="text-[11px] text-gray-700 mt-2 space-y-1">
-                    <div>
-                      <span className="font-semibold text-gray-800">Floors tested:</span>{" "}
-                      Good {Math.round(floors1.good * 100)}% | Better {Math.round(floors1.better * 100)}% | Best{" "}
-                      {Math.round(floors1.best * 100)}% ({kpiFloorAdj} pp sensitivity applied).
-                    </div>
-                    <div>
-                      <span className="font-semibold text-gray-800">Grid and gaps:</span>{" "}
-                      Good -&gt; Better gap {optConstraints.gapGB}, Better -&gt; Best gap {optConstraints.gapBB}; step $
-                      {optRanges.step} across {coverageSnapshot.tested.toLocaleString()} ladder combinations.
-                    </div>
-                  </div>
 
-                  <div className="mt-3">
-                    {(() => {
-                        const { cells, gTicks, bTicks, bestUsed } =
-                          feasibilitySliceGB(
-                            optRanges,
-                            costs,
-                            floors1,
-                            {
-                              gapGB: optConstraints.gapGB,
-                              gapBB: optConstraints.gapBB,
-                            },
-                            leak,
-                            coverageUsePocket
-                          );
-                      return (
-                        <>
-                          <details className="mb-1">
-                            <summary className="cursor-pointer select-none text-[11px] text-gray-600">
-                              How to read this heatmap
-                            </summary>
-                            <div className="text-[11px] text-gray-600 mt-1 space-y-1">
-                              <div>
-                                Best is pinned near the lowest feasible price (about {bestUsed}) so we can see the Good
-                                vs Better feasibility wedge.
-                              </div>
-                              <div>
-                                Green cells = Good/Better price pairs that clear the pocket floors and respect the required gaps; gray cells fail a gap or a margin floor.
-                              </div>
-                              <div>
-                                If the green band collapses as you raise floors, either ease the floors, widen the gap guardrails, or broaden the search ranges before running the optimizer.
-                              </div>
-                            </div>
-                          </details>
-
-
-                          <HeatmapMini
-                            cells={cells}
-                            gTicks={gTicks}
-                            bTicks={bTicks}
-                            chartId="coverage-heatmap"
-                          />
-                        </>
-                      );
-                    })()}
-                  </div>
-                </>
-              );
-            })()}
-          </Section>
-          <Section id="current-vs-optimized" title="Current vs Optimized">
-                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-slate-900 text-sm">How to read this card</span>
-                          <span className="text-[10px] uppercase tracking-wide text-slate-500">Demo aid</span>
-                        </div>
-                        <p className="mt-1 leading-snug">
-                          Use this to narrate "before vs after." Apply the optimized ladder to push prices back to Scenario Panel,
-                          undo to revert, then call out the delta and which constraints or drivers mattered most.
-                        </p>
-                        <p className="mt-1 text-slate-600">
-                          Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}.
-                        </p>
+                  {(optResult?.diagnostics || quickOpt.diagnostics) && (() => {
+                    const diag: GridDiagnostics | undefined = optResult?.diagnostics ?? (quickOpt.diagnostics as GridDiagnostics | undefined);
+                    if (!diag) return null;
+                    const guardrailNote =
+                      diag.skippedGuardrails > 0
+                        ? `${diag.skippedGuardrails.toLocaleString()} ladders skipped by guardrails (none-share/take-rate/floors). `
+                        : "";
+                    const coarsenNote = diag.coarsened ? "Grid auto-coarsened for performance. " : "";
+                    return (
+                      <div className="text-[11px] text-slate-600 mt-2">
+                        Tested {diag.tested.toLocaleString()} ladders; coarse step ${diag.coarseStep.toFixed(2)} →
+                        refine ${diag.refinementStep.toFixed(2)}. {coarsenNote}
+                        {guardrailNote}
                       </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Result line (one-liner) */}
+                <div className="text-xs text-gray-700">
+                  {optError && (
+                    <span className="text-red-600 mr-2">Error: {optError}</span>
+                  )}
+                  {optResult ? (
+                    <span>
+                      Best ladder ${optResult.prices.good}/$
+                      {optResult.prices.better}/${optResult.prices.best} — Profit
+                      delta ${Math.round(optResult.profit)}
+                    </span>
+                  ) : (
+                    <span className="text-gray-500">No result yet</span>
+                  )}
+                </div>
+                {optResult && optimizerWhyLines.length > 0 && (
+                  <div className="mt-2 rounded border border-dashed border-gray-200 bg-slate-50 p-3">
+                    <div className="text-xs font-semibold text-slate-700 mb-1">
+                      Why these prices?
+                    </div>
+                    <ul className="list-disc ml-4 space-y-1 text-[11px] text-gray-700">
+                      {optimizerWhyLines.map((line, idx) => (
+                        <li key={idx}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <details className="text-[11px] text-gray-600">
+                  <summary className="cursor-pointer select-none">
+                    How ranges & floors work
+                  </summary>
+                  <div className="mt-1 print-tight">
+                    Optimizer searches the grid defined by ranges and step. Gap
+                    constraints keep ladder spacing consistent. Floors can be
+                    checked on list or <em>pocket</em> margin. Use Apply to write
+                    prices back to the Scenario Panel.
+                  </div>
+                </details>
+
+                {/* Advanced constraints (collapsible) */}
+                <details className="rounded border border-gray-200 p-3 bg-gray-50/60">
+                  <summary className="cursor-pointer select-none text-xs font-medium">
+                    Advanced constraints
+                  </summary>
+
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                    <label className="flex items-center gap-2">
+                      <span className="w-28">Gap G-&gt;B</span>
+                      <input
+                        type="number"
+                        className="border rounded px-2 h-8 flex-1"
+                        value={optConstraints.gapGB}
+                        onChange={(e) =>
+                          setOptConstraints((c) => ({
+                            ...c,
+                            gapGB: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <span className="w-28">Gap B-&gt;Best</span>
+                      <input
+                        type="number"
+                        className="border rounded px-2 h-8 flex-1"
+                        value={optConstraints.gapBB}
+                        onChange={(e) =>
+                          setOptConstraints((c) => ({
+                            ...c,
+                            gapBB: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <div>
+                      <div className="text-[11px] font-semibold mb-1">
+                        Margin floors
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(["good", "better", "best"] as const).map((t) => (
+                          <label key={t} className="text-[11px]">
+                            {t}
+                            <input
+                              type="number"
+                              className="mt-1 w-full border rounded px-1 py-0.5"
+                              value={optConstraints.marginFloor[t]}
+                              step={0.01}
+                              onChange={(e) =>
+                                setOptConstraints((c) => ({
+                                  ...c,
+                                  marginFloor: {
+                                    ...c.marginFloor,
+                                    [t]: Number(e.target.value),
+                                  },
+                                }))
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={optConstraints.charm}
+                        onChange={(e) =>
+                          setOptConstraints((c) => ({
+                            ...c,
+                            charm: e.target.checked,
+                          }))
+                        }
+                      />
+                      <span>Charm endings (.99)</span>
+                    </label>
+
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={optConstraints.usePocketMargins}
+                        onChange={(e) =>
+                          setOptConstraints((c) => ({
+                            ...c,
+                            usePocketMargins: e.target.checked,
+                          }))
+                        }
+                      />
+                      <span>
+                        Use <em>pocket</em> price for margin floors
+                      </span>
+                      <InfoTip id="optimizer.pocketMargins" ariaLabel="What are pocket margins?" />
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <span className="w-28">Optimizer engine</span>
+                      <select
+                        className="border rounded px-2 h-8 flex-1"
+                        value={optimizerKind}
+                        onChange={(e) => setOptimizerKind(e.target.value as OptimizerKind)}
+                      >
+                        <option value="grid-worker">Grid (worker)</option>
+                        <option value="grid-inline">Grid (inline)</option>
+                        <option value="future" disabled>Future (coming)</option>
+                      </select>
+                    </label>
+
+                    <p className="text-[11px] text-gray-500 sm:col-span-2 print-tight">
+                      When enabled, margins are checked on pocket (after
+                      promo/payment/FX/refunds) instead of list.
+                    </p>
+
+                    <label className="flex items-center gap-2 sm:col-span-2">
+                      <input
+                        type="checkbox"
+                        checked={optConstraints.usePocketProfit}
+                        onChange={(e) =>
+                          setOptConstraints((c) => ({
+                            ...c,
+                            usePocketProfit: e.target.checked,
+                          }))
+                        }
+                      />
+                      <span>Compute profit using pocket price</span>
+                      <InfoTip id="optimizer.pocketProfit" ariaLabel="What is pocket profit?" />
+                    </label>
+                  </div>
+                </details>
+
+                <details className="mt-4 rounded border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs">
+                  <summary className="cursor-pointer select-none font-medium">
+                    Field guide (copy placeholder)
+                  </summary>
+                  <div
+                    data-copy-slot="waterfall.fieldGuide"
+                    className="space-y-2 text-slate-600 mt-2"
+                  >
+                    <div>
+                      <span className="font-semibold">Tier discounts</span>: Promo/volume discounts shave list down to pocket. Prioritize heavier discounts on tiers where you need mix or where payment fees bite less (higher-ticket tiers).
+                    </div>
+                    <div>
+                      <span className="font-semibold">Global leakages</span>: Payment %/fixed fees, FX, and refunds vary by channel. Low-ticket/high-fee businesses feel payment %; cross-border sales feel FX; high-return categories feel refunds.
+                    </div>
+                    <div>
+                      <span className="font-semibold">Compare all tiers</span>: Mini waterfalls help defend Good/Better/Best deltas-ensure pocket spreads match your positioning and guardrails.
+                    </div>
+                    <div>
+                      <span className="font-semibold">Channel blend</span>: Blend presets (e.g., Stripe vs. marketplace) to see a composite leak profile; narrate how channel mix shifts pocket and floors.
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </Section>
+            <Section id="reference-prices" title="Reference prices for Optimizer">
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2 items-center">
+                <label className="text-sm">Good</label>
+                <input
+                  type="number"
+                  className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                  value={refPrices.good}
+                  onChange={(e) =>
+                    setRefPrices((p) => ({ ...p, good: Number(e.target.value) }))
+                  }
+                />
+                <label className="text-sm">Better</label>
+                <input
+                  type="number"
+                  className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                  value={refPrices.better}
+                  onChange={(e) =>
+                    setRefPrices((p) => ({
+                      ...p,
+                      better: Number(e.target.value),
+                    }))
+                  }
+                />
+                <label className="text-sm">Best</label>
+                <input
+                  type="number"
+                  className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                  value={refPrices.best}
+                  onChange={(e) =>
+                    setRefPrices((p) => ({ ...p, best: Number(e.target.value) }))
+                  }
+                />
+              </div>
+
+              <div className="mt-3">
+                <button
+                  className="border rounded-md px-3 py-1.5 text-xs bg-white hover:bg-gray-50"
+                  onClick={setRefsFromCurrent}
+                >
+                  Set from current prices
+                </button>
+              </div>
+            </Section>
+            <Section
+              id="kpi-pocket-coverage"
+              title="KPI - Pocket floor coverage"
+              actions={<ActionCluster chart="coverage" id="coverage-heatmap" csv />}
+            >
+              <div className="text-[11px] text-slate-600 mb-1">
+                Basis: {coverageUsePocket ? "Pocket margins (after leakages)" : "List margins (before leakages)"}.
+                <InfoTip id="coverage.basis" ariaLabel="How is coverage basis used?" />
+              </div>
+              <div className="flex items-center gap-3 text-xs mb-2">
+                <label className="inline-flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={coverageUsePocket}
+                    onChange={(e) => setCoverageUsePocket(e.target.checked)}
+                  />
+                  Use pocket margins for coverage
+                </label>
+                <span className="text-[11px] text-slate-500">
+                  Toggle to inspect list vs pocket feasibility; optimizer runs use the pocket toggle above.
+                </span>
+              </div>
+              <Explanation slot="kpi.pocketCoverage">
+                <div className="font-semibold text-[11px] text-slate-700">
+                  How to read pocket floor coverage
+                </div>
+                <ul className="mt-1 list-disc space-y-1 pl-4">
+                  <li>
+                    Coverage is the share of Good/Better/Best ladders inside the search grid that clear pocket-margin floors
+                    after promo/FX/refund leakages.
+                  </li>
+                  <li>
+                    The sensitivity slider bumps every floor up or down (in percentage points) to stress-test how fragile feasibility is
+                    before you run the optimizer.
+                  </li>
+                  <li>
+                    Apply floors pushes the adjusted floors into the optimizer guardrails so the global search aligns with what you are validating here.
+                  </li>
+                </ul>
+              </Explanation>
+              <div className="flex items-center gap-2 text-xs mb-2">
+                <span className="text-gray-600">Floor sensitivity:</span>
+                <input
+                  type="range"
+                  min={-10}
+                  max={10}
+                  value={kpiFloorAdj}
+                  onChange={(e) => setKpiFloorAdj(Number(e.target.value))}
+                />
+                <span className="w-10 text-right">{kpiFloorAdj} pp</span>
+              </div>
+
+              {(() => {
+                const pct0 = coverageSnapshot.pct0;
+                const pct1 = coverageSnapshot.pct1;
+                const delta = coverageSnapshot.delta;
+                const tone =
+                  pct1 >= 70
+                    ? "text-green-700 bg-green-50 border-green-200"
+                    : pct1 >= 40
+                    ? "text-amber-700 bg-amber-50 border-amber-200"
+                    : "text-red-700 bg-red-50 border-red-200";
+                const floors1 = coverageSnapshot.floors;
+                return (
+                  <>
+                    <div
+                      className={`rounded border px-4 py-3 inline-flex items-center gap-4 ${tone}`}
+                    >
+                      <div>
+                        <div className="text-2xl font-semibold leading-tight">
+                          {pct1}%
+                        </div>
+                        <div className="text-xs">
+                          feasible ladders (pocket floors)
+                        </div>
+                        <div className="text-[11px] text-gray-600 mt-1">
+                          baseline {pct0}% -&gt; {pct1}% -{" "}
+                          {delta >= 0 ? `+${delta}pp` : `${delta}pp`} -{" "}
+                          {coverageSnapshot.tested.toLocaleString()} combos - step $
+                          {coverageSnapshot.step}
+                        </div>
+                      </div>
+                      <button
+                        className="text-xs border rounded px-3 py-1 bg-white hover:bg-gray-50"
+                        onClick={() => {
+                          setOptConstraints((c) => ({
+                            ...c,
+                            marginFloor: { ...floors1 },
+                          }));
+                          toast(
+                            "success",
+                            `Applied floors: Good ${Math.round(
+                              floors1.good * 100
+                            )}%, Better ${Math.round(
+                              floors1.better * 100
+                            )}%, Best ${Math.round(floors1.best * 100)}%`
+                          );
+                        }}
+                      >
+                        Apply floors
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-gray-700 mt-2 space-y-1">
+                      <div>
+                        <span className="font-semibold text-gray-800">Floors tested:</span>{" "}
+                        Good {Math.round(floors1.good * 100)}% | Better {Math.round(floors1.better * 100)}% | Best{" "}
+                        {Math.round(floors1.best * 100)}% ({kpiFloorAdj} pp sensitivity applied).
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-800">Grid and gaps:</span>{" "}
+                        Good -&gt; Better gap {optConstraints.gapGB}, Better -&gt; Best gap {optConstraints.gapBB}; step $
+                        {optRanges.step} across {coverageSnapshot.tested.toLocaleString()} ladder combinations.
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
                       {(() => {
-                        const curProfit = optConstraints.usePocketProfit
-                          ? (() => {
-                              const probs = choiceShares(prices, features, segments, refPrices);
-                              const take = {
-                                good: Math.round(N * probs.good),
-                                better: Math.round(N * probs.better),
-                                best: Math.round(N * probs.best),
-                              };
-                              const pG = computePocketPrice(prices.good, "good", leak).pocket;
-                              const pB = computePocketPrice(prices.better, "better", leak).pocket;
-                              const pH = computePocketPrice(prices.best, "best", leak).pocket;
-                              return take.good * (pG - costs.good) + take.better * (pB - costs.better) + take.best * (pH - costs.best);
-                            })()
-                          : (() => {
-                              const probs = choiceShares(prices, features, segments, refPrices);
-                              const take = {
-                                good: Math.round(N * probs.good),
-                                better: Math.round(N * probs.better),
-                                best: Math.round(N * probs.best),
-                              };
-                              return take.good * (prices.good - costs.good) + take.better * (prices.better - costs.better) + take.best * (prices.best - costs.best);
-                            })();
-
-                        const best = optResult?.prices;
-                        const bestProfit = optResult?.profit ?? null;
-
-                        if (!best || bestProfit === null)
-                          return <div className="text-xs text-gray-600">Run the optimizer to populate the optimized ladder.</div>;
-
-                        const deltaProfit = (optimizerProfitDelta?.delta ?? bestProfit - curProfit) || 0;
-                        const revenueDeltaCurrent =
-                          optimizedKPIs && currentKPIs ? optimizedKPIs.revenue - currentKPIs.revenue : null;
-                        const activeDeltaCurrent =
-                          optimizedKPIs && currentKPIs
-                            ? Math.round(N * (1 - optimizedKPIs.shares.none)) -
-                              Math.round(N * (1 - currentKPIs.shares.none))
-                            : null;
-                        const arpuDeltaCurrent =
-                          optimizedKPIs && currentKPIs
-                            ? optimizedKPIs.arpuActive - currentKPIs.arpuActive
-                            : null;
-                        const guardrails = guardrailsForOptimized;
-                        const binds = explainGaps(best, {
-                          gapGB: optConstraints.gapGB,
-                          gapBB: optConstraints.gapBB,
-                        });
-                        const topDriverLine = topDriver(tornadoRowsOptim);
-
+                          const { cells, gTicks, bTicks, bestUsed } =
+                            feasibilitySliceGB(
+                              optRanges,
+                              costs,
+                              floors1,
+                              {
+                                gapGB: optConstraints.gapGB,
+                                gapBB: optConstraints.gapBB,
+                              },
+                              leak,
+                              coverageUsePocket
+                            );
                         return (
-                          <div className="space-y-3">
-                            <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <span className="font-semibold text-slate-900 text-sm">How to read this card</span>
-                                <span className="text-[10px] uppercase tracking-wide text-slate-500">Demo aid</span>
+                          <>
+                            <details className="mb-1">
+                              <summary className="cursor-pointer select-none text-[11px] text-gray-600">
+                                How to read this heatmap
+                              </summary>
+                              <div className="text-[11px] text-gray-600 mt-1 space-y-1">
+                                <div>
+                                  Best is pinned near the lowest feasible price (about {bestUsed}) so we can see the Good
+                                  vs Better feasibility wedge.
+                                </div>
+                                <div>
+                                  Green cells = Good/Better price pairs that clear the pocket floors and respect the required gaps; gray cells fail a gap or a margin floor.
+                                </div>
+                                <div>
+                                  If the green band collapses as you raise floors, either ease the floors, widen the gap guardrails, or broaden the search ranges before running the optimizer.
+                                </div>
                               </div>
-                              <p className="mt-1 leading-snug">
-                                Narrate the “before vs after.” Apply the optimized ladder to push prices back to Scenario Panel, undo to revert, then call out the delta and which constraints or drivers mattered most.
-                              </p>
-                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] uppercase tracking-wide text-slate-600">
-                                  Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}
-                                </span>
-                                <a className="text-sky-600 hover:underline" href="#callouts">
-                                  Jump to Callouts for the narrative
-                                </a>
-                              </div>
-                            </div>
+                            </details>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 text-sm">
-                              <div className="rounded-xl border border-slate-200 bg-white/70 p-3">
-                                <div className="font-semibold mb-1">Current</div>
-                                <div>Good: ${prices.good}</div>
-                                <div>Better: ${prices.better}</div>
-                                <div>Best: ${prices.best}</div>
-                                <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(curProfit).toLocaleString()}</div>
-                              </div>
-                              <div className="rounded-xl border border-slate-200 bg-white/70 p-3">
-                                <div className="font-semibold mb-1">Optimized</div>
-                                <div>Good: ${best.good}</div>
-                                <div>Better: ${best.better}</div>
-                                <div>Best: ${best.best}</div>
-                                <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(bestProfit).toLocaleString()}</div>
-                              </div>
-                              <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 p-3 lg:col-span-2 flex flex-col gap-2">
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <div className="text-[11px] uppercase tracking-wide text-slate-600">Delta</div>
-                                    <div className="text-xl font-bold leading-tight">
-                                      {deltaProfit >= 0 ? "+" : "-"}${Math.abs(Math.round(deltaProfit)).toLocaleString()}
-                                    </div>
-                                    <div className="text-[11px] text-slate-600">vs current profit</div>
-                                  </div>
-                                  <div className="text-right text-[11px] text-slate-600">
-                                    <div>Revenue {revenueDeltaCurrent != null ? `${revenueDeltaCurrent >= 0 ? "+" : "-"}$${Math.abs(revenueDeltaCurrent).toLocaleString()}` : "n/a"}</div>
-                                    <div>Active {activeDeltaCurrent != null ? `${activeDeltaCurrent >= 0 ? "+" : "-"}${Math.abs(activeDeltaCurrent)}` : "n/a"}</div>
-                                    <div>ARPU {arpuDeltaCurrent != null ? `${arpuDeltaCurrent >= 0 ? "+" : "-"}$${Math.abs(arpuDeltaCurrent).toFixed(2)}` : "n/a"}</div>
-                                  </div>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                  <button
-                                    className="w-full border rounded px-3 py-2 text-sm font-semibold bg-white hover:bg-gray-50"
-                                    onClick={() => {
-                                      lastAppliedPricesRef.current = { ...prices };
-                                      setPrices(best as typeof prices);
-                                      pushJ?.(`Applied optimized ladder: ${(best as typeof prices).good}/${(best as typeof prices).better}/${(best as typeof prices).best}`);
-                                    }}
-                                  >
-                                    Apply optimized ladder
-                                  </button>
-                                  <button
-                                    className="w-full text-sm border rounded px-3 py-2 bg-white hover:bg-gray-50 disabled:opacity-50"
-                                    disabled={!lastAppliedPricesRef.current}
-                                    onClick={() => {
-                                      const prev = lastAppliedPricesRef.current;
-                                      if (!prev) return;
-                                      setPrices(prev);
-                                      lastAppliedPricesRef.current = null;
-                                      pushJ?.("Undo: restored ladder to previous prices");
-                                    }}
-                                  >
-                                    Undo apply ladder
-                                  </button>
-                                  {lastOptAt && (!baselineMeta || lastOptAt > baselineMeta.savedAt) ? (
-                                    <button
-                                      className="w-full text-xs border rounded px-3 py-2 bg-white hover:bg-gray-50"
-                                      onClick={() => {
-                                        if (!optResult?.kpis) return;
-                                        const meta = { label: "Pinned from optimizer", savedAt: Date.now() };
-                                        setBaselineKPIs(optResult.kpis);
-                                        setBaselineMeta(meta);
-                                        setScenarioBaseline({
-                                          snapshot: buildScenarioSnapshot({
-                                            prices,
-                                            costs,
-                                            features,
-                                            refPrices,
-                                            leak,
-                                            segments,
-                                            tornadoPocket,
-                                            tornadoPriceBump,
-                                            tornadoPctBump,
-                                            tornadoRangeMode,
-                                            retentionPct,
-                                            kpiFloorAdj,
-                                            priceRange: priceRangeState,
-                                            optRanges,
-                                            optConstraints,
-                                            channelMix,
-                                            optimizerKind,
-                                          }),
-                                          kpis: optResult.kpis,
-                                          basis: {
-                                            usePocketProfit: !!optConstraints.usePocketProfit,
-                                            usePocketMargins: !!optConstraints.usePocketMargins,
-                                          },
-                                          meta,
-                                        });
-                                        toast("success", "Baseline pinned from optimizer");
-                                      }}
-                                    >
-                                      Pin this as baseline
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                              <div className="rounded-lg border border-slate-200 bg-white/70 p-3 space-y-1">
-                                <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
-                                  Why this recommendation?
-                                </div>
-                                <ul className="list-disc ml-4 space-y-1 text-slate-700 leading-snug">
-                                  {binds.length ? binds.map((b, i) => <li key={i}>{b}</li>) : <li>No gap constraints binding.</li>}
-                                  <li>Largest profit driver near optimum: {topDriverLine ? topDriverLine : "n/a"}.</li>
-                                  <li>{guardrails.floorLine}</li>
-                                </ul>
-                              </div>
-                              <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 space-y-1">
-                                <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
-                                  Validation & follow-ups
-                                </div>
-                                <ul className="list-disc ml-4 space-y-1 text-slate-700 leading-snug">
-                                  <li>Check guardrail feasibility in <a className="text-sky-600 hover:underline" href="#kpi-pocket-coverage">Pocket floor coverage</a>.</li>
-                                  <li>Review leakages in <a className="text-sky-600 hover:underline" href="#pocket-price-waterfall">Pocket waterfall</a>.</li>
-                                  <li>Compare narrative in <a className="text-sky-600 hover:underline" href="#callouts">Callouts snapshot</a> and export/print.</li>
-                                </ul>
-                                <p className="text-[11px] text-slate-600">
-                                  Need to rerun? Adjust ranges, floors, or basis, then trigger the optimizer again to refresh this card.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
+                            <HeatmapMini
+                              cells={cells}
+                              gTicks={gTicks}
+                              bTicks={bTicks}
+                              chartId="coverage-heatmap"
+                            />
+                          </>
                         );
                       })()}
-                    </Section>
-          <Section id="methods" title="Methods">
-                      <p className="text-sm text-gray-700 print-tight">
-                        MNL: U = ß0(j) + ß?·price + ß_A·featA + ß_B·featB; outside option
-                        intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
-                        ridge regularization.
+                    </div>
+                  </>
+                );
+              })()}
+            </Section>
+            <Section id="current-vs-optimized" title="Current vs Optimized">
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-slate-900 text-sm">How to read this card</span>
+                  <span className="text-[10px] uppercase tracking-wide text-slate-500">Demo aid</span>
+                </div>
+                <p className="mt-1 leading-snug">
+                  Use this to narrate "before vs after." Apply the optimized ladder to push prices back to Scenario Panel,
+                  undo to revert, then call out the delta and which constraints or drivers mattered most.
+                </p>
+                <p className="mt-1 text-slate-600">
+                  Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}.
+                </p>
+              </div>
+              {(() => {
+                const curProfit = optConstraints.usePocketProfit
+                  ? (() => {
+                      const probs = choiceShares(prices, features, segments, refPrices);
+                      const take = {
+                        good: Math.round(N * probs.good),
+                        better: Math.round(N * probs.better),
+                        best: Math.round(N * probs.best),
+                      };
+                      const pG = computePocketPrice(prices.good, "good", leak).pocket;
+                      const pB = computePocketPrice(prices.better, "better", leak).pocket;
+                      const pH = computePocketPrice(prices.best, "best", leak).pocket;
+                      return take.good * (pG - costs.good) + take.better * (pB - costs.better) + take.best * (pH - costs.best);
+                    })()
+                  : (() => {
+                      const probs = choiceShares(prices, features, segments, refPrices);
+                      const take = {
+                        good: Math.round(N * probs.good),
+                        better: Math.round(N * probs.better),
+                        best: Math.round(N * probs.best),
+                      };
+                      return take.good * (prices.good - costs.good) + take.better * (prices.better - costs.better) + take.best * (prices.best - costs.best);
+                    })();
+
+                const best = optResult?.prices;
+                const bestProfit = optResult?.profit ?? null;
+
+                if (!best || bestProfit === null)
+                  return <div className="text-xs text-gray-600">Run the optimizer to populate the optimized ladder.</div>;
+
+                const deltaProfit = (optimizerProfitDelta?.delta ?? bestProfit - curProfit) || 0;
+                const revenueDeltaCurrent =
+                  optimizedKPIs && currentKPIs ? optimizedKPIs.revenue - currentKPIs.revenue : null;
+                const activeDeltaCurrent =
+                  optimizedKPIs && currentKPIs
+                    ? Math.round(N * (1 - optimizedKPIs.shares.none)) -
+                      Math.round(N * (1 - currentKPIs.shares.none))
+                    : null;
+                const arpuDeltaCurrent =
+                  optimizedKPIs && currentKPIs
+                    ? optimizedKPIs.arpuActive - currentKPIs.arpuActive
+                    : null;
+                const guardrails = guardrailsForOptimized;
+                const binds = explainGaps(best, {
+                  gapGB: optConstraints.gapGB,
+                  gapBB: optConstraints.gapBB,
+                });
+                const topDriverLine = topDriver(tornadoRowsOptim);
+
+                return (
+                  <div className="space-y-3">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-900 text-sm">How to read this card</span>
+                        <span className="text-[10px] uppercase tracking-wide text-slate-500">Demo aid</span>
+                      </div>
+                      <p className="mt-1 leading-snug">
+                        Narrate the “before vs after.” Apply the optimized ladder to push prices back to Scenario Panel, undo to revert, then call out the delta and which constraints or drivers mattered most.
                       </p>
-                      {fitInfo && (
-                        <div className="text-xs text-gray-700 mt-2 space-y-1 bg-slate-50 border border-slate-200 rounded p-2">
-                          <div className="font-semibold text-[11px] text-slate-800">Latest fit (sales import)</div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] uppercase tracking-wide text-slate-600">
+                          Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}
+                        </span>
+                        <a className="text-sky-600 hover:underline" href="#callouts">
+                          Jump to Callouts for the narrative
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 text-sm">
+                      <div className="rounded-xl border border-slate-200 bg-white/70 p-3">
+                        <div className="font-semibold mb-1">Current</div>
+                        <div>Good: ${prices.good}</div>
+                        <div>Better: ${prices.better}</div>
+                        <div>Best: ${prices.best}</div>
+                        <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(curProfit).toLocaleString()}</div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-white/70 p-3">
+                        <div className="font-semibold mb-1">Optimized</div>
+                        <div>Good: ${best.good}</div>
+                        <div>Better: ${best.better}</div>
+                        <div>Best: ${best.best}</div>
+                        <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(bestProfit).toLocaleString()}</div>
+                      </div>
+                      <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 p-3 lg:col-span-2 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
                           <div>
-                            Train/Test logLik: {Math.round(fitInfo.trainLogLik ?? fitInfo.logLik)} /{" "}
-                            {fitInfo.testLogLik != null ? Math.round(fitInfo.testLogLik) : "n/a"}; iters {fitInfo.iters};{" "}
-                            {fitInfo.converged ? "converged" : "not converged"}
-                          </div>
-                          {typeof fitInfo.pseudoR2 === "number" && (
-                            <div>Pseudo R^2 (test): {(fitInfo.pseudoR2 * 100).toFixed(1)}%</div>
-                          )}
-                          {typeof fitInfo.accuracy === "number" && (
-                            <div>Accuracy (test): {(fitInfo.accuracy * 100).toFixed(1)}%</div>
-                          )}
-                          {fitInfo.dataDiagnostics?.warnings?.length ? (
-                            <div className="text-amber-800">
-                              Warnings:
-                              <ul className="list-disc ml-4 space-y-0.5">
-                                {fitInfo.dataDiagnostics.warnings.slice(0, 4).map((w, i) => (
-                                  <li key={i}>{w}</li>
-                                ))}
-                              </ul>
+                            <div className="text-[11px] uppercase tracking-wide text-slate-600">Delta</div>
+                            <div className="text-xl font-bold leading-tight">
+                              {deltaProfit >= 0 ? "+" : "-"}${Math.abs(Math.round(deltaProfit)).toLocaleString()}
                             </div>
+                            <div className="text-[11px] text-slate-600">vs current profit</div>
+                          </div>
+                          <div className="text-right text-[11px] text-slate-600">
+                            <div>Revenue {revenueDeltaCurrent != null ? `${revenueDeltaCurrent >= 0 ? "+" : "-"}$${Math.abs(revenueDeltaCurrent).toLocaleString()}` : "n/a"}</div>
+                            <div>Active {activeDeltaCurrent != null ? `${activeDeltaCurrent >= 0 ? "+" : "-"}${Math.abs(activeDeltaCurrent)}` : "n/a"}</div>
+                            <div>ARPU {arpuDeltaCurrent != null ? `${arpuDeltaCurrent >= 0 ? "+" : "-"}$${Math.abs(arpuDeltaCurrent).toFixed(2)}` : "n/a"}</div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <button
+                            className="w-full border rounded px-3 py-2 text-sm font-semibold bg-white hover:bg-gray-50"
+                            onClick={() => {
+                              lastAppliedPricesRef.current = { ...prices };
+                              setPrices(best as typeof prices);
+                              pushJ?.(`Applied optimized ladder: ${(best as typeof prices).good}/${(best as typeof prices).better}/${(best as typeof prices).best}`);
+                            }}
+                          >
+                            Apply optimized ladder
+                          </button>
+                          <button
+                            className="w-full text-sm border rounded px-3 py-2 bg-white hover:bg-gray-50 disabled:opacity-50"
+                            disabled={!lastAppliedPricesRef.current}
+                            onClick={() => {
+                              const prev = lastAppliedPricesRef.current;
+                              if (!prev) return;
+                              setPrices(prev);
+                              lastAppliedPricesRef.current = null;
+                              pushJ?.("Undo: restored ladder to previous prices");
+                            }}
+                          >
+                            Undo apply ladder
+                          </button>
+                          {lastOptAt && (!baselineMeta || lastOptAt > baselineMeta.savedAt) ? (
+                            <button
+                              className="w-full text-xs border rounded px-3 py-2 bg-white hover:bg-gray-50"
+                              onClick={() => {
+                                if (!optResult?.kpis) return;
+                                const meta = { label: "Pinned from optimizer", savedAt: Date.now() };
+                                setBaselineKPIs(optResult.kpis);
+                                setBaselineMeta(meta);
+                                setScenarioBaseline({
+                                  snapshot: buildScenarioSnapshot({
+                                    prices,
+                                    costs,
+                                    features,
+                                    refPrices,
+                                    leak,
+                                    segments,
+                                    tornadoPocket,
+                                    tornadoPriceBump,
+                                    tornadoPctBump,
+                                    tornadoRangeMode,
+                                    retentionPct,
+                                    kpiFloorAdj,
+                                    priceRange: priceRangeState,
+                                    optRanges,
+                                    optConstraints,
+                                    channelMix,
+                                    optimizerKind,
+                                  }),
+                                  kpis: optResult.kpis,
+                                  basis: {
+                                    usePocketProfit: !!optConstraints.usePocketProfit,
+                                    usePocketMargins: !!optConstraints.usePocketMargins,
+                                  },
+                                  meta,
+                                });
+                                toast("success", "Baseline pinned from optimizer");
+                              }}
+                            >
+                              Pin this as baseline
+                            </button>
                           ) : null}
                         </div>
-                      )}
-                    </Section>
-          <Section id="optimizer-robustness" title="Optimizer robustness">
-                      <div className="text-[11px] text-slate-700 bg-slate-50 border border-dashed border-slate-200 rounded px-3 py-2">
-                        Stress scenarios scale price sensitivity and leakages to show how fragile the recommendation is.
-                        We re-run the grid under each scenario and compare profits at your optimized ladder vs the per-scenario optimum.
                       </div>
-                      {robustnessResults.length === 0 ? (
-                        <div className="text-xs text-gray-600">Run the optimizer to populate robustness scenarios.</div>
-                      ) : (
-                        <div className="overflow-auto">
-                          <table className="min-w-full text-[11px] border border-slate-200 rounded">
-                            <thead className="bg-slate-100 text-slate-700">
-                              <tr>
-                                <th className="px-2 py-1 text-left">Scenario</th>
-                                <th className="px-2 py-1 text-left">Profit @ optimized ladder</th>
-                                <th className="px-2 py-1 text-left">Scenario-optimal profit</th>
-                                <th className="px-2 py-1 text-left">Price shift vs optimized</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {robustnessResults.map((r) => (
-                                <tr key={r.name} className="odd:bg-white even:bg-slate-50">
-                                  <td className="px-2 py-1 font-semibold text-slate-800">{r.name}</td>
-                                  <td className="px-2 py-1">
-                                    {r.profitAtBase != null ? fmtUSD(r.profitAtBase) : "n/a"}
-                                  </td>
-                                  <td className="px-2 py-1">{fmtUSD(r.bestProfit)}</td>
-                                  <td className="px-2 py-1 text-slate-700">
-                                    {r.priceDelta != null ? `$${r.priceDelta.toFixed(2)} avg abs delta` : "n/a"}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                      <div className="rounded-lg border border-slate-200 bg-white/70 p-3 space-y-1">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
+                          Why this recommendation?
                         </div>
-                      )}
-                    </Section>
+                        <ul className="list-disc ml-4 space-y-1 text-slate-700 leading-snug">
+                          {binds.length ? binds.map((b, i) => <li key={i}>{b}</li>) : <li>No gap constraints binding.</li>}
+                          <li>Largest profit driver near optimum: {topDriverLine ? topDriverLine : "n/a"}.</li>
+                          <li>{guardrails.floorLine}</li>
+                        </ul>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 space-y-1">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
+                          Validation & follow-ups
+                        </div>
+                        <ul className="list-disc ml-4 space-y-1 text-slate-700 leading-snug">
+                          <li>Check guardrail feasibility in <a className="text-sky-600 hover:underline" href="#kpi-pocket-coverage">Pocket floor coverage</a>.</li>
+                          <li>Review leakages in <a className="text-sky-600 hover:underline" href="#pocket-price-waterfall">Pocket waterfall</a>.</li>
+                          <li>Compare narrative in <a className="text-sky-600 hover:underline" href="#callouts">Callouts snapshot</a> and export/print.</li>
+                        </ul>
+                        <p className="text-[11px] text-slate-600">
+                          Need to rerun? Adjust ranges, floors, or basis, then trigger the optimizer again to refresh this card.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </Section>
+            <Section id="methods" title="Methods">
+              <p className="text-sm text-gray-700 print-tight">
+                MNL: U = ß0(j) + ß?·price + ß_A·featA + ß_B·featB; outside option
+                intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
+                ridge regularization.
+              </p>
+              {fitInfo && (
+                <div className="text-xs text-gray-700 mt-2 space-y-1 bg-slate-50 border border-slate-200 rounded p-2">
+                  <div className="font-semibold text-[11px] text-slate-800">Latest fit (sales import)</div>
+                  <div>
+                    Train/Test logLik: {Math.round(fitInfo.trainLogLik ?? fitInfo.logLik)} /{" "}
+                    {fitInfo.testLogLik != null ? Math.round(fitInfo.testLogLik) : "n/a"}; iters {fitInfo.iters};{" "}
+                    {fitInfo.converged ? "converged" : "not converged"}
+                  </div>
+                  {typeof fitInfo.pseudoR2 === "number" && (
+                    <div>Pseudo R^2 (test): {(fitInfo.pseudoR2 * 100).toFixed(1)}%</div>
+                  )}
+                  {typeof fitInfo.accuracy === "number" && (
+                    <div>Accuracy (test): {(fitInfo.accuracy * 100).toFixed(1)}%</div>
+                  )}
+                  {fitInfo.dataDiagnostics?.warnings?.length ? (
+                    <div className="text-amber-800">
+                      Warnings:
+                      <ul className="list-disc ml-4 space-y-0.5">
+                        {fitInfo.dataDiagnostics.warnings.slice(0, 4).map((w, i) => (
+                          <li key={i}>{w}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </Section>
+            <Section id="optimizer-robustness" title="Optimizer robustness">
+              <div className="text-[11px] text-slate-700 bg-slate-50 border border-dashed border-slate-200 rounded px-3 py-2">
+                Stress scenarios scale price sensitivity and leakages to show how fragile the recommendation is.
+                We re-run the grid under each scenario and compare profits at your optimized ladder vs the per-scenario optimum.
+              </div>
+              {robustnessResults.length === 0 ? (
+                <div className="text-xs text-gray-600">Run the optimizer to populate robustness scenarios.</div>
+              ) : (
+                <div className="overflow-auto">
+                  <table className="min-w-full text-[11px] border border-slate-200 rounded">
+                    <thead className="bg-slate-100 text-slate-700">
+                      <tr>
+                        <th className="px-2 py-1 text-left">Scenario</th>
+                        <th className="px-2 py-1 text-left">Profit @ optimized ladder</th>
+                        <th className="px-2 py-1 text-left">Scenario-optimal profit</th>
+                        <th className="px-2 py-1 text-left">Price shift vs optimized</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {robustnessResults.map((r) => (
+                        <tr key={r.name} className="odd:bg-white even:bg-slate-50">
+                          <td className="px-2 py-1 font-semibold text-slate-800">{r.name}</td>
+                          <td className="px-2 py-1">
+                            {r.profitAtBase != null ? fmtUSD(r.profitAtBase) : "n/a"}
+                          </td>
+                          <td className="px-2 py-1">{fmtUSD(r.bestProfit)}</td>
+                          <td className="px-2 py-1 text-slate-700">
+                            {r.priceDelta != null ? `$${r.priceDelta.toFixed(2)} avg abs delta` : "n/a"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Section>
             </div>
           )}
         </div>
