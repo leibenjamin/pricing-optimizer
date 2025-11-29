@@ -4488,10 +4488,10 @@ export default function App() {
                         <button
                           className="border rounded-md px-3 py-1.5 text-xs bg-white hover:bg-gray-50"
                           onClick={setRefsFromCurrent}
-                    >
-                      Set from current prices
-                    </button>
-                  </div>
+                        >
+                          Set from current prices
+                        </button>
+                      </div>
           </Section>
           <Section id="current-vs-optimized" title="Current vs Optimized">
                       <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
