@@ -11,7 +11,7 @@ function money(n: number) {
 
 function leakSummary(p: Preset) {
   const L = p.leak;
-  // Show the most “credible” quick tells recruiters expect to see
+  // Show the most credible quick tells
   // (payments %/fixed, average promo, refunds)
   const avgPromo = (L.promo.good + L.promo.better + L.promo.best) / 3;
   const avgVol   = (L.volume.good + L.volume.better + L.volume.best) / 3;
@@ -21,7 +21,45 @@ function leakSummary(p: Preset) {
     `Volume ~${pct(avgVol)}`,
     `Refunds ${pct(L.refundsPct)}`,
     L.fxPct ? `FX ${pct(L.fxPct)}` : null,
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join(" | ");
+}
+
+function featureSummary(p: Preset) {
+  if (!p.features) return null;
+  const { featA, featB } = p.features;
+  return `Features: A ${featA.good}/${featA.better}/${featA.best}; B ${featB.good}/${featB.better}/${featB.best}`;
+}
+
+function optimizerSummary(p: Preset) {
+  if (!p.optConstraints) return null;
+  const c = p.optConstraints;
+  const floors = `${pct(c.marginFloor.good)} / ${pct(c.marginFloor.better)} / ${pct(c.marginFloor.best)}`;
+  const basis = c.usePocketProfit ? "Pocket profit" : "List profit";
+  const floorBasis = c.usePocketMargins ? "pocket floors" : "list floors";
+  const charm = c.charm ? "charm on" : "charm off";
+  return `${basis}, ${floorBasis}, gaps ${c.gapGB}/${c.gapBB}, floors ${floors}, ${charm}`;
+}
+
+function rangeSummary(p: Preset) {
+  if (!p.optRanges) return null;
+  const { good, better, best, step } = p.optRanges;
+  return `Ranges: G ${money(good[0])}-${money(good[1])}, B ${money(better[0])}-${money(better[1])}, Best ${money(best[0])}-${money(best[1])} (step ${step})`;
+}
+
+function sensitivitySummary(p: Preset) {
+  const bits: string[] = [];
+  if (p.tornado) {
+    const span = p.tornado.rangeMode === "data" ? "data-driven span" : `±${p.tornado.priceBump ?? 10}%`;
+    bits.push(`${p.tornado.usePocket ? "Pocket" : "List"} tornado, ${span}, leak bump ${p.tornado.pctBump ?? 0}pp`);
+  }
+  if (typeof p.retentionPct === "number") bits.push(`Retention ${p.retentionPct}%`);
+  if (typeof p.kpiFloorAdj === "number" && p.kpiFloorAdj !== 0) bits.push(`Floor sensitivity ${p.kpiFloorAdj}pp`);
+  return bits.length ? bits.join(" | ") : null;
+}
+
+function channelSummary(p: Preset) {
+  if (!p.channelMix || !p.channelMix.length) return null;
+  return `Channel blend: ${p.channelMix.map((r) => `${r.preset} ${Math.round(r.w)}%`).join(" | ")}`;
 }
 
 export default function PresetPicker({
@@ -97,9 +135,47 @@ export default function PresetPicker({
                   })}
                 </div>
                 <div className="truncate">
+                  <span className="text-slate-500">Refs:</span>{" "}
+                  {["good","better","best"].map((t, i) => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const val = (p.refPrices as any)[t];
+                    return <span key={t}>{money(val)}{i<2?" · ":""}</span>;
+                  })}
+                </div>
+                {featureSummary(p) ? (
+                  <div className="truncate">
+                    <span className="text-slate-500">Features:</span>{" "}
+                    {featureSummary(p)}
+                  </div>
+                ) : null}
+                <div className="truncate">
                   <span className="text-slate-500">Leakages:</span>{" "}
                   {leakSummary(p)}
                 </div>
+                {optimizerSummary(p) ? (
+                  <div className="truncate">
+                    <span className="text-slate-500">Optimizer:</span>{" "}
+                    {optimizerSummary(p)}
+                  </div>
+                ) : null}
+                {rangeSummary(p) ? (
+                  <div className="truncate">
+                    <span className="text-slate-500">Ranges:</span>{" "}
+                    {rangeSummary(p)}
+                  </div>
+                ) : null}
+                {channelSummary(p) ? (
+                  <div className="truncate">
+                    <span className="text-slate-500">Channels:</span>{" "}
+                    {channelSummary(p)}
+                  </div>
+                ) : null}
+                {sensitivitySummary(p) ? (
+                  <div className="truncate">
+                    <span className="text-slate-500">Sensitivity:</span>{" "}
+                    {sensitivitySummary(p)}
+                  </div>
+                ) : null}
               </div>
             </div>
           );

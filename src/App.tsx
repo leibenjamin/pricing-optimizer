@@ -26,8 +26,8 @@ import { choiceShares } from "./lib/choice";
 import { type SearchRanges, type GridDiagnostics } from "./lib/optimize";
 import { runOptimizeInWorker } from "./lib/optWorker";
 
-import { computePocketPrice, type Leakages, type Tier } from "./lib/waterfall";
-import { LEAK_PRESETS } from "./lib/waterfallPresets";
+import { computePocketPrice, type Tier } from "./lib/waterfall";
+import { LEAK_PRESETS, blendLeakPresets } from "./lib/waterfallPresets";
 
 import { gridOptimize } from "./lib/optQuick";
 import { tornadoProfit } from "./lib/sensitivity";
@@ -951,18 +951,6 @@ export default function App() {
     refundsPct: 0.02, // 2%
   });
 
-  // Apply a scenario preset: sets prices, costs, refPrices, and leak
-  // NOTE: Preset type is from src/lib/presets
-  const applyScenarioPreset = useCallback((p: Preset) => {
-    setPrices(p.prices);
-    setCosts(p.costs);
-    setRefPrices(p.refPrices);
-    setLeak(p.leak);
-    setChannelBlendApplied(false);
-    setScenarioPresetId(p.id);
-    pushJ(`Loaded preset: ${p.name}`);
-  }, [setPrices, setCosts, setRefPrices, setLeak, pushJ]);
-
   const sliderMax = useMemo(() => {
     const preset = scenarioPresetId
       ? PRESETS.find((x) => x.id === scenarioPresetId)
@@ -1017,19 +1005,22 @@ export default function App() {
     { preset: "App Store (est.)", w: 30 },
   ]);
   const [channelBlendApplied, setChannelBlendApplied] = useState(false);
-  const defaults = {
-    prices: { good: 9, better: 15, best: 25 },
-    costs: { good: 3, better: 5, best: 8 },
-    refPrices: { good: 10, better: 18, best: 30 },
-    leak: { promo: { good: 0.05, better: 0.05, best: 0.05 }, volume: { good: 0.03, better: 0.03, best: 0.03 }, paymentPct: 0.029, paymentFixed: 0.1, fxPct: 0, refundsPct: 0.02 },
-    features: { featA: { good: 1, better: 1, best: 1 }, featB: { good: 0, better: 1, best: 1 } },
-    optConstraints: { gapGB: 2, gapBB: 3, marginFloor: { good: 0.25, better: 0.25, best: 0.25 }, charm: false, usePocketProfit: false, usePocketMargins: false },
-    optRanges: { good: [5, 30] as [number, number], better: [10, 45] as [number, number], best: [15, 60] as [number, number], step: 1 },
-    channelMix: [
-      { preset: "Stripe (cards)", w: 70 },
-      { preset: "App Store (est.)", w: 30 },
-    ],
-  };
+  const defaults = useMemo(
+    () => ({
+      prices: { good: 9, better: 15, best: 25 },
+      costs: { good: 3, better: 5, best: 8 },
+      refPrices: { good: 10, better: 18, best: 30 },
+      leak: { promo: { good: 0.05, better: 0.05, best: 0.05 }, volume: { good: 0.03, better: 0.03, best: 0.03 }, paymentPct: 0.029, paymentFixed: 0.1, fxPct: 0, refundsPct: 0.02 },
+      features: { featA: { good: 1, better: 1, best: 1 }, featB: { good: 0, better: 1, best: 1 } },
+      optConstraints: { gapGB: 2, gapBB: 3, marginFloor: { good: 0.25, better: 0.25, best: 0.25 }, charm: false, usePocketProfit: false, usePocketMargins: false },
+      optRanges: { good: [5, 30] as [number, number], better: [10, 45] as [number, number], best: [15, 60] as [number, number], step: 1 },
+      channelMix: [
+        { preset: "Stripe (cards)", w: 70 },
+        { preset: "App Store (est.)", w: 30 },
+      ],
+    }),
+    []
+  );
   const clearDefaults = {
     prices: { good: 0, better: 0, best: 0 },
     costs: { good: 0, better: 0, best: 0 },
@@ -1040,6 +1031,15 @@ export default function App() {
     optRanges: { good: [0, 0] as [number, number], better: [0, 0] as [number, number], best: [0, 0] as [number, number], step: 1 },
     channelMix: [],
   };
+
+  const TORNADO_DEFAULTS = {
+    usePocket: true,
+    priceBump: 10,
+    pctBump: 2,
+    rangeMode: "symmetric" as const,
+  };
+  const RETENTION_DEFAULT = 92;
+  const KPI_FLOOR_ADJ_DEFAULT = 0;
 
   const resetAllSettings = () => {
     localStorage.removeItem("po:prices");
@@ -1405,7 +1405,7 @@ export default function App() {
   const runIdRef = useRef(0);
   const cancelRef = useRef<null | (() => void)>(null);
 
-  const [kpiFloorAdj, setKpiFloorAdj] = useState(0); // -10..+10 (pp)
+  const [kpiFloorAdj, setKpiFloorAdj] = useState(KPI_FLOOR_ADJ_DEFAULT); // -10..+10 (pp)
   const [coverageUsePocket, setCoverageUsePocket] = useState(true);
   const coverageSnapshot = useMemo(() => {
     const floors0 = optConstraints.marginFloor;
@@ -1461,40 +1461,6 @@ export default function App() {
 
   function clamp01(x: number) {
     return Math.max(0, Math.min(1, x));
-  }
-
-  // Weighted blend of leakage presets (percent terms weighted linearly; fixed fee weighted avg)
-  function blendLeaks(rows: { w: number; preset: string }[]): Leakages {
-    // guard
-    const safeRows = rows.filter((r) => LEAK_PRESETS[r.preset] && r.w > 0);
-    if (safeRows.length === 0)
-      return LEAK_PRESETS[Object.keys(LEAK_PRESETS)[0]];
-
-    // start with a deep copy of the first preset
-    const init = JSON.parse(
-      JSON.stringify(LEAK_PRESETS[safeRows[0].preset])
-    ) as Leakages;
-    const acc = init;
-    let total = safeRows[0].w;
-
-    for (let i = 1; i < safeRows.length; i++) {
-      const { w, preset } = safeRows[i];
-      const L = LEAK_PRESETS[preset];
-      total += w;
-      (["promo", "volume"] as const).forEach((k) => {
-        (["good", "better", "best"] as const).forEach((t) => {
-          acc[k][t] = acc[k][t] * ((total - w) / total) + L[k][t] * (w / total);
-        });
-      });
-      acc.paymentPct =
-        acc.paymentPct * ((total - w) / total) + L.paymentPct * (w / total);
-      acc.paymentFixed =
-        acc.paymentFixed * ((total - w) / total) + L.paymentFixed * (w / total);
-      acc.fxPct = acc.fxPct * ((total - w) / total) + L.fxPct * (w / total);
-      acc.refundsPct =
-        acc.refundsPct * ((total - w) / total) + L.refundsPct * (w / total);
-    }
-    return acc;
   }
 
   const probs = useMemo(
@@ -1745,11 +1711,11 @@ export default function App() {
 
   // ---- Tornado sensitivity data ----
   // ---- Tornado sensitivity data ----
-  const [tornadoPocket, setTornadoPocket] = useState(true);
+  const [tornadoPocket, setTornadoPocket] = useState(TORNADO_DEFAULTS.usePocket);
   const [tornadoView, setTornadoView] = useState<"current" | "optimized">("current");
-  const [tornadoPriceBump, setTornadoPriceBump] = useState(10); // percent span for symmetric mode
-  const [tornadoRangeMode, setTornadoRangeMode] = useState<"symmetric" | "data">("symmetric");
-  const [tornadoPctBump, setTornadoPctBump] = useState(2); // pp
+  const [tornadoPriceBump, setTornadoPriceBump] = useState(TORNADO_DEFAULTS.priceBump); // percent span for symmetric mode
+  const [tornadoRangeMode, setTornadoRangeMode] = useState<"symmetric" | "data">(TORNADO_DEFAULTS.rangeMode);
+  const [tornadoPctBump, setTornadoPctBump] = useState(TORNADO_DEFAULTS.pctBump); // pp
 
   const dataDrivenBumps = useMemo(() => {
     const ranges = priceRangeState?.map;
@@ -1997,12 +1963,123 @@ export default function App() {
   // Cohort retention (percent, per-month). Default 92%.
   const [retentionPct, setRetentionPct] = useState<number>(() => {
     const saved = localStorage.getItem("cohort_retention_pct");
-    const v = saved ? Number(saved) : 92;
-    return Number.isFinite(v) ? Math.min(99.9, Math.max(70, v)) : 92;
+    const v = saved ? Number(saved) : RETENTION_DEFAULT;
+    return Number.isFinite(v) ? Math.min(99.9, Math.max(70, v)) : RETENTION_DEFAULT;
   });
   useEffect(() => {
     localStorage.setItem("cohort_retention_pct", String(retentionPct));
   }, [retentionPct]);
+
+  const normalizeChannelMix = useCallback(
+    (rows: Array<{ w: number; preset: string }>) => {
+      const cleaned = rows
+        .map((r) => ({
+          preset: r.preset,
+          w: Number.isFinite(Number(r.w)) ? Number(r.w) : 0,
+        }))
+        .filter((r) => r.w > 0 && LEAK_PRESETS[r.preset]);
+      if (!cleaned.length) return defaults.channelMix.map((r) => ({ ...r }));
+      const total = cleaned.reduce((s, r) => s + r.w, 0) || 1;
+      return cleaned.map((r) => ({
+        ...r,
+        w: Math.round((r.w / total) * 100),
+      }));
+    },
+    [defaults]
+  );
+
+  // Apply a scenario preset: replaces ladder, ref prices, leak, features, segments,
+  // optimizer constraints/ranges, sensitivity knobs, cohort retention, and channel blend.
+  const applyScenarioPreset = useCallback(
+    (p: Preset) => {
+      setPrices(p.prices);
+      setCosts(p.costs);
+      setRefPrices(p.refPrices);
+      setFeatures(p.features ?? defaults.features);
+      setSegments(normalizeWeights(p.segments ?? defaultSegments));
+
+      const mix = p.channelMix && p.channelMix.length ? normalizeChannelMix(p.channelMix) : normalizeChannelMix(defaults.channelMix);
+      const useBlend = Boolean(p.channelMix && p.channelMix.length);
+      setChannelMix(mix);
+      setChannelBlendApplied(useBlend);
+      setLeak(p.leak);
+
+      const mergedConstraints = {
+        ...defaults.optConstraints,
+        ...(p.optConstraints ?? {}),
+        marginFloor: {
+          ...defaults.optConstraints.marginFloor,
+          ...(p.optConstraints?.marginFloor ?? {}),
+        },
+      };
+      setOptConstraints(mergedConstraints);
+      setCoverageUsePocket(mergedConstraints.usePocketMargins ?? true);
+      setOptRanges(p.optRanges ?? defaults.optRanges);
+
+      setTornadoPocket(p.tornado?.usePocket ?? TORNADO_DEFAULTS.usePocket);
+      setTornadoPriceBump(p.tornado?.priceBump ?? TORNADO_DEFAULTS.priceBump);
+      setTornadoPctBump(p.tornado?.pctBump ?? TORNADO_DEFAULTS.pctBump);
+      const desiredRangeMode = p.tornado?.rangeMode ?? (p.priceRange ? "data" : TORNADO_DEFAULTS.rangeMode);
+
+      if (p.priceRange) {
+        const ok = setPriceRangeFromData(p.priceRange, p.priceRangeSource ?? "shared");
+        setTornadoRangeMode(ok ? desiredRangeMode : "symmetric");
+        if (!ok) fallbackToSyntheticRanges();
+      } else {
+        fallbackToSyntheticRanges();
+        setTornadoRangeMode(desiredRangeMode === "data" ? "symmetric" : desiredRangeMode);
+      }
+
+      setRetentionPct(p.retentionPct ?? RETENTION_DEFAULT);
+      setKpiFloorAdj(p.kpiFloorAdj ?? KPI_FLOOR_ADJ_DEFAULT);
+
+      setOptResult(null);
+      setOptError(null);
+      setLastOptAt(null);
+      setScorecardView("current");
+      setTornadoView("current");
+      setPresetSel("");
+      setScenarioPresetId(p.id);
+      pushJ(`Loaded preset: ${p.name}`);
+    },
+    [
+      defaults,
+      fallbackToSyntheticRanges,
+      normalizeChannelMix,
+      pushJ,
+      setCosts,
+      setCoverageUsePocket,
+      setFeatures,
+      setKpiFloorAdj,
+      setLeak,
+      setOptConstraints,
+      setOptError,
+      setOptRanges,
+      setOptResult,
+      setPrices,
+      setRefPrices,
+      setRetentionPct,
+      setScenarioPresetId,
+      setSegments,
+      setTornadoPctBump,
+      setTornadoPocket,
+      setTornadoPriceBump,
+      setTornadoRangeMode,
+      setChannelBlendApplied,
+      setChannelMix,
+      setScorecardView,
+      setTornadoView,
+      setLastOptAt,
+      setPriceRangeFromData,
+      setPresetSel,
+      TORNADO_DEFAULTS.priceBump,
+      TORNADO_DEFAULTS.pctBump,
+      TORNADO_DEFAULTS.rangeMode,
+      TORNADO_DEFAULTS.usePocket,
+      RETENTION_DEFAULT,
+      KPI_FLOOR_ADJ_DEFAULT,
+    ]
+  );
 
   // --- UI adapter: nested -> your UI's flattened segment shape ---
   function mapNormalizedToUI(norm: SegmentNested[]): typeof segments {
@@ -2947,10 +3024,10 @@ export default function App() {
             <div role="tabpanel" id="tab-load-scenario" aria-labelledby="tab-btn-load" className="space-y-3 md:space-y-4 min-w-0">
               <Section id="preset-scenarios" title="Preset scenarios" className="order-0">
                         <div className="text-[11px] text-slate-600 mb-1">
-                          Presets set prices/costs/reference prices and leakages; features and optimizer constraints stay as-is so you can mix/match.
+                          Each preset applies ladder, costs, refs, features, segments, leakages (with channel blend if defined), optimizer ranges/guardrails, tornado knobs, and cohort retention. It should be ready to run the optimizer as-is.
                         </div>
                         <div className="text-[11px] text-slate-600 mb-1">
-                          Tip: after applying a preset, set refs from current or import JSON/CSV to layer on constraints.
+                          Pick one, hop to Optimize, click Run, then tweak guardrails if needed. Power users can still override any field after applying.
                         </div>
                         <PresetPicker
                           presets={PRESETS}
@@ -3724,12 +3801,12 @@ export default function App() {
                                   </button>
                                   <button
                                     className="border rounded px-3 py-2 bg-white hover:bg-gray-50"
-                                    onClick={() => {
+                                  onClick={() => {
                                       const rows = channelMix.map((r) => ({
                                         w: r.w,
                                         preset: r.preset,
                                       }));
-                                      const blended = blendLeaks(rows);
+                                      const blended = blendLeakPresets(rows);
                                       setLeak(blended);
                                       setChannelBlendApplied(true);
                                     }}

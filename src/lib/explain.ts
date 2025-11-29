@@ -125,10 +125,11 @@ export const EXPLAIN: Record<string, string> = {
 
   // --- Presets ---
   "presets.scenario": `
-    <b>Scenario presets</b> apply a coherent bundle: list prices, costs,
-    reference prices (for anchoring), and typical leakages. Use these to
-    start from a realistic baseline that matches a business model.<br>
-    <i>Tip:</i> after applying a scenario, you can still adjust any field.`,
+    <b>Scenario presets</b> apply a coherent bundle: ladder, costs,
+    reference prices, features, segments, leakages (with channel blends),
+    optimizer guardrails/ranges, tornado knobs, and cohort retention. They are
+    designed so you can click <i>Run optimizer</i> immediately and see a
+    meaningful lift and explanation. Adjust anything after applying.`,
   "presets.waterfall": `
     <b>Leak presets</b> only change downstream leakages (promo, payment,
     FX, refunds). They do <i>not</i> modify prices, costs, or reference
