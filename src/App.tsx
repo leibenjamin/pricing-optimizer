@@ -2622,6 +2622,36 @@ export default function App() {
     );
   };
 
+  const buildGuardrailSummary = useCallback(
+    (activePrices: Prices) => {
+      const gapNotes = explainGaps(activePrices, {
+        gapGB: optConstraints.gapGB,
+        gapBB: optConstraints.gapBB,
+      });
+      const gapLine = gapNotes.length
+        ? gapNotes[0]
+        : `Gaps slack: ${(activePrices.better - activePrices.good - optConstraints.gapGB).toFixed(2)} / ${(activePrices.best - activePrices.better - optConstraints.gapBB).toFixed(2)} (G/B, B/Best)`;
+      const floorLine = `Floors: Good ${Math.round(optConstraints.marginFloor.good * 100)}% | Better ${Math.round(
+        optConstraints.marginFloor.better * 100
+      )}% | Best ${Math.round(optConstraints.marginFloor.best * 100)}%`;
+      const optimizerReady = Boolean(optResult?.prices);
+      const optimizerLine = optimizerReady
+        ? `Optimizer ready - ranges ${optRanges.good[0]}-${optRanges.good[1]} / ${optRanges.better[0]}-${optRanges.better[1]} / ${optRanges.best[0]}-${optRanges.best[1]}`
+        : "Set ranges and floors, then run the optimizer";
+      return { gapLine, floorLine, optimizerLine };
+    },
+    [optConstraints, optRanges, optResult]
+  );
+
+  const guardrailsForCurrent = useMemo(
+    () => buildGuardrailSummary(prices),
+    [buildGuardrailSummary, prices]
+  );
+  const guardrailsForOptimized = useMemo(
+    () => buildGuardrailSummary(optResult?.prices ?? prices),
+    [buildGuardrailSummary, optResult, prices]
+  );
+
   const scorecardBaselineText = formatBaselineLabel(baselineMeta);
   const scorecardPinnedBasis = scenarioBaseline?.basis
     ? scenarioBaseline.basis.usePocketProfit
@@ -4506,119 +4536,168 @@ export default function App() {
                         if (!best || bestProfit === null)
                           return <div className="text-xs text-gray-600">Run the optimizer to populate the optimized ladder.</div>;
 
+                        const deltaProfit = (optimizerProfitDelta?.delta ?? bestProfit - curProfit) || 0;
+                        const revenueDeltaCurrent =
+                          optimizedKPIs && currentKPIs ? optimizedKPIs.revenue - currentKPIs.revenue : null;
+                        const activeDeltaCurrent =
+                          optimizedKPIs && currentKPIs
+                            ? Math.round(N * (1 - optimizedKPIs.shares.none)) -
+                              Math.round(N * (1 - currentKPIs.shares.none))
+                            : null;
+                        const arpuDeltaCurrent =
+                          optimizedKPIs && currentKPIs
+                            ? optimizedKPIs.arpuActive - currentKPIs.arpuActive
+                            : null;
+                        const guardrails = guardrailsForOptimized;
+                        const binds = explainGaps(best, {
+                          gapGB: optConstraints.gapGB,
+                          gapBB: optConstraints.gapBB,
+                        });
+                        const topDriverLine = topDriver(tornadoRowsOptim);
+
                         return (
                           <div className="space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                            <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-semibold text-slate-900 text-sm">How to read this card</span>
+                                <span className="text-[10px] uppercase tracking-wide text-slate-500">Demo aid</span>
+                              </div>
+                              <p className="mt-1 leading-snug">
+                                Narrate the “before vs after.” Apply the optimized ladder to push prices back to Scenario Panel, undo to revert, then call out the delta and which constraints or drivers mattered most.
+                              </p>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] uppercase tracking-wide text-slate-600">
+                                  Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}
+                                </span>
+                                <a className="text-sky-600 hover:underline" href="#callouts">
+                                  Jump to Callouts for the narrative
+                                </a>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 text-sm">
+                              <div className="rounded-xl border border-slate-200 bg-white/70 p-3">
                                 <div className="font-semibold mb-1">Current</div>
                                 <div>Good: ${prices.good}</div>
                                 <div>Better: ${prices.better}</div>
                                 <div>Best: ${prices.best}</div>
                                 <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(curProfit).toLocaleString()}</div>
                               </div>
-                              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                              <div className="rounded-xl border border-slate-200 bg-white/70 p-3">
                                 <div className="font-semibold mb-1">Optimized</div>
                                 <div>Good: ${best.good}</div>
                                 <div>Better: ${best.better}</div>
                                 <div>Best: ${best.best}</div>
                                 <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(bestProfit).toLocaleString()}</div>
                               </div>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
-                              <div className="font-semibold">Delta</div>
-                              <div className="text-lg font-bold leading-tight">
-                                {bestProfit - curProfit >= 0 ? "+" : "-"}${Math.abs(Math.round(bestProfit - curProfit)).toLocaleString()}
-                              </div>
-                              <div className="text-[11px] text-slate-600">vs current profit</div>
-                              <div className="flex flex-col gap-2">
-                                <button
-                                  className="w-full border rounded px-3 py-2 text-sm font-semibold bg-white hover:bg-gray-50"
-                                  onClick={() => {
-                                    lastAppliedPricesRef.current = { ...prices };
-                                    setPrices(best as typeof prices);
-                                    pushJ?.(`Applied optimized ladder: ${(best as typeof prices).good}/${(best as typeof prices).better}/${(best as typeof prices).best}`);
-                                  }}
-                                >
-                                  Apply optimized ladder
-                                </button>
-                                <button
-                                  className="w-full text-sm border rounded px-3 py-2 bg-white hover:bg-gray-50 disabled:opacity-50"
-                                  disabled={!lastAppliedPricesRef.current}
-                                  onClick={() => {
-                                    const prev = lastAppliedPricesRef.current;
-                                    if (!prev) return;
-                                    setPrices(prev);
-                                    lastAppliedPricesRef.current = null;
-                                    pushJ?.("Undo: restored ladder to previous prices");
-                                  }}
-                                >
-                                  Undo apply ladder
-                                </button>
-                                {lastOptAt && (!baselineMeta || lastOptAt > baselineMeta.savedAt) ? (
+                              <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 p-3 lg:col-span-2 flex flex-col gap-2">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <div className="text-[11px] uppercase tracking-wide text-slate-600">Delta</div>
+                                    <div className="text-xl font-bold leading-tight">
+                                      {deltaProfit >= 0 ? "+" : "-"}${Math.abs(Math.round(deltaProfit)).toLocaleString()}
+                                    </div>
+                                    <div className="text-[11px] text-slate-600">vs current profit</div>
+                                  </div>
+                                  <div className="text-right text-[11px] text-slate-600">
+                                    <div>Revenue {revenueDeltaCurrent != null ? `${revenueDeltaCurrent >= 0 ? "+" : "-"}$${Math.abs(revenueDeltaCurrent).toLocaleString()}` : "n/a"}</div>
+                                    <div>Active {activeDeltaCurrent != null ? `${activeDeltaCurrent >= 0 ? "+" : "-"}${Math.abs(activeDeltaCurrent)}` : "n/a"}</div>
+                                    <div>ARPU {arpuDeltaCurrent != null ? `${arpuDeltaCurrent >= 0 ? "+" : "-"}$${Math.abs(arpuDeltaCurrent).toFixed(2)}` : "n/a"}</div>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                   <button
-                                    className="w-full text-xs border rounded px-3 py-2 bg-white hover:bg-gray-50"
+                                    className="w-full border rounded px-3 py-2 text-sm font-semibold bg-white hover:bg-gray-50"
                                     onClick={() => {
-                                      if (!optResult?.kpis) return;
-                                      const meta = { label: "Pinned from optimizer", savedAt: Date.now() };
-                                      setBaselineKPIs(optResult.kpis);
-                                      setBaselineMeta(meta);
-                                      setScenarioBaseline({
-                                        snapshot: buildScenarioSnapshot({
-                                          prices,
-                                          costs,
-                                          features,
-                                          refPrices,
-                                          leak,
-                                          segments,
-                                          tornadoPocket,
-                                          tornadoPriceBump,
-                                          tornadoPctBump,
-                                          tornadoRangeMode,
-                                          retentionPct,
-                                          kpiFloorAdj,
-                                          priceRange: priceRangeState,
-                                          optRanges,
-                                          optConstraints,
-                                          channelMix,
-                                          optimizerKind,
-                                        }),
-                                        kpis: optResult.kpis,
-                                        basis: {
-                                          usePocketProfit: !!optConstraints.usePocketProfit,
-                                          usePocketMargins: !!optConstraints.usePocketMargins,
-                                        },
-                                        meta,
-                                      });
-                                      toast("success", "Baseline pinned from optimizer");
+                                      lastAppliedPricesRef.current = { ...prices };
+                                      setPrices(best as typeof prices);
+                                      pushJ?.(`Applied optimized ladder: ${(best as typeof prices).good}/${(best as typeof prices).better}/${(best as typeof prices).best}`);
                                     }}
                                   >
-                                    Pin this as baseline
+                                    Apply optimized ladder
                                   </button>
-                                ) : null}
+                                  <button
+                                    className="w-full text-sm border rounded px-3 py-2 bg-white hover:bg-gray-50 disabled:opacity-50"
+                                    disabled={!lastAppliedPricesRef.current}
+                                    onClick={() => {
+                                      const prev = lastAppliedPricesRef.current;
+                                      if (!prev) return;
+                                      setPrices(prev);
+                                      lastAppliedPricesRef.current = null;
+                                      pushJ?.("Undo: restored ladder to previous prices");
+                                    }}
+                                  >
+                                    Undo apply ladder
+                                  </button>
+                                  {lastOptAt && (!baselineMeta || lastOptAt > baselineMeta.savedAt) ? (
+                                    <button
+                                      className="w-full text-xs border rounded px-3 py-2 bg-white hover:bg-gray-50"
+                                      onClick={() => {
+                                        if (!optResult?.kpis) return;
+                                        const meta = { label: "Pinned from optimizer", savedAt: Date.now() };
+                                        setBaselineKPIs(optResult.kpis);
+                                        setBaselineMeta(meta);
+                                        setScenarioBaseline({
+                                          snapshot: buildScenarioSnapshot({
+                                            prices,
+                                            costs,
+                                            features,
+                                            refPrices,
+                                            leak,
+                                            segments,
+                                            tornadoPocket,
+                                            tornadoPriceBump,
+                                            tornadoPctBump,
+                                            tornadoRangeMode,
+                                            retentionPct,
+                                            kpiFloorAdj,
+                                            priceRange: priceRangeState,
+                                            optRanges,
+                                            optConstraints,
+                                            channelMix,
+                                            optimizerKind,
+                                          }),
+                                          kpis: optResult.kpis,
+                                          basis: {
+                                            usePocketProfit: !!optConstraints.usePocketProfit,
+                                            usePocketMargins: !!optConstraints.usePocketMargins,
+                                          },
+                                          meta,
+                                        });
+                                        toast("success", "Baseline pinned from optimizer");
+                                      }}
+                                    >
+                                      Pin this as baseline
+                                    </button>
+                                  ) : null}
+                                </div>
                               </div>
-                            </div>
                             </div>
 
-                            <div className="mt-1 text-xs max-w-md space-y-1">
-                              <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
-                                Why this recommendation?
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div className="rounded-lg border border-slate-200 bg-white/70 p-3 space-y-1">
+                                <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
+                                  Why this recommendation?
+                                </div>
+                                <ul className="list-disc ml-4 space-y-1 text-slate-700 leading-snug">
+                                  {binds.length ? binds.map((b, i) => <li key={i}>{b}</li>) : <li>No gap constraints binding.</li>}
+                                  <li>Largest profit driver near optimum: {topDriverLine ? topDriverLine : "n/a"}.</li>
+                                  <li>{guardrails.floorLine}</li>
+                                </ul>
                               </div>
-                              <ul className="list-disc ml-4 space-y-1 text-slate-700 leading-snug">
-                                {(() => {
-                                  const binds = explainGaps(best, {
-                                    gapGB: optConstraints.gapGB,
-                                    gapBB: optConstraints.gapBB,
-                                  });
-                                  return binds.length ? binds.map((b, i) => <li key={i}>{b}</li>) : <li>No gap constraints binding.</li>;
-                                })()}
-                                {(() => {
-                                  const td = topDriver(tornadoRowsOptim);
-                                  return <li>Largest profit driver near optimum: {td ? td : "n/a"}</li>;
-                                })()}
-                                <li>
-                                  Floors: pocket margin = {Math.round(optConstraints.marginFloor.good * 100)}% /{" "}
-                                  {Math.round(optConstraints.marginFloor.better * 100)}% / {Math.round(optConstraints.marginFloor.best * 100)}% (G/B/Best).
-                                </li>
-                              </ul>
+                              <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 space-y-1">
+                                <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
+                                  Validation & follow-ups
+                                </div>
+                                <ul className="list-disc ml-4 space-y-1 text-slate-700 leading-snug">
+                                  <li>Check guardrail feasibility in <a className="text-sky-600 hover:underline" href="#kpi-pocket-coverage">Pocket floor coverage</a>.</li>
+                                  <li>Review leakages in <a className="text-sky-600 hover:underline" href="#pocket-price-waterfall">Pocket waterfall</a>.</li>
+                                  <li>Compare narrative in <a className="text-sky-600 hover:underline" href="#callouts">Callouts snapshot</a> and export/print.</li>
+                                </ul>
+                                <p className="text-[11px] text-slate-600">
+                                  Need to rerun? Adjust ranges, floors, or basis, then trigger the optimizer again to refresh this card.
+                                </p>
+                              </div>
                             </div>
                           </div>
                         );
@@ -4811,31 +4890,75 @@ export default function App() {
                 },
               ];
 
+              const summaryPills = baselineKPIs
+                ? [
+                    {
+                      label: "Profit vs baseline",
+                      value: scorecardKPIs.profit - baselineKPIs.profit,
+                      format: fmtUSD,
+                    },
+                    {
+                      label: "Active vs baseline",
+                      value:
+                        baselineActiveCustomers !== null
+                          ? scorecardActiveFromShares - baselineActiveCustomers
+                          : null,
+                      format: (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v).toLocaleString()}`,
+                    },
+                    {
+                      label: "Gross margin delta",
+                      value: marginDeltaPP,
+                      format: (v: number) => `${v.toFixed(1)} pp`,
+                    },
+                  ]
+                : [];
+
+              const guardrails =
+                scorecardView === "optimized" && optResult
+                  ? guardrailsForOptimized
+                  : guardrailsForCurrent;
+
               const tierColors: Record<"good" | "better" | "best", string> = {
                 good: "bg-sky-500",
                 better: "bg-indigo-500",
                 best: "bg-fuchsia-500",
               };
 
-              const activePrices =
-                scorecardView === "optimized" && optResult
-                  ? optResult.prices
-                  : prices;
-              const gapNotes = explainGaps(activePrices, {
-                gapGB: optConstraints.gapGB,
-                gapBB: optConstraints.gapBB,
-              });
-              const gapLine = gapNotes.length
-                ? gapNotes[0]
-                : `Gaps slack: ${(activePrices.better - activePrices.good - optConstraints.gapGB).toFixed(2)} / ${(activePrices.best - activePrices.better - optConstraints.gapBB).toFixed(2)} (G/B, B/Best)`;
-              const floorLine = `Floors: Good ${Math.round(optConstraints.marginFloor.good * 100)}% | Better ${Math.round(optConstraints.marginFloor.better * 100)}% | Best ${Math.round(optConstraints.marginFloor.best * 100)}%`;
-              const optimizerReady = Boolean(optResult?.prices);
-              const optimizerLine = optimizerReady
-                ? `Optimizer ready - ranges ${optRanges.good[0]}-${optRanges.good[1]} / ${optRanges.better[0]}-${optRanges.better[1]} / ${optRanges.best[0]}-${optRanges.best[1]}`
-                : "Set ranges and floors, then run the optimizer";
-
               return (
                 <>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
+                      <span className="font-semibold text-slate-800">Quick read</span>
+                      <a className="text-sky-600 hover:underline" href="#callouts">
+                        Jump to Callouts for the narrative
+                      </a>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {summaryPills.length === 0 ? (
+                        <span className="text-[11px] text-slate-500">Pin a baseline to see deltas.</span>
+                      ) : (
+                        summaryPills.map((pill) =>
+                          pill.value === null ? null : (
+                            <div
+                              key={pill.label}
+                              className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                                pill.value >= 0
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-rose-200 bg-rose-50 text-rose-700"
+                              }`}
+                            >
+                              {pill.label}: {pill.value >= 0 ? "+" : "-"}
+                              {pill.format(Math.abs(pill.value))}
+                            </div>
+                          )
+                        )
+                      )}
+                      <span className="rounded-full bg-white px-3 py-1 text-[11px] text-slate-600 border border-slate-200">
+                        Basis: {scorecardActiveBasis}
+                      </span>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {metrics.map((card) => (
                       <div
@@ -4947,10 +5070,10 @@ export default function App() {
                         <span>Guardrails & optimizer</span>
                       </div>
                       <div className="mt-1 text-sm font-semibold text-slate-900">
-                        {gapLine}
+                        {guardrails.gapLine}
                       </div>
-                      <p className="text-[11px] text-slate-600 mt-1">{floorLine}</p>
-                      <p className="text-[11px] text-slate-600 mt-1">{optimizerLine}</p>
+                      <p className="text-[11px] text-slate-600 mt-1">{guardrails.floorLine}</p>
+                      <p className="text-[11px] text-slate-600 mt-1">{guardrails.optimizerLine}</p>
                     </div>
                   </div>
                 </>
@@ -4961,68 +5084,74 @@ export default function App() {
           <Section id="callouts" title="Callouts snapshot">
             {optResult ? (
               <>
-                <div className="text-[11px] text-slate-600">
-                  Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}.
+                <div className="text-[11px] text-slate-600 flex flex-wrap items-center gap-2">
+                  <span>Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}.</span>
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
+                    Ladder {optResult.prices.good}/${optResult.prices.better}/${optResult.prices.best}
+                  </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  <div className="rounded-xl border border-blue-100 bg-blue-50/40 px-3 py-2">
-                    <div className="text-[11px] uppercase text-slate-600">
-                      Optimizer vs baseline
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-3 shadow-sm">
+                    <div className="text-[11px] uppercase text-slate-600">Lift vs baseline</div>
                     <div className="text-2xl font-semibold text-slate-900">
                       {explainDeltaOptimized
                         ? `${explainDeltaOptimized.deltaProfit >= 0 ? "+" : "-"}$${Math.abs(
                             explainDeltaOptimized.deltaProfit
-                          ).toFixed(0)}`
+                          ).toLocaleString()}`
                         : "Pin a baseline"}
                     </div>
-                    <p className="text-[11px] text-slate-600 mt-1">
-                      {explainDeltaOptimized
-                        ? `Revenue ${explainDeltaOptimized.deltaRevenue >= 0 ? "+" : "-"}$${Math.abs(
-                            explainDeltaOptimized.deltaRevenue
-                          ).toFixed(0)} | Active ${
-                            explainDeltaOptimized.deltaActive >= 0 ? "+" : "-"
-                          }${Math.abs(explainDeltaOptimized.deltaActive).toFixed(0)} | ARPU ${
-                            explainDeltaOptimized.deltaARPU >= 0 ? "+" : "-"
-                          }$${Math.abs(explainDeltaOptimized.deltaARPU).toFixed(2)}`
-                        : 'Use "Set baseline to now" so deltas have context.'}
-                    </p>
+                    <ul className="mt-2 space-y-1 text-[11px] text-slate-700">
+                      {explainDeltaOptimized ? (
+                        <>
+                          <li>Revenue {explainDeltaOptimized.deltaRevenue >= 0 ? "+" : "-"}${Math.abs(explainDeltaOptimized.deltaRevenue).toLocaleString()}</li>
+                          <li>Active {explainDeltaOptimized.deltaActive >= 0 ? "+" : "-"}{Math.abs(explainDeltaOptimized.deltaActive).toFixed(0)}</li>
+                          <li>ARPU {explainDeltaOptimized.deltaARPU >= 0 ? "+" : "-"}${Math.abs(explainDeltaOptimized.deltaARPU).toFixed(2)}</li>
+                        </>
+                      ) : (
+                        <li>Use "Set baseline to now" so deltas have context.</li>
+                      )}
+                    </ul>
                   </div>
 
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 px-3 py-2">
-                    <div className="text-[11px] uppercase text-slate-600">
-                      Main driver
-                    </div>
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-3 shadow-sm">
+                    <div className="text-[11px] uppercase text-slate-600">Main driver</div>
                     <div className="text-sm font-semibold text-slate-900">
                       {explainDeltaOptimized?.mainDriver || scorecardExplainDelta?.mainDriver || "Drivers appear here once a baseline is set."}
                     </div>
-                    <p className="text-[11px] text-slate-600 mt-1">
+                    <p className="text-[11px] text-slate-600 mt-1 leading-snug">
                       {explainDeltaOptimized?.segmentLine || scorecardExplainDelta?.segmentLine || "Narrate which segment is winning or losing once deltas are available."}
                     </p>
-                  </div>
-
-                  <div className="rounded-xl border border-purple-100 bg-purple-50/40 px-3 py-2">
-                    <div className="text-[11px] uppercase text-slate-600">
-                      Optimizer outlook
-                    </div>
-                    <div className="text-sm font-semibold text-slate-900">
-                      {optimizerWhyLines.length > 0
-                        ? optimizerWhyLines[0]
-                        : optResult
-                        ? "Optimizer ready - run to refresh insights."
-                        : "Set ranges & floors, then run the optimizer."}
-                    </div>
-                    {optimizerWhyLines.length > 1 && (
-                      <p className="text-[11px] text-slate-600 mt-1">
-                        {optimizerWhyLines[1]}
-                      </p>
+                    {scorecardExplainDelta?.suggestion && (
+                      <p className="text-[11px] text-slate-600 mt-1">{scorecardExplainDelta.suggestion}</p>
                     )}
                   </div>
-                </div>
 
-                <Explanation slot="callouts.overview">
-                  Provide a short narrative that summarizes the optimizer result and where guardrails bite. Mention how to validate: rerun optimizer, review waterfall, export/print the summary.
-                </Explanation>
+                  <div className="rounded-xl border border-purple-100 bg-purple-50/50 px-3 py-3 shadow-sm">
+                    <div className="text-[11px] uppercase text-slate-600">Guardrails & outlook</div>
+                    <div className="text-sm font-semibold text-slate-900 leading-snug">
+                      {guardrailsForOptimized.gapLine}
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-1">{guardrailsForOptimized.floorLine}</p>
+                    <p className="text-[11px] text-slate-600 mt-1">
+                      {optimizerWhyLines.length > 0
+                        ? optimizerWhyLines[0]
+                        : "Optimizer ready - rerun if you change ranges, floors, or basis."}
+                    </p>
+                    {optimizerWhyLines.length > 1 && (
+                      <p className="text-[11px] text-slate-600 mt-1">{optimizerWhyLines[1]}</p>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3 shadow-sm">
+                    <div className="text-[11px] uppercase text-slate-600">Next steps</div>
+                    <ul className="mt-1 list-disc space-y-1 pl-4 text-[11px] text-slate-700 leading-snug">
+                      <li>Validate guardrails in <a className="text-sky-600 hover:underline" href="#kpi-pocket-coverage">Pocket floor coverage</a>.</li>
+                      <li>Review leakages in <a className="text-sky-600 hover:underline" href="#pocket-price-waterfall">Pocket waterfall</a>.</li>
+                      <li>Rerun optimizer after ladder or basis tweaks, then export/print the summary.</li>
+                      <li>Pin this run as a baseline to compare future tweaks.</li>
+                    </ul>
+                  </div>
+                </div>
               </>
             ) : (
               <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-3 py-2 text-sm text-slate-600">
