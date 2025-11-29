@@ -4110,7 +4110,7 @@ export default function App() {
 
                           {/* Step */}
                           <label className="flex items-center gap-1">
-                            <span className="w-8">Step</span>
+                            <span className="w-8">Step between Prices</span>
                             <input
                               type="number"
                               className="border rounded px-2 h-8 w-16"
@@ -4169,7 +4169,7 @@ export default function App() {
                           {optResult ? (
                             <span>
                               Best ladder ${optResult.prices.good}/$
-                              {optResult.prices.better}/${optResult.prices.best} ? Profit
+                              {optResult.prices.better}/${optResult.prices.best} — Profit
                               delta ${Math.round(optResult.profit)}
                             </span>
                           ) : (
