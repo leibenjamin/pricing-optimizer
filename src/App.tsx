@@ -66,6 +66,7 @@ import { csvTemplate } from "./lib/csv";
 import { preflight, fetchWithRetry } from "./lib/net";
 
 import CompareBoard from "./components/CompareBoard";
+import ScorecardToolbar from "./components/ScorecardToolbar";
 import { kpisFromSnapshot, type SnapshotKPIs } from "./lib/snapshots";
 import { runRobustnessScenarios, type UncertaintyScenario } from "./lib/robustness";
 
@@ -102,6 +103,16 @@ type BaselineMeta = {
   label: string;
   savedAt: number;
 };
+function formatBaselineLabel(meta: BaselineMeta | null): string {
+  if (!meta) return "Pinned on load";
+  const formatted = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(meta.savedAt));
+  return `${meta.label} - ${formatted}`;
+}
 const ROBUST_SCENARIOS: UncertaintyScenario[] = [
   { name: "Base", segmentScalePrice: 1 },
   { name: "More price sensitive", segmentScalePrice: 1.2, leakDeltaPct: 0.05 },
@@ -187,10 +198,14 @@ function Section({
       id={id}
       className={`scroll-mt-24 md:scroll-mt-32 rounded-2xl shadow p-3 md:p-4 border border-gray-200 bg-white print-avoid print-card print-pad ${className}`}
     >
-      <div className="mb-3 print:mb-2 flex items-center justify-between gap-3">
+      <div className="mb-3 print:mb-2 flex flex-wrap items-start gap-3 md:items-center md:justify-between">
         <h2 className="font-semibold text-lg print:text-base print-tight">{title}</h2>
         {/* Hide the action toolbar on print */}
-        {actions ? <div className="shrink-0 no-print">{actions}</div> : null}
+        {actions ? (
+          <div className="no-print flex-1 min-w-60 md:min-w-0 flex flex-wrap justify-end gap-2">
+            {actions}
+          </div>
+        ) : null}
       </div>
       <div className="space-y-3 print-space">{children}</div>
     </section>
@@ -2607,6 +2622,55 @@ export default function App() {
     );
   };
 
+  const scorecardBaselineText = formatBaselineLabel(baselineMeta);
+  const scorecardPinnedBasis = scenarioBaseline?.basis
+    ? scenarioBaseline.basis.usePocketProfit
+      ? "Pocket (after leakages)"
+      : "List (before leakages)"
+    : "Not pinned yet";
+  const scorecardActiveBasis = optConstraints.usePocketProfit
+    ? "Pocket profit (after leakages)"
+    : "List profit (before leakages)";
+
+  const pinBaselineNow = () => {
+    const kpis = scorecardKPIs;
+    const meta = { label: "Pinned now", savedAt: Date.now() };
+    if (kpis) {
+      setBaselineKPIs(kpis);
+      setBaselineMeta(meta);
+      setScenarioBaseline({
+        snapshot: buildScenarioSnapshot({
+          prices,
+          costs,
+          features,
+          refPrices,
+          leak,
+          segments,
+          tornadoPocket,
+          tornadoPriceBump,
+          tornadoPctBump,
+          tornadoRangeMode,
+          retentionPct,
+          kpiFloorAdj,
+          priceRange: priceRangeState,
+          optRanges,
+          optConstraints,
+          channelMix,
+          optimizerKind,
+        }),
+        kpis,
+        basis: {
+          usePocketProfit: !!optConstraints.usePocketProfit,
+          usePocketMargins: !!optConstraints.usePocketMargins,
+        },
+        meta,
+      });
+      toast("success", "Baseline pinned");
+    } else {
+      toast("error", "Baseline not pinned: KPIs unavailable");
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
@@ -4639,96 +4703,15 @@ export default function App() {
             id="scorecard"
             title="Scorecard"
             actions={
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1">
-                  <span className="font-semibold text-slate-800">Baseline</span>
-                  <span className="text-slate-600">
-                    {baselineMeta
-                      ? `${baselineMeta.label} - ${new Date(baselineMeta.savedAt).toLocaleString()}`
-                      : "Pinned on load"}
-                  </span>
-                </div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1">
-                  <span className="text-slate-500">Basis</span>
-                  <span className="font-semibold text-slate-800">
-                    {scenarioBaseline?.basis?.usePocketProfit ? "Pocket" : "List"}
-                  </span>
-                </div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1">
-                  <span className="text-slate-500">Basis</span>
-                  <span className="font-semibold text-slate-800">
-                    {optConstraints.usePocketProfit ? "Pocket profit" : "List profit"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="rounded border border-slate-300 px-2 py-1 font-medium text-slate-700 hover:bg-slate-50"
-                  onClick={() => {
-                    const kpis = scorecardKPIs;
-                    const meta = { label: "Pinned now", savedAt: Date.now() };
-                    if (kpis) {
-                      setBaselineKPIs(kpis);
-                      setBaselineMeta(meta);
-                      setScenarioBaseline({
-                        snapshot: buildScenarioSnapshot({
-                          prices,
-                          costs,
-                          features,
-                          refPrices,
-                          leak,
-                          segments,
-                          tornadoPocket,
-                          tornadoPriceBump,
-                          tornadoPctBump,
-                          tornadoRangeMode,
-                          retentionPct,
-                          kpiFloorAdj,
-                          priceRange: priceRangeState,
-                          optRanges,
-                          optConstraints,
-                          channelMix,
-                          optimizerKind,
-                        }),
-                        kpis,
-                        basis: {
-                          usePocketProfit: !!optConstraints.usePocketProfit,
-                          usePocketMargins: !!optConstraints.usePocketMargins,
-                        },
-                        meta,
-                      });
-                      toast("success", "Baseline pinned");
-                    } else {
-                      toast("error", "Baseline not pinned: KPIs unavailable");
-                    }
-                  }}
-                >
-                  Set baseline to now
-                </button>
-                <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-0.5">
-                  <span className="text-slate-500">View</span>
-                  <div className="inline-flex overflow-hidden rounded border border-slate-200">
-                    <button
-                      type="button"
-                      className={`px-2 h-7 ${scorecardView === "current" ? "bg-gray-900 text-white" : "bg-white"}`}
-                      onClick={() => setScorecardView("current")}
-                    >
-                      Current
-                    </button>
-                    <button
-                      type="button"
-                      className={`px-2 h-7 ${
-                        scorecardView === "optimized" && optimizedKPIs
-                          ? "bg-gray-900 text-white"
-                          : "bg-white"
-                      } ${!optimizedKPIs ? "opacity-50 cursor-not-allowed" : ""}`}
-                      onClick={() => optimizedKPIs && setScorecardView("optimized")}
-                      disabled={!optimizedKPIs}
-                    >
-                      Optimized
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <ScorecardToolbar
+                baselineText={scorecardBaselineText}
+                pinnedBasisText={scorecardPinnedBasis}
+                activeBasisText={scorecardActiveBasis}
+                onPinBaseline={pinBaselineNow}
+                view={scorecardView}
+                onChangeView={setScorecardView}
+                hasOptimized={!!optimizedKPIs}
+              />
             }
           >
             {(() => {
