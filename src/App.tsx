@@ -4204,7 +4204,7 @@ export default function App() {
 
                           {/* Step */}
                           <label className="flex items-center gap-1">
-                            <span className="w-8">Step between Prices</span>
+                            <span className="w-16">Step between Prices</span>
                             <input
                               type="number"
                               className="border rounded px-2 h-8 w-16"
