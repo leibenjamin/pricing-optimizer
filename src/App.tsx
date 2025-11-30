@@ -511,18 +511,18 @@ export default function App() {
             role="toolbar"
             aria-label="Quick export toolbar"
           >
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[90vw]">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-[90vw] p-1">
               {GROUPS.map((g, i) => (
                 <div
                   key={g.chartId}
-                  className="flex items-center gap-1 border rounded-md px-1 py-0.5"
+                  className="flex items-center gap-1.5 border rounded-md px-1.5 py-1 bg-white"
                   aria-label={g.aria}
                   title={`${g.label} � Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
                 >
                   {/* Chip label scrolls to the section */}
                   <button
                     type="button"
-                    className="px-1 text-[11px] text-slate-700 hover:underline"
+                    className="px-1 text-[11px] leading-tight text-slate-700 hover:underline whitespace-nowrap"
                     onClick={() => scrollToId(g.sectionId)}
                     aria-label={`Scroll to ${g.label} section`}
                   >
