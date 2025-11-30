@@ -1,4 +1,4 @@
-// src/components/PresetPicker.tsx
+﻿// src/components/PresetPicker.tsx
 import InfoTip from "./InfoTip";
 import type { Preset } from "../lib/presets";
 
@@ -49,7 +49,7 @@ function rangeSummary(p: Preset) {
 function sensitivitySummary(p: Preset) {
   const bits: string[] = [];
   if (p.tornado) {
-    const span = p.tornado.rangeMode === "data" ? "data-driven span" : `±${p.tornado.priceBump ?? 10}%`;
+    const span = p.tornado.rangeMode === "data" ? "data-driven span" : "+/-" + (p.tornado.priceBump ?? 10) + "%";
     bits.push(`${p.tornado.usePocket ? "Pocket" : "List"} tornado, ${span}, leak bump ${p.tornado.pctBump ?? 0}pp`);
   }
   if (typeof p.retentionPct === "number") bits.push(`Retention ${p.retentionPct}%`);
@@ -123,7 +123,7 @@ export default function PresetPicker({
                   {["good","better","best"].map((t, i) => {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const val = (p.prices as any)[t];
-                    return <span key={t}>{money(val)}{i<2?" · ":""}</span>;
+                    return <span key={t}>{money(val)}{i<2?" -> ":""}</span>;
                   })}
                 </div>
                 <div className="truncate">
@@ -131,7 +131,7 @@ export default function PresetPicker({
                   {["good","better","best"].map((t, i) => {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const val = (p.costs as any)[t];
-                    return <span key={t}>{money(val)}{i<2?" · ":""}</span>;
+                    return <span key={t}>{money(val)}{i<2?" -> ":""}</span>;
                   })}
                 </div>
                 <div className="truncate">
@@ -139,7 +139,7 @@ export default function PresetPicker({
                   {["good","better","best"].map((t, i) => {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const val = (p.refPrices as any)[t];
-                    return <span key={t}>{money(val)}{i<2?" · ":""}</span>;
+                    return <span key={t}>{money(val)}{i<2?" -> ":""}</span>;
                   })}
                 </div>
                 {featureSummary(p) ? (
@@ -184,3 +184,4 @@ export default function PresetPicker({
     </section>
   );
 }
+

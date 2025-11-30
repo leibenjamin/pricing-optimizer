@@ -71,7 +71,7 @@ export default function ScorecardToolbar({
           className="whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 shadow-sm hover:bg-slate-50"
           onClick={onPinBaseline}
         >
-          Set baseline to now
+          Re-pin baseline
         </button>
         <div className="inline-flex items-center gap-1">
           <span className="text-[10px] uppercase tracking-wide text-slate-500">View</span>

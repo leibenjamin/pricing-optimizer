@@ -122,14 +122,14 @@ const ONBOARDING_STEPS = [
   {
     id: "preset-scenarios",
     title: "Start with a preset",
-    body: "Pick a preset to load prices, refs, leakages, guardrails, and sensitivity knobs so you can run immediately.",
+    body: "Pick a preset to load prices, refs, leakages, guardrails, and sensitivity knobs so you can run immediately. We auto-pin that preset as your baseline.",
     targetId: "preset-scenarios",
     helper: "Presets are ready-to-run; switch anytime to reset the ladder and optimizer settings.",
   },
   {
     id: "global-optimizer",
     title: "Run the optimizer",
-    body: "Go to Optimize and click Run. Guardrails and ranges come from the preset; edit them if you need to widen the search.",
+    body: "Go to Optimize and click Run. We'll auto-pin the current scenario as the baseline before running so deltas make sense.",
     targetId: "global-optimizer",
     helper: "Pocket/list basis, gaps, and floors sit here. Charm endings are optional.",
   },
@@ -373,10 +373,13 @@ export default function App() {
     ttl?: number;
   };
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const toast = (kind: Toast["kind"], msg: string, ttl = 4000) => {
-    const id = Date.now() + Math.random();
-    setToasts((ts) => [...ts, { id, kind, msg, ttl }]);
-  };
+  const toast = useCallback(
+    (kind: Toast["kind"], msg: string, ttl = 4000) => {
+      const id = Date.now() + Math.random();
+      setToasts((ts) => [...ts, { id, kind, msg, ttl }]);
+    },
+    [setToasts]
+  );
 
   function Toasts() {
     return (
@@ -460,10 +463,10 @@ export default function App() {
     // Keyboard shortcuts (Alt+1..4 = PNG, Shift+Alt+1..4 = CSV, Ctrl/Cmd+P = print)
     useEffect(() => {
       const onKey = (e: KeyboardEvent) => {
-        // Respect native print with Ctrl/Cmd+P (don�t intercept)
+        // Respect native print with Ctrl/Cmd+P (don't intercept)
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") return;
 
-        const idx = Number(e.key) - 1; // '1' -> 0
+        const idx = Number(e.key) - 1; // '1' ? 0
         const inRange = idx >= 0 && idx < GROUPS.length;
         if (e.altKey && inRange) {
           e.preventDefault();
@@ -517,7 +520,7 @@ export default function App() {
                   key={g.chartId}
                   className="flex items-center gap-1.5 border rounded-md px-1.5 py-1 bg-white"
                   aria-label={g.aria}
-                  title={`${g.label} � Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
+                  title={`${g.label} ? Alt+${i + 1} (PNG), Shift+Alt+${i + 1} (CSV)`}
                 >
                   {/* Chip label scrolls to the section */}
                   <button
@@ -1332,6 +1335,10 @@ export default function App() {
       cancelRef.current();
       cancelRef.current = null;
     }
+    pinBaseline("Baseline before optimizer run", undefined, {
+      toastKind: "info",
+      toastMessage: "Baseline saved before running optimizer",
+    });
     setIsOptRunning(true);
     setOptError(null);
     const runId = ++runIdRef.current;
@@ -1364,8 +1371,9 @@ export default function App() {
         pushJ(
           `[${now()}] Optimizer best ladder $${out.prices.good}/$${out.prices.better}/$${out.prices.best} (profit $${Math.round(out.profit)})`
         );
+        setScorecardView("optimized");
         toast("success", "Optimizer finished");
-        toast("info", "Optimizer done. Pin as baseline for clean deltas.");
+        toast("info", "Optimizer done. Deltas compare to the saved pre-run baseline.");
       })
       .catch((e) => {
         if (runIdRef.current !== runId) return;
@@ -1988,100 +1996,7 @@ export default function App() {
     [defaults]
   );
 
-  // Apply a scenario preset: replaces ladder, ref prices, leak, features, segments,
-  // optimizer constraints/ranges, sensitivity knobs, cohort retention, and channel blend.
-  const applyScenarioPreset = useCallback(
-    (p: Preset) => {
-      setPrices(p.prices);
-      setCosts(p.costs);
-      setRefPrices(p.refPrices);
-      setFeatures(p.features ?? defaults.features);
-      setSegments(normalizeWeights(p.segments ?? defaultSegments));
-
-      const mix = p.channelMix && p.channelMix.length ? normalizeChannelMix(p.channelMix) : normalizeChannelMix(defaults.channelMix);
-      const useBlend = Boolean(p.channelMix && p.channelMix.length);
-      setChannelMix(mix);
-      setChannelBlendApplied(useBlend);
-      setLeak(p.leak);
-
-      const mergedConstraints = {
-        ...defaults.optConstraints,
-        ...(p.optConstraints ?? {}),
-        marginFloor: {
-          ...defaults.optConstraints.marginFloor,
-          ...(p.optConstraints?.marginFloor ?? {}),
-        },
-      };
-      setOptConstraints(mergedConstraints);
-      setCoverageUsePocket(mergedConstraints.usePocketMargins ?? true);
-      setOptRanges(p.optRanges ?? defaults.optRanges);
-
-      setTornadoPocket(p.tornado?.usePocket ?? TORNADO_DEFAULTS.usePocket);
-      setTornadoPriceBump(p.tornado?.priceBump ?? TORNADO_DEFAULTS.priceBump);
-      setTornadoPctBump(p.tornado?.pctBump ?? TORNADO_DEFAULTS.pctBump);
-      const desiredRangeMode = p.tornado?.rangeMode ?? (p.priceRange ? "data" : TORNADO_DEFAULTS.rangeMode);
-
-      if (p.priceRange) {
-        const ok = setPriceRangeFromData(p.priceRange, p.priceRangeSource ?? "shared");
-        setTornadoRangeMode(ok ? desiredRangeMode : "symmetric");
-        if (!ok) fallbackToSyntheticRanges();
-      } else {
-        fallbackToSyntheticRanges();
-        setTornadoRangeMode(desiredRangeMode === "data" ? "symmetric" : desiredRangeMode);
-      }
-
-      setRetentionPct(p.retentionPct ?? RETENTION_DEFAULT);
-      setKpiFloorAdj(p.kpiFloorAdj ?? KPI_FLOOR_ADJ_DEFAULT);
-
-      setOptResult(null);
-      setOptError(null);
-      setLastOptAt(null);
-      setScorecardView("current");
-      setTornadoView("current");
-      setPresetSel("");
-      setScenarioPresetId(p.id);
-      pushJ(`Loaded preset: ${p.name}`);
-    },
-    [
-      defaults,
-      fallbackToSyntheticRanges,
-      normalizeChannelMix,
-      pushJ,
-      setCosts,
-      setCoverageUsePocket,
-      setFeatures,
-      setKpiFloorAdj,
-      setLeak,
-      setOptConstraints,
-      setOptError,
-      setOptRanges,
-      setOptResult,
-      setPrices,
-      setRefPrices,
-      setRetentionPct,
-      setScenarioPresetId,
-      setSegments,
-      setTornadoPctBump,
-      setTornadoPocket,
-      setTornadoPriceBump,
-      setTornadoRangeMode,
-      setChannelBlendApplied,
-      setChannelMix,
-      setScorecardView,
-      setTornadoView,
-      setLastOptAt,
-      setPriceRangeFromData,
-      setPresetSel,
-      TORNADO_DEFAULTS.priceBump,
-      TORNADO_DEFAULTS.pctBump,
-      TORNADO_DEFAULTS.rangeMode,
-      TORNADO_DEFAULTS.usePocket,
-      RETENTION_DEFAULT,
-      KPI_FLOOR_ADJ_DEFAULT,
-    ]
-  );
-
-  // --- UI adapter: nested -> your UI's flattened segment shape ---
+  // --- UI adapter: nested ? your UI's flattened segment shape ---
   function mapNormalizedToUI(norm: SegmentNested[]): typeof segments {
     const ui = norm.map((s) => ({
       name: "" as string,
@@ -2674,7 +2589,7 @@ export default function App() {
     pct: number | null | undefined = null
   ) => {
     if (delta === null || delta === undefined || !Number.isFinite(delta)) {
-      return <span className="text-[11px] text-slate-400">Pin a baseline</span>;
+      return <span className="text-[11px] text-slate-400">Baseline pending</span>;
     }
     const positive = delta >= 0;
     const pctText =
@@ -2740,44 +2655,170 @@ export default function App() {
     ? "Pocket profit (after leakages)"
     : "List profit (before leakages)";
 
-  const pinBaselineNow = () => {
-    const kpis = scorecardKPIs;
-    const meta = { label: "Pinned now", savedAt: Date.now() };
-    if (kpis) {
+  type SnapshotInput = Parameters<typeof buildScenarioSnapshot>[0];
+
+  const pinBaseline = useCallback(
+    (
+      label: string,
+      override?: Partial<SnapshotInput>,
+      opts?: { toastMessage?: string; toastKind?: "success" | "info" | "error"; silent?: boolean }
+    ) => {
+      const base: SnapshotInput = {
+        prices,
+        costs,
+        features,
+        refPrices,
+        leak,
+        segments,
+        tornadoPocket,
+        tornadoPriceBump,
+        tornadoPctBump,
+        tornadoRangeMode,
+        retentionPct,
+        kpiFloorAdj,
+        priceRange: priceRangeState,
+        optRanges,
+        optConstraints: {
+          ...optConstraints,
+          marginFloor: { ...optConstraints.marginFloor },
+        },
+        channelMix,
+        optimizerKind,
+      };
+
+      const merged: SnapshotInput = {
+        ...base,
+        ...(override ?? {}),
+        optConstraints: {
+          ...base.optConstraints,
+          ...(override?.optConstraints ?? {}),
+          marginFloor: {
+            ...base.optConstraints.marginFloor,
+            ...(override?.optConstraints?.marginFloor ?? {}),
+          },
+        },
+        optRanges: override?.optRanges ?? base.optRanges,
+        priceRange: override?.priceRange ?? base.priceRange,
+        channelMix: override?.channelMix ?? base.channelMix,
+      };
+
+      const kpis = kpisFromSnapshot(
+        { prices: merged.prices, costs: merged.costs, features: merged.features, segments: merged.segments, refPrices: merged.refPrices, leak: merged.leak },
+        N,
+        !!merged.optConstraints.usePocketProfit,
+        merged.optConstraints.usePocketMargins ?? !!merged.optConstraints.usePocketProfit
+      );
+      const meta = { label, savedAt: Date.now() };
       setBaselineKPIs(kpis);
       setBaselineMeta(meta);
       setScenarioBaseline({
-        snapshot: buildScenarioSnapshot({
-          prices,
-          costs,
-          features,
-          refPrices,
-          leak,
-          segments,
-          tornadoPocket,
-          tornadoPriceBump,
-          tornadoPctBump,
-          tornadoRangeMode,
-          retentionPct,
-          kpiFloorAdj,
-          priceRange: priceRangeState,
-          optRanges,
-          optConstraints,
-          channelMix,
-          optimizerKind,
-        }),
+        snapshot: buildScenarioSnapshot(merged),
         kpis,
         basis: {
-          usePocketProfit: !!optConstraints.usePocketProfit,
-          usePocketMargins: !!optConstraints.usePocketMargins,
+          usePocketProfit: !!merged.optConstraints.usePocketProfit,
+          usePocketMargins: !!merged.optConstraints.usePocketMargins,
         },
         meta,
       });
-      toast("success", "Baseline pinned");
-    } else {
-      toast("error", "Baseline not pinned: KPIs unavailable");
-    }
+      if (!opts?.silent) {
+        const kind = opts?.toastKind ?? "success";
+        toast(kind, opts?.toastMessage ?? "Baseline pinned");
+      }
+    },
+    [N, buildScenarioSnapshot, channelMix, costs, features, kpiFloorAdj, leak, optConstraints, optRanges, optimizerKind, priceRangeState, prices, refPrices, retentionPct, segments, setBaselineKPIs, setBaselineMeta, setScenarioBaseline, toast, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode]
+  );
+
+  const pinBaselineNow = () => {
+    pinBaseline("Pinned now", undefined, { toastMessage: "Baseline pinned" });
   };
+
+  // Apply a scenario preset: replaces ladder, ref prices, leak, features, segments,
+  // optimizer constraints/ranges, sensitivity knobs, cohort retention, and channel blend.
+  const applyScenarioPreset = useCallback(
+    (p: Preset) => {
+      const appliedSegments = normalizeWeights(p.segments ?? defaultSegments);
+      setPrices(p.prices);
+      setCosts(p.costs);
+      setRefPrices(p.refPrices);
+      setFeatures(p.features ?? defaults.features);
+      setSegments(appliedSegments);
+
+      const mix = p.channelMix && p.channelMix.length ? normalizeChannelMix(p.channelMix) : normalizeChannelMix(defaults.channelMix);
+      const useBlend = Boolean(p.channelMix && p.channelMix.length);
+      setChannelMix(mix);
+      setChannelBlendApplied(useBlend);
+      setLeak(p.leak);
+
+      const mergedConstraints = {
+        ...defaults.optConstraints,
+        ...(p.optConstraints ?? {}),
+        marginFloor: {
+          ...defaults.optConstraints.marginFloor,
+          ...(p.optConstraints?.marginFloor ?? {}),
+        },
+      };
+      setOptConstraints(mergedConstraints);
+      setCoverageUsePocket(mergedConstraints.usePocketMargins ?? true);
+      setOptRanges(p.optRanges ?? defaults.optRanges);
+
+      setTornadoPocket(p.tornado?.usePocket ?? TORNADO_DEFAULTS.usePocket);
+      setTornadoPriceBump(p.tornado?.priceBump ?? TORNADO_DEFAULTS.priceBump);
+      setTornadoPctBump(p.tornado?.pctBump ?? TORNADO_DEFAULTS.pctBump);
+      const desiredRangeMode = p.tornado?.rangeMode ?? (p.priceRange ? "data" : TORNADO_DEFAULTS.rangeMode);
+      const hasRange = p.priceRange && hasMeaningfulRange(p.priceRange);
+      const priceRangeForBaseline = hasRange
+        ? { map: p.priceRange as TierRangeMap, source: p.priceRangeSource ?? "shared" }
+        : null;
+      const tornadoRangeModeNext =
+        hasRange ? desiredRangeMode : desiredRangeMode === "data" ? "symmetric" : desiredRangeMode;
+
+      if (p.priceRange) {
+        const ok = setPriceRangeFromData(p.priceRange, p.priceRangeSource ?? "shared");
+        setTornadoRangeMode(ok ? desiredRangeMode : "symmetric");
+        if (!ok) fallbackToSyntheticRanges();
+      } else {
+        fallbackToSyntheticRanges();
+        setTornadoRangeMode(desiredRangeMode === "data" ? "symmetric" : desiredRangeMode);
+      }
+
+      const retention = p.retentionPct ?? RETENTION_DEFAULT;
+      const floorAdj = p.kpiFloorAdj ?? KPI_FLOOR_ADJ_DEFAULT;
+      setRetentionPct(retention);
+      setKpiFloorAdj(floorAdj);
+
+      setOptResult(null);
+      setOptError(null);
+      setLastOptAt(null);
+      setScorecardView("current");
+      setTornadoView("current");
+      setPresetSel("");
+      setScenarioPresetId(p.id);
+      pinBaseline(
+        `Preset: ${p.name}`,
+        {
+          prices: p.prices,
+          costs: p.costs,
+          features: p.features ?? defaults.features,
+          refPrices: p.refPrices,
+          leak: p.leak,
+          segments: appliedSegments,
+          tornadoPocket: p.tornado?.usePocket ?? TORNADO_DEFAULTS.usePocket,
+          tornadoPriceBump: p.tornado?.priceBump ?? TORNADO_DEFAULTS.priceBump,
+          tornadoPctBump: p.tornado?.pctBump ?? TORNADO_DEFAULTS.pctBump,
+          tornadoRangeMode: tornadoRangeModeNext,
+          retentionPct: retention,
+          kpiFloorAdj: floorAdj,
+          priceRange: priceRangeForBaseline,
+          optRanges: p.optRanges ?? defaults.optRanges,
+          optConstraints: mergedConstraints,
+          channelMix: mix,
+        },
+        { toastKind: "info", toastMessage: "Preset applied and pinned as baseline" }
+      );
+      pushJ(`Loaded preset: ${p.name}`);
+    },
+    [KPI_FLOOR_ADJ_DEFAULT, RETENTION_DEFAULT, TORNADO_DEFAULTS.priceBump, TORNADO_DEFAULTS.pctBump, TORNADO_DEFAULTS.rangeMode, TORNADO_DEFAULTS.usePocket, defaults, fallbackToSyntheticRanges, normalizeChannelMix, pinBaseline, pushJ, setChannelBlendApplied, setChannelMix, setCosts, setCoverageUsePocket, setFeatures, setKpiFloorAdj, setLeak, setLastOptAt, setOptConstraints, setOptError, setOptRanges, setOptResult, setPresetSel, setPriceRangeFromData, setPrices, setRefPrices, setRetentionPct, setScenarioPresetId, setScorecardView, setSegments, setTornadoPctBump, setTornadoPocket, setTornadoPriceBump, setTornadoRangeMode, setTornadoView]
+  );
 
 
   return (
@@ -2892,6 +2933,32 @@ export default function App() {
       <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4 min-h-screen print-grid-1 print:gap-2">
         {/* Left half: tabbed workspace */}
         <div className="col-span-12 lg:col-span-6 min-w-0">
+          <div className="no-print mb-4 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3 shadow-sm">
+            <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+              Quick path
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-700">
+              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold">
+                1) Apply a preset (auto-baseline)
+              </span>
+              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold">
+                2) Optimize (baseline saved before run)
+              </span>
+              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold">
+                3) Read results on the right; export in Review
+              </span>
+              <button
+                type="button"
+                className="ml-auto rounded border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+                onClick={() => {
+                  setLeftColumnTab("optimize");
+                  scrollToId("global-optimizer");
+                }}
+              >
+                Jump to Optimize
+              </button>
+            </div>
+          </div>
           <div className="no-print mb-3">
             <div
               className="inline-flex flex-wrap items-center gap-2"
@@ -2932,21 +2999,6 @@ export default function App() {
                 Adjust Scenario
               </button>
               <button
-                id="tab-btn-save"
-                type="button"
-                role="tab"
-                aria-selected={leftColumnTab === "save"}
-                aria-controls="tab-save-scenario"
-                className={`px-3 py-2 rounded-lg border text-sm font-semibold ${
-                  leftColumnTab === "save"
-                    ? "bg-gray-900 text-white border-gray-900 shadow"
-                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
-                }`}
-                onClick={() => setLeftColumnTab("save")}
-              >
-                Save Scenario
-              </button>
-              <button
                 id="tab-btn-optimizer"
                 type="button"
                 role="tab"
@@ -2960,6 +3012,21 @@ export default function App() {
                 onClick={() => setLeftColumnTab("optimize")}
               >
                 Optimize
+              </button>
+              <button
+                id="tab-btn-save"
+                type="button"
+                role="tab"
+                aria-selected={leftColumnTab === "save"}
+                aria-controls="tab-save-scenario"
+                className={`px-3 py-2 rounded-lg border text-sm font-semibold ${
+                  leftColumnTab === "save"
+                    ? "bg-gray-900 text-white border-gray-900 shadow"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                }`}
+                onClick={() => setLeftColumnTab("save")}
+              >
+                Review & Export
               </button>
             </div>
           </div>
@@ -3103,7 +3170,7 @@ export default function App() {
                 footer={
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-gray-600">
-                      The estimator runs in a Web Worker and won�t block the UI. Your CSV never leaves the browser.
+                      The estimator runs in a Web Worker and won't block the UI. Your CSV never leaves the browser.
                     </p>
                     <button
                       className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
@@ -3139,7 +3206,7 @@ export default function App() {
                       )}, iters=${diagnostics.iters}, converged=${diagnostics.converged})`
                     );
                     toast("success", "Applied latent-class estimate");
-                    toast("info", "Segments updated. Pin a new baseline for meaningful deltas.");
+                    toast("info", "Segments updated. Re-pin baseline if you want deltas on this mix.");
                   }}
                   onToast={(kind, msg) => toast(kind, msg)}
                   onDone={() => setShowSalesImport(false)}
@@ -3422,14 +3489,24 @@ export default function App() {
                       }
                     >
                       <Explanation slot="chart.waterfall" className="px-3 py-1.5 text-[11px] leading-snug">
-                        Start with list price, subtract tier discounts (promo/volume), then payment/FX/refunds to land on pocket. Use tier sliders for promo/volume, global inputs for fees, and channel blend if you sell through multiple processors. Pocket matters most in high-fee channels (e.g., app stores); compare all tiers to sanity-check leak assumptions across the ladder.
+                        <div className="font-semibold text-slate-800 text-[11px]">How to use</div>
+                        <ul className="mt-1 list-disc space-y-1 pl-4">
+                          <li>Pick a leak preset or blend channels; all tiers inherit it.</li>
+                          <li>Promo/volume are per-tier; payment/FX/refunds hit every tier.</li>
+                          <li>Use the mini waterfalls to sanity-check Good/Better/Best spacing.</li>
+                        </ul>
                       </Explanation>
-                      <div className="grid gap-4 md:grid-cols-2 items-start text-xs">
+                      <div className="grid gap-5 md:grid-cols-2 items-start text-xs lg:grid-cols-[1.1fr_1fr]">
                         {/* Controls */}
                         <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1 text-xs font-semibold text-slate-800">
-                              <span>Choose preset</span>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                                  Step 1 - Source
+                                </div>
+                                <div className="text-sm font-semibold text-slate-800">Leakage preset</div>
+                              </div>
                               <InfoTip className="ml-1" align="right" id="presets.waterfall" ariaLabel="About leak presets" />
                             </div>
                             <select
@@ -3455,8 +3532,14 @@ export default function App() {
                             </select>
                           </div>
 
-                          <div className="space-y-1">
-                            <span className="font-semibold text-slate-800">Chart shows tier</span>
+                        <div className="space-y-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                                Step 2 - Focus
+                              </div>
+                              <div className="text-sm font-semibold text-slate-800">Chart shows tier</div>
+                            </div>
                             <div className="inline-flex overflow-hidden rounded border">
                               {(["good", "better", "best"] as const).map((t) => (
                                 <button
@@ -3468,58 +3551,68 @@ export default function App() {
                                 </button>
                               ))}
                             </div>
-                            <p className="text-[11px] text-gray-600 leading-snug">
-                              Tier discounts are per-tier (affect the selected tier's chart). Global leakages (payment, FX, refunds) apply to all tiers.
-                            </p>
                           </div>
+                          <p className="text-[11px] text-gray-600 leading-snug">
+                            Promo/volume edits apply to the selected tier; payment/FX/refunds apply to every tier.
+                          </p>
+                        </div>
 
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-semibold text-slate-800">Tier discounts (%)</span>
-                              <span className="text-[11px] text-slate-500">Per selected tier</span>
-                              <InfoTip id="waterfall.step.promo" ariaLabel="What are tier discounts?" />
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                                Step 3 - Tier discounts
+                              </div>
+                              <div className="text-sm font-semibold text-slate-800">Promo & volume (%)</div>
                             </div>
-                            <div className="space-y-1">
-                              {(["good", "better", "best"] as const).map((t) => (
-                                <div key={t} className="grid grid-cols-2 gap-2 sm:grid-cols-4 items-center">
-                                  <span className="capitalize text-slate-700">{t} promo</span>
+                            <InfoTip id="waterfall.step.promo" ariaLabel="What are tier discounts?" />
+                          </div>
+                          <div className="space-y-1">
+                            {(["good", "better", "best"] as const).map((t) => (
+                              <div key={t} className="grid grid-cols-[minmax(72px,1fr)_1fr_1fr] items-center gap-2">
+                                <span className="capitalize text-slate-700">{t} tier</span>
+                                <div className="flex items-center gap-1">
                                   <input
                                     type="number"
                                     step={0.01}
                                     className="h-9 w-full border rounded px-2 bg-white"
                                     value={leak.promo[t]}
-                                  onChange={(e) => {
-                                    setLeak((L) => ({
-                                      ...L,
-                                      promo: {
-                                        ...L.promo,
-                                        [t]: clamp01(Number(e.target.value)),
-                                      },
-                                    }));
-                                    setChannelBlendApplied(false);
-                                  }}
-                                />
-                                  <span className="text-slate-700">Volume</span>
+                                    onChange={(e) => {
+                                      setLeak((L) => ({
+                                        ...L,
+                                        promo: {
+                                          ...L.promo,
+                                          [t]: clamp01(Number(e.target.value)),
+                                        },
+                                      }));
+                                      setChannelBlendApplied(false);
+                                    }}
+                                  />
+                                  <span className="text-[10px] text-slate-500">promo</span>
+                                </div>
+                                <div className="flex items-center gap-1">
                                   <input
                                     type="number"
                                     step={0.01}
                                     className="h-9 w-full border rounded px-2 bg-white"
                                     value={leak.volume[t]}
-                                  onChange={(e) => {
-                                    setLeak((L) => ({
-                                      ...L,
-                                      volume: {
-                                        ...L.volume,
-                                        [t]: clamp01(Number(e.target.value)),
-                                      },
-                                    }));
-                                    setChannelBlendApplied(false);
-                                  }}
-                                />
+                                    onChange={(e) => {
+                                      setLeak((L) => ({
+                                        ...L,
+                                        volume: {
+                                          ...L.volume,
+                                          [t]: clamp01(Number(e.target.value)),
+                                        },
+                                      }));
+                                      setChannelBlendApplied(false);
+                                    }}
+                                  />
+                                  <span className="text-[10px] text-slate-500">volume</span>
                                 </div>
-                              ))}
-                            </div>
+                              </div>
+                            ))}
                           </div>
+                        </div>
 
                           <div className="flex flex-wrap gap-2">
                             <button
@@ -3549,7 +3642,12 @@ export default function App() {
                           </div>
 
                           <div className="space-y-2">
-                            <div className="font-semibold text-slate-800">Global leakages</div>
+                            <div>
+                              <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                                Step 4 - Global leakages
+                              </div>
+                              <div className="text-sm font-semibold text-slate-800">Fees applied to every tier</div>
+                            </div>
                             <div className="grid grid-cols-2 gap-2">
                               <label className="flex flex-col gap-1 font-semibold text-slate-800">
                                 <span>Payment %</span>
@@ -3616,6 +3714,9 @@ export default function App() {
                                 />
                               </label>
                             </div>
+                            <p className="text-[11px] text-slate-600 leading-snug">
+                              Use these for processor fees, FX, and refunds; promo/volume stays per-tier above.
+                            </p>
                           </div>
                         </div>
 
@@ -3826,6 +3927,12 @@ export default function App() {
 
           {leftColumnTab === "save" && (
             <div role="tabpanel" id="tab-save-scenario" aria-labelledby="tab-btn-save" className="space-y-3 md:space-y-4 min-w-0">
+              <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-700">
+                <div className="text-sm font-semibold text-slate-800">Review & export after an optimizer run</div>
+                <div className="mt-1">
+                  Freeze the latest ladder as a baseline, compare A/B/C saves, and share print/export links. Baselines auto-save on preset apply and before Optimize runs.
+                </div>
+              </div>
               <Section id="scenario-baseline" title="Scenario baseline">
                 <div className="flex flex-wrap items-center gap-3 text-sm">
                   <button
@@ -3871,13 +3978,16 @@ export default function App() {
                       }
                     }}
                   >
-                    Set current scenario to baseline now
+                    Re-pin baseline now
                   </button>
                   <div className="text-xs text-gray-600">
                     {scenarioBaseline
                       ? `Baseline saved ${new Date(scenarioBaseline.meta.savedAt).toLocaleString()}`
                       : "No scenario baseline saved yet."}
                   </div>
+                  <p className="basis-full text-[11px] text-slate-600">
+                    Baselines auto-save when you apply a preset and right before you run Optimize. Use this button after manual tweaks to set a new anchor.
+                  </p>
                 </div>
               </Section>
             <Section id="compare-board" title="Scenario Compare (A/B/C)" className="order-3">
@@ -4164,6 +4274,9 @@ export default function App() {
               <Explanation slot="chart.optimizer">
                 Fast start: apply a preset then click Run. Set ranges, gaps, and margin floors, then run the grid optimizer (worker). Use pocket toggles to enforce floors and profit after leakages. Charm endings snap to .99 if applicable. If no feasible ladder is found, widen ranges or ease floors/gaps. Cite binding constraints when explaining results.
               </Explanation>
+              <div className="text-[11px] text-slate-600 mb-1">
+                We auto-pin the current scenario as a baseline before every run so scorecard deltas stay anchored.
+              </div>
               {/* Compact header: inline ranges + actions */}
               <div className="flex flex-col gap-3">
                 {/* Header row wraps nicely on small screens */}
@@ -4325,7 +4438,7 @@ export default function App() {
                     const coarsenNote = diag.coarsened ? "Grid auto-coarsened for performance. " : "";
                     return (
                       <div className="text-[11px] text-slate-600 mt-2">
-                        Tested {diag.tested.toLocaleString()} ladders; coarse step ${diag.coarseStep.toFixed(2)} →
+                        Tested {diag.tested.toLocaleString()} ladders; coarse step ${diag.coarseStep.toFixed(2)} ?
                         refine ${diag.refinementStep.toFixed(2)}. {coarsenNote}
                         {guardrailNote}
                       </div>
@@ -4341,7 +4454,7 @@ export default function App() {
                   {optResult ? (
                     <span>
                       Best ladder ${optResult.prices.good}/$
-                      {optResult.prices.better}/${optResult.prices.best} — Profit
+                      {optResult.prices.better}/${optResult.prices.best} ? Profit
                       delta ${Math.round(optResult.profit)}
                     </span>
                   ) : (
@@ -4805,7 +4918,7 @@ export default function App() {
                         <span className="text-[10px] uppercase tracking-wide text-slate-500">Demo aid</span>
                       </div>
                       <p className="mt-1 leading-snug">
-                        Narrate the “before vs after.” Apply the optimized ladder to push prices back to Scenario Panel, undo to revert, then call out the delta and which constraints or drivers mattered most.
+                        Narrate the before vs after. Apply the optimized ladder to push prices back to Scenario Panel, undo to revert, then call out the delta and which constraints or drivers mattered most.
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] uppercase tracking-wide text-slate-600">
@@ -4947,7 +5060,7 @@ export default function App() {
             </Section>
             <Section id="methods" title="Methods">
               <p className="text-sm text-gray-700 print-tight">
-                MNL: U = ß0(j) + ß?·price + ß_A·featA + ß_B·featB; outside option
+                MNL: U = b0(j) + bP*price + bA*featA + bB*featB; outside option
                 intercept fixed at 0. Estimated by MLE on ~15k synthetic obs with
                 ridge regularization.
               </p>
@@ -5036,7 +5149,7 @@ export default function App() {
             }
           >
             {(() => {
-              const baselineFallback = "Pin a baseline to compare.";
+              const baselineFallback = "Baseline auto-saves when you apply a preset or run Optimize.";
               const metrics = [
                 {
                   key: "revenue",
@@ -5177,7 +5290,7 @@ export default function App() {
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       {summaryPills.length === 0 ? (
-                        <span className="text-[11px] text-slate-500">Pin a baseline to see deltas.</span>
+                        <span className="text-[11px] text-slate-500">Baseline auto-saves on preset or Optimize; re-pin anytime.</span>
                       ) : (
                         summaryPills.map((pill) =>
                           pill.value === null ? null : (
@@ -5295,7 +5408,7 @@ export default function App() {
                         Driver snapshot
                       </div>
                       <div className="mt-1 text-sm font-semibold text-slate-900">
-                        {scorecardExplainDelta?.mainDriver || "Pin a baseline to see driver story."}
+                        {scorecardExplainDelta?.mainDriver || "Driver story appears once a baseline exists."}
                       </div>
                       <p className="text-[11px] text-slate-600 mt-1">
                         {scorecardExplainDelta?.segmentLine || "Narrate which segment is winning or losing once deltas are available."}
@@ -5340,7 +5453,7 @@ export default function App() {
                         ? `${explainDeltaOptimized.deltaProfit >= 0 ? "+" : "-"}$${Math.abs(
                             explainDeltaOptimized.deltaProfit
                           ).toLocaleString()}`
-                        : "Pin a baseline"}
+                        : "Baseline pending"}
                     </div>
                     <ul className="mt-2 space-y-1 text-[11px] text-slate-700">
                       {explainDeltaOptimized ? (
@@ -5390,7 +5503,7 @@ export default function App() {
                       <li>Validate guardrails in <a className="text-sky-600 hover:underline" href="#kpi-pocket-coverage">Pocket floor coverage</a>.</li>
                       <li>Review leakages in <a className="text-sky-600 hover:underline" href="#pocket-price-waterfall">Pocket waterfall</a>.</li>
                       <li>Rerun optimizer after ladder or basis tweaks, then export/print the summary.</li>
-                      <li>Pin this run as a baseline to compare future tweaks.</li>
+                      <li>Baseline auto-saved before this run; re-pin after manual tweaks to compare future changes.</li>
                     </ul>
                   </div>
                 </div>
@@ -5707,6 +5820,17 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 
