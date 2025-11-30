@@ -120,25 +120,25 @@ const ROBUST_SCENARIOS: UncertaintyScenario[] = [
 ];
 const ONBOARDING_STEPS = [
   {
-    id: "start-ladder",
-    title: "Tune your Good/Better/Best ladder",
-    body: "Use the Scenario panel to set list prices, feature levels, and leakages. KPIs update instantly so you can narrate what changes.",
-    targetId: "scenario",
-    helper: "Each slider change is logged inside the Scenario Journal.",
+    id: "preset-scenarios",
+    title: "Start with a preset",
+    body: "Pick a preset to load prices, refs, leakages, guardrails, and sensitivity knobs so you can run immediately.",
+    targetId: "preset-scenarios",
+    helper: "Presets are ready-to-run; switch anytime to reset the ladder and optimizer settings.",
   },
   {
-    id: "import",
-    title: "Import sales logs & estimate segments",
-    body: "Click the Import Sales CSV button to upload historical choice logs and fit latent-class segments without leaving the browser.",
-    targetId: "sales-import-trigger",
-    helper: "Need a dataset? Download the sample CSV inside the modal.",
-  },
-  {
-    id: "optimize",
-    title: "Run the Global Optimizer",
-    body: "Set your margin floors and run the optimizer to see a recomputed ladder plus a micro-explainer for why those prices make sense.",
+    id: "global-optimizer",
+    title: "Run the optimizer",
+    body: "Go to Optimize and click Run. Guardrails and ranges come from the preset; edit them if you need to widen the search.",
     targetId: "global-optimizer",
-    helper: "Pocket vs list margin plus charm-price toggles live here.",
+    helper: "Pocket/list basis, gaps, and floors sit here. Charm endings are optional.",
+  },
+  {
+    id: "callouts",
+    title: "Read what changed",
+    body: "Scorecard and callouts summarize lift, drivers, and guardrails. Use them to narrate before/after in the right column.",
+    targetId: "callouts",
+    helper: "Switch Current/Optimized to see mix shifts and KPI deltas.",
   },
   {
     id: "compare",
@@ -4162,7 +4162,7 @@ export default function App() {
               <div role="tabpanel" id="tab-global-optimizer" aria-labelledby="tab-btn-optimizer" className="col-span-12 lg:col-span-3 space-y-3 md:space-y-4 min-w-0 self-start md:text-[13px] pr-1">
             <Section id="global-optimizer" title="Global Optimizer">
               <Explanation slot="chart.optimizer">
-                Set ranges, gaps, and margin floors, then run the grid optimizer (worker). Use pocket toggles to enforce floors and profit after leakages. Charm endings snap to .99 if applicable. If no feasible ladder is found, widen ranges or ease floors/gaps. Cite binding constraints when explaining results.
+                Fast start: apply a preset then click Run. Set ranges, gaps, and margin floors, then run the grid optimizer (worker). Use pocket toggles to enforce floors and profit after leakages. Charm endings snap to .99 if applicable. If no feasible ladder is found, widen ranges or ease floors/gaps. Cite binding constraints when explaining results.
               </Explanation>
               {/* Compact header: inline ranges + actions */}
               <div className="flex flex-col gap-3">
