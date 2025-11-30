@@ -110,8 +110,12 @@ export const EXPLAIN: Record<string, string> = {
     Reset ladder, refs, leak, features, ranges, constraints, and channel blend back to defaults. Does not touch saved baselines or compare slots.`,
   "takeRate.bars": `
     <b>Take-rate bars</b> show demand mix (None/Good/Better/Best) from the logit model using current prices, features, segments, and reference prices. Leakages/constraints do not affect demand directly. Baseline/current/optimized sit side-by-side; use Δ vs. baseline to narrate mix shifts.`,
+  "chart.cohort": `
+    <b>Cohort rehearsal</b> simulates pocket margin on a shrinking cohort across 6-24 months.
+    Overlay Baseline/Current/Optimized to see if lift is front-loaded or durable; adjust retention
+    to stress churn vs contribution. Pocket basis uses leakages (promo/fees/FX/refunds).`,
   "cohort.retention": `
-    <b>Monthly retention</b> drives cohort rehearsal. We apply pocket margins per cohort month and decay by the retention slider to simulate 12 months.`,
+    <b>Monthly retention</b> drives cohort rehearsal. We apply pocket margins per cohort month and decay by the retention slider over the selected horizon. Try 6m for short campaigns and 18-24m for durable subs.`,
   "waterfall.compareAll": `
     Small multiples show pocket math for Good/Better/Best side by side. Use to ensure leak assumptions look reasonable across tiers.`,
   "compare.toggles": `

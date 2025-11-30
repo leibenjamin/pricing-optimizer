@@ -1200,6 +1200,7 @@ export default function App() {
               tornadoPctBump?: number;
               tornadoRangeMode?: "symmetric" | "data";
               retentionPct?: number;
+              retentionMonths?: number;
               kpiFloorAdj?: number;
               priceRange?: TierRangeMap;
               priceRangeSource?: PriceRangeSource;
@@ -1239,6 +1240,9 @@ export default function App() {
           }
           if (typeof scenario.analysis.retentionPct === "number") {
             setRetentionPct(scenario.analysis.retentionPct);
+          }
+          if (typeof scenario.analysis.retentionMonths === "number") {
+            setRetentionMonths(Math.min(24, Math.max(6, scenario.analysis.retentionMonths)));
           }
           if (typeof scenario.analysis.kpiFloorAdj === "number") {
             setKpiFloorAdj(scenario.analysis.kpiFloorAdj);
@@ -1770,7 +1774,7 @@ export default function App() {
       N * ((1 - target.shares.none) - (1 - base.shares.none))
     );
     const fmt = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v * 10) / 10} pp`;
-    const fmtActive = activeDelta === 0 ? "±0" : `${activeDelta > 0 ? "+" : ""}${activeDelta.toLocaleString()}`;
+    const fmtActive = activeDelta === 0 ? "+/-0" : `${activeDelta > 0 ? "+" : ""}${activeDelta.toLocaleString()}`;
 
     const labels: Record<keyof typeof delta, string> = {
       none: "None",
@@ -1807,6 +1811,130 @@ export default function App() {
       setTakeRateMode("mix");
     }
   }, [takeRateBaselineKey, takeRateMode]);
+
+  // Cohort retention (percent, per-month) and horizon.
+  const [retentionPct, setRetentionPct] = useState<number>(() => {
+    const saved = localStorage.getItem("cohort_retention_pct");
+    const v = saved ? Number(saved) : RETENTION_DEFAULT;
+    return Number.isFinite(v) ? Math.min(99.9, Math.max(70, v)) : RETENTION_DEFAULT;
+  });
+  useEffect(() => {
+    localStorage.setItem("cohort_retention_pct", String(retentionPct));
+  }, [retentionPct]);
+
+  const [retentionMonths, setRetentionMonths] = useState<number>(() => {
+    const saved = localStorage.getItem("cohort_months");
+    const v = saved ? Number(saved) : 12;
+    return Number.isFinite(v) ? Math.min(24, Math.max(6, v)) : 12;
+  });
+  useEffect(() => {
+    localStorage.setItem("cohort_months", String(retentionMonths));
+  }, [retentionMonths]);
+  const [showCohortAdvanced, setShowCohortAdvanced] = useState(false);
+
+  // --- Cohort rehearsal scenarios (baseline/current/optimized) ---
+  const cohortScenarios = useMemo(() => {
+    if (!currentKPIs) return [];
+    const months = Math.max(6, Math.min(24, retentionMonths));
+    const r = retentionPct / 100;
+
+    const build = (
+      key: string,
+      label: string,
+      shares: SnapshotKPIs["shares"],
+      pricesForMargin: Prices,
+      leakForMargin: typeof leak,
+      costsForMargin: Prices
+    ) => {
+      const pts = simulateCohort(pricesForMargin, shares, leakForMargin, costsForMargin, months, r);
+      const total = pts.reduce((s, p) => s + p.margin, 0);
+      return {
+        key,
+        label,
+        shares,
+        points: pts,
+        total,
+        month1: pts[0]?.margin ?? 0,
+        monthEnd: pts[pts.length - 1]?.margin ?? 0,
+      };
+    };
+
+    const scenarios: Array<ReturnType<typeof build>> = [];
+
+    if (baselineKPIs) {
+      const baseLeak = scenarioBaseline?.snapshot?.leak ?? leak;
+      const baseCosts = scenarioBaseline?.snapshot?.costs ?? costs;
+      const basePrices = scenarioBaseline?.snapshot?.prices ?? baselineKPIs.prices;
+      scenarios.push(
+        build(
+          "baseline",
+          baselineMeta ? formatBaselineLabel(baselineMeta) : "Baseline",
+          baselineKPIs.shares,
+          basePrices,
+          baseLeak,
+          baseCosts
+        )
+      );
+    }
+
+    scenarios.push(
+      build(
+        "current",
+        baselineKPIs ? "Current" : "Current (unpinned)",
+        currentKPIs.shares,
+        prices,
+        leak,
+        costs
+      )
+    );
+
+    if (optimizedKPIs && optResult?.prices) {
+      scenarios.push(
+        build(
+          "optimized",
+          "Optimized",
+          optimizedKPIs.shares,
+          optResult.prices,
+          leak,
+          costs
+        )
+      );
+    }
+
+    return scenarios;
+  }, [
+    baselineKPIs,
+    baselineMeta,
+    costs,
+    currentKPIs,
+    leak,
+    optResult?.prices,
+    optimizedKPIs,
+    prices,
+    retentionMonths,
+    retentionPct,
+    scenarioBaseline?.snapshot?.costs,
+    scenarioBaseline?.snapshot?.leak,
+    scenarioBaseline?.snapshot?.prices,
+  ]);
+
+  const cohortSummaryCards = useMemo(() => {
+    if (!cohortScenarios.length) return [];
+    const base = cohortScenarios.find((c) => c.key === "baseline") ?? cohortScenarios[0];
+    return cohortScenarios.map((c) => {
+      const deltaTotal = c.key === base.key ? null : c.total - base.total;
+      const deltaEnd = c.key === base.key ? null : c.monthEnd - base.monthEnd;
+      const label = c.key === "baseline" ? "Baseline" : c.label;
+      return {
+        key: c.key,
+        label,
+        total: c.total,
+        monthEnd: c.monthEnd,
+        deltaTotal,
+        deltaEnd,
+      };
+    });
+  }, [cohortScenarios]);
 
   // ---- Tornado sensitivity data ----
   // ---- Tornado sensitivity data ----
@@ -2059,16 +2187,6 @@ export default function App() {
   const tornadoViewLabel =
     tornadoView === "optimized" && hasOptimizedTornado ? "Optimized" : "Current";
 
-  // Cohort retention (percent, per-month). Default 92%.
-  const [retentionPct, setRetentionPct] = useState<number>(() => {
-    const saved = localStorage.getItem("cohort_retention_pct");
-    const v = saved ? Number(saved) : RETENTION_DEFAULT;
-    return Number.isFinite(v) ? Math.min(99.9, Math.max(70, v)) : RETENTION_DEFAULT;
-  });
-  useEffect(() => {
-    localStorage.setItem("cohort_retention_pct", String(retentionPct));
-  }, [retentionPct]);
-
   const normalizeChannelMix = useCallback(
     (rows: Array<{ w: number; preset: string }>) => {
       const cleaned = rows
@@ -2115,6 +2233,7 @@ export default function App() {
     tornadoPctBump: number;
     tornadoRangeMode: "symmetric" | "data";
     retentionPct: number;
+    retentionMonths: number;
     kpiFloorAdj: number;
     priceRange: PriceRangeState | null;
     optRanges: typeof optRanges;
@@ -2136,6 +2255,7 @@ export default function App() {
         tornadoPctBump: args.tornadoPctBump,
         tornadoRangeMode: args.tornadoRangeMode,
         retentionPct: args.retentionPct,
+        retentionMonths: args.retentionMonths,
         kpiFloorAdj: args.kpiFloorAdj,
         optRanges: args.optRanges,
         optConstraints: args.optConstraints,
@@ -2219,6 +2339,7 @@ export default function App() {
         tornadoPctBump,
         tornadoRangeMode,
         retentionPct,
+        retentionMonths,
       kpiFloorAdj,
       priceRange: priceRangeState,
       optRanges,
@@ -2238,7 +2359,7 @@ export default function App() {
         meta,
       });
     }
-  }, [baselineKPIs, currentKPIs, scenarioBaseline, buildScenarioSnapshot, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, retentionPct, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, setScenarioBaseline, optimizerKind]);
+  }, [baselineKPIs, currentKPIs, scenarioBaseline, buildScenarioSnapshot, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, setScenarioBaseline, optimizerKind]);
 
 
   async function handleImportJson(e: ChangeEvent<HTMLInputElement>) {
@@ -2373,6 +2494,7 @@ export default function App() {
       tornadoPctBump,
       tornadoRangeMode,
       retentionPct,
+      retentionMonths,
       kpiFloorAdj,
       priceRange: priceRangeState,
       optRanges,
@@ -2507,6 +2629,7 @@ export default function App() {
         tornadoPctBump,
         tornadoRangeMode,
         retentionPct,
+        retentionMonths,
         kpiFloorAdj,
         priceRange: priceRangeState,
         optRanges,
@@ -2580,6 +2703,7 @@ export default function App() {
       tornadoPctBump,
       tornadoRangeMode,
       retentionPct,
+      retentionMonths,
       kpiFloorAdj,
       priceRange: priceRangeState,
       optRanges,
@@ -2625,6 +2749,8 @@ export default function App() {
       }
       if (typeof sc.analysis.retentionPct === "number")
         setRetentionPct(sc.analysis.retentionPct);
+      if (typeof sc.analysis.retentionMonths === "number")
+        setRetentionMonths(Math.min(24, Math.max(6, sc.analysis.retentionMonths)));
       if (typeof sc.analysis.kpiFloorAdj === "number")
         setKpiFloorAdj(sc.analysis.kpiFloorAdj);
       if (sc.analysis.priceRange) {
@@ -2766,6 +2892,7 @@ export default function App() {
         tornadoPctBump,
         tornadoRangeMode,
         retentionPct,
+        retentionMonths,
         kpiFloorAdj,
         priceRange: priceRangeState,
         optRanges,
@@ -2780,6 +2907,7 @@ export default function App() {
       const merged: SnapshotInput = {
         ...base,
         ...(override ?? {}),
+        retentionMonths: override?.retentionMonths ?? base.retentionMonths,
         optConstraints: {
           ...base.optConstraints,
           ...(override?.optConstraints ?? {}),
@@ -2816,7 +2944,7 @@ export default function App() {
         toast(kind, opts?.toastMessage ?? "Baseline pinned");
       }
     },
-    [N, buildScenarioSnapshot, channelMix, costs, features, kpiFloorAdj, leak, optConstraints, optRanges, optimizerKind, priceRangeState, prices, refPrices, retentionPct, segments, setBaselineKPIs, setBaselineMeta, setScenarioBaseline, toast, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode]
+    [prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, setScenarioBaseline, buildScenarioSnapshot, toast]
   );
 
   const pinBaselineNow = () => {
@@ -4049,6 +4177,7 @@ export default function App() {
                         tornadoPctBump,
                         tornadoRangeMode,
                         retentionPct,
+                        retentionMonths,
                       kpiFloorAdj,
                       priceRange: priceRangeState,
                       optRanges,
@@ -5103,6 +5232,7 @@ export default function App() {
                                     tornadoPctBump,
                                     tornadoRangeMode,
                                     retentionPct,
+                                    retentionMonths,
                                     kpiFloorAdj,
                                     priceRange: priceRangeState,
                                     optRanges,
@@ -5745,79 +5875,118 @@ export default function App() {
 
           <Section
             id="cohort-rehearsal"
-            title="Cohort rehearsal (12 months)"
+            title="Cohort rehearsal"
           actions={<ActionCluster chart="cohort" id="cohort-curve" csv />}
           >
             <Explanation slot="chart.cohort">
-              Cohort rehearsal simulates 12 months of pocket margin on a shrinking cohort. Adjust monthly retention to stress churn vs. contribution and narrate sustainability beyond a single period.
+              Cohort rehearsal simulates pocket margin on a shrinking cohort. Overlay Baseline/Current/Optimized to see whether lift holds past month 1; adjust retention/horizon to stress churn vs contribution.
             </Explanation>
-            {(() => {
-              const probsNow = choiceShares(
-                prices,
-                features,
-                segments,
-                refPrices
-              );
-              const pts = simulateCohort(
-                prices,
-                probsNow,
-                leak,
-                costs,
-                12,
-                retentionPct / 100 // <- slider drives retention
-              );
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs">
+                <label className="font-medium">Monthly retention</label>
+                <InfoTip id="cohort.retention" ariaLabel="What does monthly retention do?" />
+                <input
+                  type="range"
+                  min={70}
+                  max={99.9}
+                  step={0.1}
+                  value={retentionPct}
+                  onChange={(e) => setRetentionPct(Number(e.target.value))}
+                />
+                <input
+                  type="number"
+                  step={0.1}
+                  min={70}
+                  max={99.9}
+                  value={retentionPct}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (!Number.isFinite(v)) return;
+                    setRetentionPct(Math.min(99.9, Math.max(70, v)));
+                  }}
+                  className="w-16 h-7 border rounded px-2"
+                />
+                <span>%</span>
+                <span className="text-gray-500 ml-2">
+                  (churn ~ {(100 - retentionPct).toFixed(1)}%/mo)
+                </span>
+              </div>
 
-              return (
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-xs">
-                      <label className="font-medium">Monthly retention</label>
-                      <InfoTip id="cohort.retention" ariaLabel="What does monthly retention do?" />
-                      <input
-                        type="range"
-                        min={70}
-                        max={99.9}
-                        step={0.1}
-                        value={retentionPct}
-                        onChange={(e) =>
-                          setRetentionPct(Number(e.target.value))
-                        }
-                      />
-                      <input
-                        type="number"
-                        step={0.1}
-                        min={70}
-                        max={99.9}
-                        value={retentionPct}
-                        onChange={(e) => {
-                          const v = Number(e.target.value);
-                          if (!Number.isFinite(v)) return;
-                          setRetentionPct(Math.min(99.9, Math.max(70, v)));
-                        }}
-                        className="w-16 h-7 border rounded px-2"
-                      />
-                      <span>%</span>
-                      <span className="text-gray-500 ml-2">
-                        (churn ~ {(100 - retentionPct).toFixed(1)}%/mo)
-                      </span>
+              <div className="flex items-center gap-2 text-xs">
+                <button
+                  type="button"
+                  className="underline text-slate-600"
+                  onClick={() => setShowCohortAdvanced((v) => !v)}
+                >
+                  {showCohortAdvanced ? "Hide advanced" : "Advanced"}
+                </button>
+                {showCohortAdvanced && (
+                  <label className="flex items-center gap-2">
+                    Horizon
+                    <select
+                      className="border rounded px-2 h-8 bg-white"
+                      value={retentionMonths}
+                      onChange={(e) =>
+                        setRetentionMonths(Math.min(24, Math.max(6, Number(e.target.value))))
+                      }
+                    >
+                      <option value={6}>6 months</option>
+                      <option value={12}>12 months</option>
+                      <option value={18}>18 months</option>
+                      <option value={24}>24 months</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+            </div>
+
+            {cohortSummaryCards.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {cohortSummaryCards.map((c) => (
+                  <div
+                    key={c.key}
+                    className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm shadow-sm"
+                  >
+                    <div className="text-[11px] uppercase text-slate-600">{c.label}</div>
+                    <div className="text-lg font-semibold text-slate-900">
+                      ${Math.round(c.total).toLocaleString()}
                     </div>
-
+                    <div className="text-[11px] text-slate-600">
+                      Month {retentionMonths}: ${Math.round(c.monthEnd).toLocaleString()}
+                    </div>
+                    {c.deltaTotal !== null && (
+                      <div
+                        className={`text-[11px] font-medium ${
+                          (c.deltaTotal ?? 0) >= 0 ? "text-emerald-700" : "text-rose-700"
+                        }`}
+                      >
+                        {(c.deltaTotal ?? 0) >= 0 ? "+" : "-"}$
+                        {Math.abs(Math.round(c.deltaTotal ?? 0)).toLocaleString()} vs baseline
+                      </div>
+                    )}
                   </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded border border-dashed border-slate-300 bg-slate-50/60 px-3 py-2 text-sm text-slate-600">
+                Pin a baseline or run the optimizer to compare cohort decay.
+              </div>
+            )}
 
-                  <div className="mt-2">
-                    <MiniLine
-                      title={`Pocket margin by cohort month (retention ${retentionPct.toFixed(
-                        1
-                      )}%)`}
-                      x={pts.map((p) => p.month)}
-                      y={pts.map((p) => p.margin)}
-                      chartId="cohort-curve"
-                      exportKind="cohort"
-                    />
-                  </div>
-                </>
-              );
-            })()}
+            {cohortScenarios.length > 0 && (
+              <div className="mt-2">
+                <MiniLine
+                  title={`Pocket margin by cohort month (retention ${retentionPct.toFixed(1)}%, horizon ${retentionMonths}m)`}
+                  series={cohortScenarios.map((c) => ({
+                    label: c.label,
+                    x: c.points.map((p) => p.month),
+                    y: c.points.map((p) => p.margin),
+                  }))}
+                  chartId="cohort-curve"
+                  exportKind="cohort"
+                />
+              </div>
+            )}
           </Section>
 
           <Section

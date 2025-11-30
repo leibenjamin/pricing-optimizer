@@ -1,39 +1,74 @@
 // src/components/MiniLine.tsx
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+
+type Series = {
+  label: string;
+  x: number[];
+  y: number[];
+  color?: string;
+};
+
+const PALETTE = ["#2563eb", "#10b981", "#f97316", "#a855f7"];
 
 export default function MiniLine({
   title,
   x,
   y,
+  series,
   height = 140,
   chartId,
   exportKind = "cohort",
 }: {
   title?: string;
-  x: number[]; // 1..N
-  y: number[]; // values
+  x?: number[];
+  y?: number[];
+  series?: Series[];
   height?: number;
   chartId?: string;
   exportKind?: string;
 }) {
+  // Normalize into a series array for rendering/export
+  const lines: Series[] = useMemo(() => {
+    if (series && series.length) {
+      return series.map((s, idx) => ({
+        ...s,
+        color: s.color ?? PALETTE[idx % PALETTE.length],
+      }));
+    }
+    if (x && y) {
+      return [{ label: "Series", x, y, color: PALETTE[0] }];
+    }
+    return [];
+  }, [series, x, y]);
+
   const w = 520; // SVG will scale with CSS width: 100%
   const h = height;
   const pad = 24;
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  const minY = Math.min(...y, 0);
-  const maxY = Math.max(...y, 1e-6);
-  const xScale = (i: number) =>
-    pad + ((w - 2 * pad) * (i - x[0])) / (x[x.length - 1] - x[0] || 1);
-  const yScale = (v: number) =>
-    h - pad - ((h - 2 * pad) * (v - minY)) / (maxY - minY || 1);
+  const hasLines = lines.length > 0;
 
-  const d =
-    y.length > 0
-      ? y
-          .map((v, i) => `${i ? "L" : "M"} ${xScale(x[i])} ${yScale(v)}`)
-          .join(" ")
-      : "";
+  const xDomain = hasLines
+    ? [lines[0].x[0] ?? 0, lines[0].x[lines[0].x.length - 1] ?? 1]
+    : [0, 1];
+  const yValues = hasLines ? lines.flatMap((s) => s.y) : [0];
+  const minY = Math.min(...yValues, 0);
+  const maxY = Math.max(...yValues, 1e-6);
+
+  const xScale = (val: number) =>
+    pad + ((w - 2 * pad) * (val - xDomain[0])) / (xDomain[1] - xDomain[0] || 1);
+  const yScale = (val: number) =>
+    h - pad - ((h - 2 * pad) * (val - minY)) / (maxY - minY || 1);
+
+  const paths = lines.map((s) => {
+    const d =
+      s.y.length > 0
+        ? s.y
+            .map((v, i) => `${i ? "L" : "M"} ${xScale(s.x[i])} ${yScale(v)}`)
+            .join(" ")
+        : "";
+    return { label: s.label, color: s.color ?? PALETTE[0], d };
+  });
 
   useEffect(() => {
     if (!chartId || !exportKind) return;
@@ -43,10 +78,15 @@ export default function MiniLine({
       if (ce.detail?.id && ce.detail.id !== chartId) return;
       const type = ce.detail?.type ?? "png";
       if (type === "csv") {
-        const rows: (string | number)[][] = [
-          ["x", "y"],
-          ...x.map((xi, idx) => [xi, y[idx]]),
-        ];
+        const header = ["x", ...lines.map((s) => s.label)];
+        const rows: (string | number)[][] = [header];
+        const len = lines[0]?.x.length ?? 0;
+        for (let i = 0; i < len; i++) {
+          rows.push([
+            lines[0].x[i],
+            ...lines.map((s) => s.y[i] ?? ""),
+          ]);
+        }
         const csv = rows
           .map((row) => row.map((cell) => String(cell)).join(","))
           .join("\n");
@@ -94,11 +134,23 @@ export default function MiniLine({
     const evtName = `export:${exportKind}`;
     window.addEventListener(evtName, handler as EventListener);
     return () => window.removeEventListener(evtName, handler as EventListener);
-  }, [chartId, exportKind, x, y, title, w, h]);
+  }, [chartId, exportKind, lines, title, w, h]);
 
   return (
     <div className="w-full">
       {title && <div className="text-xs font-medium mb-1">{title}</div>}
+      <div className="flex items-center gap-2 text-[10px] text-slate-600 mb-1 flex-wrap">
+        {lines.map((s, idx) => (
+          <span key={idx} className="inline-flex items-center gap-1">
+            <span
+              className="inline-block w-3 h-1.5 rounded-full"
+              style={{ backgroundColor: s.color ?? PALETTE[idx % PALETTE.length] }}
+            />
+            {s.label}
+          </span>
+        ))}
+        {!hasLines && <span className="text-slate-400">No data</span>}
+      </div>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${w} ${h}`}
@@ -118,8 +170,17 @@ export default function MiniLine({
             stroke="#f3f4f6"
           />
         )}
-        {/* line */}
-        <path d={d} fill="none" stroke="#2563eb" strokeWidth={2} />
+        {/* lines */}
+        {paths.map((p, idx) => (
+          <path
+            key={p.label + idx}
+            d={p.d}
+            fill="none"
+            stroke={p.color}
+            strokeWidth={2}
+            strokeLinecap="round"
+          />
+        ))}
       </svg>
     </div>
   );
