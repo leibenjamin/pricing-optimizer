@@ -63,7 +63,7 @@ import OnboardingOverlay from "./components/OnboardingOverlay";
 import { useStickyState } from "./lib/useStickyState";
 import { csvTemplate } from "./lib/csv";
 
-import { preflight, fetchWithRetry } from "./lib/net";
+import { preflight, fetchWithRetry, apiUrl } from "./lib/net";
 
 import CompareBoard from "./components/CompareBoard";
 import ScorecardToolbar from "./components/ScorecardToolbar";
@@ -1177,7 +1177,7 @@ export default function App() {
     if (!sid) return;
     (async () => {
       try {
-        const res = await fetch(`/api/get?s=${encodeURIComponent(sid)}`);
+        const res = await fetch(apiUrl(`/api/get?s=${encodeURIComponent(sid)}`));
         if (!res.ok) {
           pushJ(`[${now()}] Load failed for id ${sid} (HTTP ${res.status})`);
           toast("error", `Load failed (HTTP ${res.status})`);

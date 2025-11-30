@@ -9,7 +9,17 @@ export type RetryConfig = {
 
 // Default to same-origin so custom domains don't trip CORS; allow override via env.
 const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN ?? "").replace(/\/$/, "");
-const apiUrl = (path: string) => (API_ORIGIN ? `${API_ORIGIN}${path}` : path);
+const BASE_PATH = (() => {
+  const path = new URL(".", location.href).pathname.replace(/\/$/, "");
+  return path === "/" ? "" : path; // "" on root, "/pricing-optimizer" on mounted path
+})();
+
+const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
+export const apiUrl = (path: string) => {
+  const normalized = normalizePath(path);
+  if (API_ORIGIN) return `${API_ORIGIN}${normalized}`;
+  return `${BASE_PATH}${normalized}` || normalized;
+};
 
 // Tiny sleep
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -21,6 +31,9 @@ function backoff(attempt: number, base: number, jitter: boolean) {
   const rand = Math.random() * 0.4 + 0.8; // 0.8-1.2x
   return Math.round(t * rand);
 }
+
+const shouldResolve = (input: string) =>
+  !/^https?:\/\//i.test(input) && !input.startsWith("//") && !input.startsWith("data:");
 
 // Fetch with timeout
 async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number): Promise<Response> {
@@ -51,7 +64,8 @@ export async function fetchWithRetry(
   let lastErr: unknown = null;
   for (let i = 0; i < attempts; i++) {
     try {
-      const res = await fetchWithTimeout(input, init, timeout);
+      const target = typeof input === "string" && shouldResolve(input) ? apiUrl(input) : input;
+      const res = await fetchWithTimeout(target, init, timeout);
       // Retry on 5xx/429 only; pass through 4xx so caller can show validation messages
       if (res.status >= 500 || res.status === 429) {
         if (i < attempts - 1) {
@@ -74,9 +88,8 @@ export async function fetchWithRetry(
 
 /** Cheap edge warmup/health check. Returns true on 204, false otherwise. */
 export async function preflight(path: string): Promise<boolean> {
-  const url = apiUrl(path);
   try {
-    const res = await fetchWithRetry(url, { method: "HEAD" }, { attempts: 2, baseDelayMs: 150, timeoutMs: 2000 });
+    const res = await fetchWithRetry(path, { method: "HEAD" }, { attempts: 2, baseDelayMs: 150, timeoutMs: 2000 });
     return res.status === 204;
   } catch {
     return false;
