@@ -3136,32 +3136,36 @@ export default function App() {
                     Import Sales Data CSV (estimate)
                   </button>
                   
-                  <button
-                    className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
-                    onClick={resetAllSettings}
-                    title="Reset all fields to sensible defaults"
-                  >
-                    Reset all settings to defaults
-                  </button>
-                  <InfoTip id="import.resetAll" ariaLabel="Reset all settings to defaults" />
+                  <div>
+                    <button
+                      className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                      onClick={resetAllSettings}
+                      title="Reset all fields to sensible defaults"
+                    >
+                      Reset all settings to defaults
+                    </button>
+                    <InfoTip id="import.resetAll" ariaLabel="Reset all settings to defaults" />
 
-                  <button
-                    className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
-                    onClick={clearAllSettings}
-                    title="Clear all fields (set to zero/blank)"
-                  >
-                    Clear all settings
-                  </button>
-                  <InfoTip id="import.clearAll" ariaLabel="Clear all settings to blank" />
-
-                  <button
-                    className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
-                    onClick={handleTestBackend}
-                    aria-label="Test backend connectivity"
-                    title="Quick health check (HEAD /api/get?s=ping)"
-                  >
-                    Test backend
-                  </button>
+                    <button
+                      className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                      onClick={clearAllSettings}
+                      title="Clear all fields (set to zero/blank)"
+                    >
+                      Clear all settings
+                    </button>
+                    <InfoTip id="import.clearAll" ariaLabel="Clear all settings to blank" />
+                  </div>
+                  
+                  <div>
+                    <button
+                      className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                      onClick={handleTestBackend}
+                      aria-label="Test backend connectivity"
+                      title="Quick health check (HEAD /api/get?s=ping)"
+                    >
+                      Test backend
+                    </button>
+                  </div>
                 </div>
               </Section>
 
