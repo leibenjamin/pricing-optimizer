@@ -6,6 +6,16 @@ export interface Env {
   SCENARIOS: KVNamespace
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST,OPTIONS",
+  "Access-Control-Allow-Headers": "content-type",
+  "Cache-Control": "no-store",
+};
+
+export const onRequestOptions: PagesFunction = async () =>
+  new Response(null, { status: 204, headers: CORS_HEADERS });
+
 // helper to enforce finite numbers (no NaN/Infinity)
 const Num = z.number().finite()
 
@@ -81,7 +91,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (!parsed.success) {
       return new Response(
         JSON.stringify({ error: "Invalid body", issues: parsed.error.issues }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       )
     }
     const scenario: Scenario = parsed.data
@@ -96,20 +106,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       await env.SCENARIOS.put(id, JSON.stringify(scenario), {
         expirationTtl: 60 * 60 * 24 * 180,
       })
-      return new Response(JSON.stringify({ id }), {
-        headers: { "Content-Type": "application/json" },
-      })
+      return new Response(JSON.stringify({ id }), { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } })
     }
 
     return new Response(JSON.stringify({ error: "Could not allocate id" }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Server error"
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     })
   }
 }

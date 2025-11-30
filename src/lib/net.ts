@@ -7,11 +7,9 @@ export type RetryConfig = {
   jitter?: boolean;
 };
 
-// Pick API origin at runtime
-const API_ORIGIN =
-  location.hostname.endsWith("pages.dev")
-    ? "" // same origin for pages.dev (works with /api/*)
-    : "https://pricing-optimizer.pages.dev"; // explicit origin when running under benlei.org
+// Default to same-origin so custom domains don't trip CORS; allow override via env.
+const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN ?? "").replace(/\/$/, "");
+const apiUrl = (path: string) => (API_ORIGIN ? `${API_ORIGIN}${path}` : path);
 
 // Tiny sleep
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -20,7 +18,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function backoff(attempt: number, base: number, jitter: boolean) {
   const t = base * Math.pow(2, attempt); // 0,1,2...
   if (!jitter) return t;
-  const rand = Math.random() * 0.4 + 0.8; // 0.8–1.2x
+  const rand = Math.random() * 0.4 + 0.8; // 0.8-1.2x
   return Math.round(t * rand);
 }
 
@@ -75,8 +73,8 @@ export async function fetchWithRetry(
 }
 
 /** Cheap edge warmup/health check. Returns true on 204, false otherwise. */
-export async function preflight(path:string): Promise<boolean> {
-  const url = API_ORIGIN + path;
+export async function preflight(path: string): Promise<boolean> {
+  const url = apiUrl(path);
   try {
     const res = await fetchWithRetry(url, { method: "HEAD" }, { attempts: 2, baseDelayMs: 150, timeoutMs: 2000 });
     return res.status === 204;
