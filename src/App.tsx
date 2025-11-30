@@ -6,6 +6,7 @@ const FrontierChartReal = lazy(() => import("./components/FrontierChart"));
 const Tornado = lazy(() => import("./components/Tornado"));
 const Waterfall = lazy(() => import("./components/Waterfall"));
 const TakeRateChart = lazy(() => import("./components/TakeRateChart"));
+import type { TakeRateScenario } from "./components/TakeRateChart";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { defaultSim } from "./lib/simulate";
@@ -364,6 +365,7 @@ export default function App() {
   const [baselineKPIs, setBaselineKPIs] = useState<SnapshotKPIs | null>(null);
   const [baselineMeta, setBaselineMeta] = useState<BaselineMeta | null>(null);
   const [scorecardView, setScorecardView] = useState<"current" | "optimized">("current");
+  const [takeRateMode, setTakeRateMode] = useState<"mix" | "delta">("mix");
 
   // --- Toasts ---
   type Toast = {
@@ -1716,6 +1718,95 @@ export default function App() {
       setScorecardView("current");
     }
   }, [scorecardView, optimizedKPIs]);
+
+  // --- Take-rate comparison data (baseline/current/optimized) ---
+  const takeRateScenarios: TakeRateScenario[] = useMemo(() => {
+    if (!currentKPIs) return [];
+    const rows: TakeRateScenario[] = [];
+
+    if (baselineKPIs) {
+      rows.push({
+        key: "baseline",
+        label: baselineMeta ? formatBaselineLabel(baselineMeta) : "Baseline (pinned)",
+        shares: baselineKPIs.shares,
+        active: Math.round(N * (1 - baselineKPIs.shares.none)),
+        kind: "baseline",
+      });
+    }
+
+    rows.push({
+      key: "current",
+      label: baselineKPIs ? "Current" : "Current (no baseline pinned yet)",
+      shares: currentKPIs.shares,
+      active: Math.round(N * (1 - currentKPIs.shares.none)),
+      kind: "current",
+    });
+
+    if (optimizedKPIs) {
+      rows.push({
+        key: "optimized",
+        label: "Optimized",
+        shares: optimizedKPIs.shares,
+        active: Math.round(N * (1 - optimizedKPIs.shares.none)),
+        kind: "optimized",
+      });
+    }
+
+    return rows;
+  }, [N, baselineKPIs, baselineMeta, currentKPIs, optimizedKPIs]);
+
+  const takeRateSummary = useMemo(() => {
+    const base = baselineKPIs ?? currentKPIs;
+    const target = optimizedKPIs ?? currentKPIs;
+    if (!base || !target) return null;
+
+    const delta = {
+      none: (target.shares.none - base.shares.none) * 100,
+      good: (target.shares.good - base.shares.good) * 100,
+      better: (target.shares.better - base.shares.better) * 100,
+      best: (target.shares.best - base.shares.best) * 100,
+    };
+    const activeDelta = Math.round(
+      N * ((1 - target.shares.none) - (1 - base.shares.none))
+    );
+    const fmt = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v * 10) / 10} pp`;
+    const fmtActive = activeDelta === 0 ? "±0" : `${activeDelta > 0 ? "+" : ""}${activeDelta.toLocaleString()}`;
+
+    const labels: Record<keyof typeof delta, string> = {
+      none: "None",
+      good: "Good",
+      better: "Better",
+      best: "Best",
+    };
+    const order: Array<keyof typeof delta> = ["best", "better", "good", "none"];
+    const biggest = order.reduce<{ key: keyof typeof delta; mag: number }>(
+      (acc, key) => {
+        const mag = Math.abs(delta[key]);
+        if (mag > acc.mag) return { key, mag };
+        return acc;
+      },
+      { key: "best", mag: Math.abs(delta.best) }
+    );
+
+    return {
+      headline: `Best ${fmt(delta.best)}, None ${fmt(delta.none)}; Active ${fmtActive} vs ${
+        baselineKPIs ? "baseline" : "start"
+      }.`,
+      detail: `Biggest mover: ${labels[biggest.key]} ${fmt(delta[biggest.key])}. Better ${fmt(
+        delta.better
+      )}, Good ${fmt(delta.good)}.`,
+      baselineLabel: baselineKPIs ? formatBaselineLabel(baselineMeta) : null,
+      targetLabel: optimizedKPIs ? "Optimized" : "Current",
+    };
+  }, [N, baselineKPIs, baselineMeta, currentKPIs, optimizedKPIs]);
+
+  const takeRateBaselineKey = baselineKPIs ? "baseline" : takeRateScenarios[0]?.key;
+
+  useEffect(() => {
+    if (!takeRateBaselineKey && takeRateMode === "delta") {
+      setTakeRateMode("mix");
+    }
+  }, [takeRateBaselineKey, takeRateMode]);
 
   // ---- Tornado sensitivity data ----
   // ---- Tornado sensitivity data ----
@@ -5568,12 +5659,53 @@ export default function App() {
             actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
           >
             <Explanation slot="chart.takeRate">
-              Take-rate bars show predicted mix across None/Good/Better/Best given current prices, features, segments, and reference prices. Use them to narrate how mix shifts when prices/features change; "None" is the outside option.
+              Take-rate bars show predicted mix across None/Good/Better/Best given current prices, features, segments, and reference prices. Baseline/current/optimized sit side by side so you can narrate how mix shifts; "None" is the outside option.
             </Explanation>
-            <div className="text-[11px] text-slate-600">
-              Demand-only view: leakages and margin floors are not applied here.
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+              <span>Demand-only view: leakages and guardrails do not apply here.</span>
+              {takeRateSummary?.baselineLabel && (
+                <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
+                  Baseline: {takeRateSummary.baselineLabel}
+                </span>
+              )}
+              <div className="ml-auto flex items-center gap-2 text-xs">
+                <span>View</span>
+                <div className="inline-flex overflow-hidden rounded border">
+                  <button
+                    type="button"
+                    className={`px-2 h-7 ${takeRateMode === "mix" ? "bg-gray-900 text-white" : "bg-white"}`}
+                    onClick={() => setTakeRateMode("mix")}
+                  >
+                    Mix
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-2 h-7 ${
+                      takeRateMode === "delta" ? "bg-gray-900 text-white" : "bg-white"
+                    } ${!takeRateBaselineKey ? "opacity-50 cursor-not-allowed" : ""}`}
+                    onClick={() => takeRateBaselineKey && setTakeRateMode("delta")}
+                    disabled={!takeRateBaselineKey}
+                  >
+                    Δ vs baseline
+                  </button>
+                </div>
+                <InfoTip id="takeRate.bars" ariaLabel="How take-rate bars are computed" />
+              </div>
             </div>
-            <InfoTip id="takeRate.bars" ariaLabel="How take-rate bars are computed" />
+
+            {takeRateSummary ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm text-slate-800">
+                <div className="font-semibold">
+                  {takeRateSummary.targetLabel} vs {takeRateSummary.baselineLabel ?? "start"}: {takeRateSummary.headline}
+                </div>
+                <div className="text-[11px] text-slate-600 mt-0.5">{takeRateSummary.detail}</div>
+              </div>
+            ) : (
+              <div className="rounded border border-dashed border-slate-300 bg-slate-50/60 px-3 py-2 text-sm text-slate-600">
+                Pin a baseline (preset or optimizer run) to see mix deltas.
+              </div>
+            )}
+
             <Suspense
               fallback={
                 <div className="text-xs text-gray-500 p-2">Loading bars...</div>
@@ -5588,10 +5720,27 @@ export default function App() {
                     id="chart.takeRate"
                     ariaLabel="How should I read take-rate bars?"
                   />
-                </div>                
-                <TakeRateChart chartId="takerate-main" data={probs} />
+                </div>
+                <TakeRateChart
+                  chartId="takerate-main"
+                  scenarios={takeRateScenarios}
+                  baselineKey={takeRateBaselineKey}
+                  mode={takeRateMode}
+                />
               </ErrorBoundary>
             </Suspense>
+            {takeRateScenarios.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
+                {takeRateScenarios.map((s) => (
+                  <div key={s.key} className="rounded border border-slate-200 bg-white px-2.5 py-2 shadow-sm">
+                    <div className="font-semibold text-slate-900">{s.label}</div>
+                    <div className="text-[11px] text-slate-600">
+                      Active: {s.active.toLocaleString()} (N={N.toLocaleString()})
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Section>
 
           <Section

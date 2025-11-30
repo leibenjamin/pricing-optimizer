@@ -40,9 +40,9 @@ export const EXPLAIN: Record<string, string> = {
     <i>Tip:</i> set gaps/margin floors before reading the frontier.`,
 
   "chart.takeRate": `
-    <b>Take-rate bars</b> show segment-mixed shares {None, Good, Better, Best}.
-    Shares come from a multinomial logit over segments; anchoring/loss-aversion
-    apply if reference prices are set.`,
+    <b>Take-rate bars</b> show segment-mixed shares {None, Good, Better, Best} for baseline/current/optimized.
+    Toggle Δ view to see percentage-point shifts vs. the pinned baseline; anchoring/loss-aversion
+    still apply if reference prices are set.`,
 
   "chart.waterfall": `
     <b>Pocket price waterfall</b> starts from list price and subtracts leakages
@@ -109,7 +109,7 @@ export const EXPLAIN: Record<string, string> = {
   "reset.defaults": `
     Reset ladder, refs, leak, features, ranges, constraints, and channel blend back to defaults. Does not touch saved baselines or compare slots.`,
   "takeRate.bars": `
-    <b>Take-rate bars</b> show demand mix (None/Good/Better/Best) from the logit model using current prices, features, segments, and reference prices. Leakages/constraints do not affect demand directly.`,
+    <b>Take-rate bars</b> show demand mix (None/Good/Better/Best) from the logit model using current prices, features, segments, and reference prices. Leakages/constraints do not affect demand directly. Baseline/current/optimized sit side-by-side; use Δ vs. baseline to narrate mix shifts.`,
   "cohort.retention": `
     <b>Monthly retention</b> drives cohort rehearsal. We apply pocket margins per cohort month and decay by the retention slider to simulate 12 months.`,
   "waterfall.compareAll": `
