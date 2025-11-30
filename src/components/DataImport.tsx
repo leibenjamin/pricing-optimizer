@@ -48,6 +48,7 @@ export default function DataImport(props: {
             if (f) handleCSV(f);
             e.currentTarget.value = "";
           }}
+          title="Upload scenario parameters CSV (refer to downloaded template for format)"
         />
       </label>
       <button
@@ -62,8 +63,9 @@ export default function DataImport(props: {
           a.click();
           URL.revokeObjectURL(url);
         }}
+        title="Download a CSV template for scenario parameters"
       >
-        Download Scenario Parameters CSV
+        Download Scenario Parameters CSV Template
       </button>
     </div>
   );
