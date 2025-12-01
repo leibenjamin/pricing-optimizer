@@ -58,6 +58,7 @@ import InfoTip from "./components/InfoTip";
 
 import ActionCluster from "./components/ActionCluster";
 import SharesMini from "./components/SharesMini";
+import { TakeRateDeltaTable } from "./components/TakeRateDeltaTable";
 import DataImport from "./components/DataImport";
 import SalesImport from "./components/SalesImport";
 import Modal from "./components/Modal";
@@ -4159,7 +4160,7 @@ export default function App() {
                               Compare all tiers
                             </summary>
                             <div className="text-[11px] text-slate-600">
-                              Small multiples let you sanity-check pocket math across Good/Better/Best simultaneously.
+                              Small multiples let you sanity-check leakages across Good/Better/Best simultaneously. Use the main chart for precise values; minis are best for quick visual checks.
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
                               {(["good", "better", "best"] as const).map((t) => {
@@ -5982,16 +5983,16 @@ export default function App() {
             className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
             actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
           >
-            <Explanation slot="chart.takeRate">
-              Take-rate bars show predicted mix across None/Good/Better/Best given current prices, features, segments, and reference prices. Baseline/current/optimized sit side by side so you can narrate how mix shifts; "None" is the outside option.
-            </Explanation>
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-              <span>Demand-only view: leakages and guardrails do not apply here.</span>
-              {takeRateSummary?.baselineLabel && (
-                <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
-                  Baseline: {takeRateSummary.baselineLabel}
-                </span>
-              )}
+          <Explanation slot="chart.takeRate">
+            Take-rate bars show predicted mix across None/Good/Better/Best given current prices, features, segments, and reference prices. Baseline/current/optimized sit side by side so you can narrate how mix shifts; "None" is the outside option.
+          </Explanation>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+            <span>Demand-only view: leakages and guardrails do not apply here. Use delta view or the table for small differences.</span>
+            {takeRateSummary?.baselineLabel && (
+              <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
+                Baseline: {takeRateSummary.baselineLabel}
+              </span>
+            )}
               <div className="ml-auto flex items-center gap-2 text-xs">
                 <span>View</span>
                 <div className="inline-flex overflow-hidden rounded border">
@@ -6065,6 +6066,11 @@ export default function App() {
                 ))}
               </div>
             )}
+            {takeRateBaselineKey && takeRateScenarios.length > 1 && (
+              <div className="mt-2">
+                <TakeRateDeltaTable scenarios={takeRateScenarios} baselineKey={takeRateBaselineKey} />
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-3 text-xs">
               <label className="flex items-center gap-2 font-medium text-slate-700">
                 <input
@@ -6075,7 +6081,7 @@ export default function App() {
                 />
                 Segment mix (top 3)
               </label>
-              <span className="text-[11px] text-slate-500">Baseline / Current / Optimized mini bars per segment.</span>
+              <span className="text-[11px] text-slate-500">Baseline / Current / Optimized per segment; use table above for exact deltas.</span>
             </div>
             {showSegmentMix && segmentMixes.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

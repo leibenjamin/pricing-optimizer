@@ -132,9 +132,9 @@ export default function FrontierChartReal({
     const isNarrow = vw < 768;
     const axisFont = isNarrow ? 10 : 12;
     const labelFont = isNarrow ? 10 : 12;
-    const topPad = isNarrow ? 20 : 32;
-    const rightPad = isNarrow ? 18 : 32;
-    const bottomPad = isNarrow ? 36 : 48;
+    const topPad = isNarrow ? 26 : 40;
+    const rightPad = isNarrow ? 24 : 40;
+    const bottomPad = isNarrow ? 42 : 56;
     const markerSymbolSize = isNarrow ? 18 : 24;
 
     const markPointData =
@@ -153,7 +153,7 @@ export default function FrontierChartReal({
     const option: ECOption = {
       animation: false,
       grid: {
-        left: isNarrow ? 44 : 64,
+        left: isNarrow ? 52 : 72,
         right: rightPad,
         top: topPad,
         bottom: bottomPad,
@@ -163,13 +163,18 @@ export default function FrontierChartReal({
         type: "value",
         name: xLabel,
         nameTextStyle: { fontSize: axisFont },
-        axisLabel: { fontSize: axisFont },
+        axisLabel: { fontSize: axisFont, hideOverlap: true, margin: 10 },
+        boundaryGap: [0.02, 0.05],
+        axisLine: { onZero: false },
       },
       yAxis: {
         type: "value",
         name: "Profit (N=1000)",
         nameTextStyle: { fontSize: axisFont },
-        axisLabel: { fontSize: axisFont },
+        axisLabel: { fontSize: axisFont, hideOverlap: true, margin: 8 },
+        axisLine: { onZero: false },
+        splitNumber: 6,
+        splitLine: { lineStyle: { color: "#e2e8f0" } },
       },
       series: [
         {
@@ -224,6 +229,7 @@ export default function FrontierChartReal({
                   color: "#0f172a",
                   formatter: (p: CallbackDataParams) => (p.name ? String(p.name) : ""),
                 },
+                labelLayout: { hideOverlap: true, moveOverlap: "shiftY" },
                 data: markPointData,
               }
             : undefined,

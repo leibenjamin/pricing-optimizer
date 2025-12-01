@@ -141,8 +141,8 @@ export default function TakeRateChart(props: {
     const isNarrow = vw < 768;
     const axisFont = isNarrow ? 10 : 12;
     const labelFont = isNarrow ? 10 : 12;
-    const topPad = isNarrow ? 18 : 26;
-    const bottomPad = isNarrow ? 28 : 34;
+    const topPad = isNarrow ? 22 : 30;
+    const bottomPad = isNarrow ? 32 : 40;
 
     const option: ECOption = {
       animation: false,
@@ -156,7 +156,7 @@ export default function TakeRateChart(props: {
       xAxis: {
         type: "category",
         data: scenarios.map((s) => s.label),
-        axisLabel: { fontSize: axisFont },
+        axisLabel: { fontSize: axisFont, hideOverlap: true },
         axisPointer: { type: "shadow" },
       },
       yAxis: {

@@ -104,10 +104,10 @@ export default function Waterfall({
     const isNarrow = vw < 768;
     const axisFont  = localIsMini ? (isNarrow ? 9  : 10) : (isNarrow ? 11 : 12);
     const labelFont = localIsMini ? (isNarrow ? 8  : 9)  : (isNarrow ? 11 : 12);
-    const gridTop   = localIsMini ? (isNarrow ? 16 : 22) : (isNarrow ? 32 : 44);
-    const gridBot   = localIsMini ? (isNarrow ?  8 : 10) : (isNarrow ? 32 : 44);
-    const rightPad  = localIsMini ? (isNarrow ? 18 : 26) : (isNarrow ? 26 : 38);
-    const leftPad   = localIsMini ? (isNarrow ? 48 : 66) : (isNarrow ? 64 : 82);
+    const gridTop   = localIsMini ? (isNarrow ? 20 : 26) : (isNarrow ? 38 : 52);
+    const gridBot   = localIsMini ? (isNarrow ? 12 : 16) : (isNarrow ? 38 : 52);
+    const rightPad  = localIsMini ? (isNarrow ? 20 : 30) : (isNarrow ? 30 : 44);
+    const leftPad   = localIsMini ? (isNarrow ? 56 : 74) : (isNarrow ? 72 : 96);
     const barW      = localIsMini ? (isNarrow ? 7  : 9)  : (isNarrow ? 16 : 20);
 
     if (!ref.current) return;
@@ -209,10 +209,10 @@ export default function Waterfall({
           : {
               fontSize: axisFont,
               interval: 0,
-              margin: 8,
+              margin: 10,
               hideOverlap: true,
               overflow: "truncate",
-              width: isNarrow ? 72 : 96,
+              width: isNarrow ? 84 : 110,
             },
       },
       yAxis: {

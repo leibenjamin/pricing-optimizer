@@ -3,7 +3,7 @@ export default function SharesMini({
   title,
   labels,
   values,   // 0..1
-  height = 140,
+  height = 120,
   colors,
 }: {
   title?: string;
