@@ -1496,69 +1496,83 @@ export default function App() {
   );
 
   const [frontierTier, setFrontierTier] = useState<Tier>("best");
+  const [frontierCompareCharm, setFrontierCompareCharm] = useState(false);
+
+  const snapCharm = useCallback((p: number, charm: boolean) => {
+    if (!charm) return p;
+    const floored = Math.floor(p);
+    if (p - floored < 0.5) return Math.max(0.99, floored - 1 + 0.99);
+    return floored + 0.99;
+  }, []);
+
+  const snapLadder = useCallback(
+    (ladder: Prices, charm: boolean): Prices => ({
+      good: snapCharm(ladder.good, charm),
+      better: snapCharm(ladder.better, charm),
+      best: snapCharm(ladder.best, charm),
+    }),
+    [snapCharm]
+  );
 
   // Profit frontier: sweep selected tier; hold others fixed (latent-class mix)
   const frontier = useMemo(() => {
-    const points: Array<{ price: number; profit: number; shares: typeof probs; reason?: string }> = [];
-    const feasible: typeof points = [];
-    const infeasible: typeof points = [];
     const usePocketProfit = !!optConstraints.usePocketProfit;
     const usePocketMargins = !!(optConstraints.usePocketMargins ?? optConstraints.usePocketProfit);
     const floors = optConstraints.marginFloor;
-    for (let p = 5; p <= 60; p += 1) {
-      const pricesP = { good: prices.good, better: prices.better, best: prices.best };
-      pricesP[frontierTier] = p;
-      const probsP = choiceShares(pricesP, features, segments, refPrices);
-      const take_good = Math.round(N * probsP.good);
-      const take_better = Math.round(N * probsP.better);
-      const take_best = Math.round(N * probsP.best);
-      const effGoodProfit = usePocketProfit
-        ? computePocketPrice(prices.good, "good", leak).pocket
-        : prices.good;
-      const effBetterProfit = usePocketProfit
-        ? computePocketPrice(prices.better, "better", leak).pocket
-        : prices.better;
-      const effBestProfit = usePocketProfit
-        ? computePocketPrice(pricesP.best, "best", leak).pocket
-        : pricesP.best;
-      const profitP =
-        take_good * (effGoodProfit - costs.good) +
-        take_better * (effBetterProfit - costs.better) +
-        take_best * (effBestProfit - costs.best);
-      const point = { price: p, profit: profitP, shares: probsP, reason: undefined as string | undefined };
+    const build = (charmFlag: boolean) => {
+      const pts: Array<{ price: number; profit: number; shares: typeof probs; reason?: string }> = [];
+      const feasible: typeof pts = [];
+      const infeasible: typeof pts = [];
+      for (let p = 5; p <= 60; p += 1) {
+        const pricesP = snapLadder({ good: prices.good, better: prices.better, best: prices.best, [frontierTier]: p } as Prices, charmFlag);
+        const probsP = choiceShares(pricesP, features, segments, refPrices);
+        const take_good = Math.round(N * probsP.good);
+        const take_better = Math.round(N * probsP.better);
+        const take_best = Math.round(N * probsP.best);
+        const effGoodProfit = usePocketProfit
+          ? computePocketPrice(pricesP.good, "good", leak).pocket
+          : pricesP.good;
+        const effBetterProfit = usePocketProfit
+          ? computePocketPrice(pricesP.better, "better", leak).pocket
+          : pricesP.better;
+        const effBestProfit = usePocketProfit
+          ? computePocketPrice(pricesP.best, "best", leak).pocket
+          : pricesP.best;
+        const profitP =
+          take_good * (effGoodProfit - costs.good) +
+          take_better * (effBetterProfit - costs.better) +
+          take_best * (effBestProfit - costs.best);
+        const point = { price: pricesP[frontierTier], profit: profitP, shares: probsP, reason: undefined as string | undefined };
 
-      // Feasibility based on margin floors
-      const effGoodFloor = usePocketMargins ? computePocketPrice(pricesP.good, "good", leak).pocket : pricesP.good;
-      const effBetterFloor = usePocketMargins ? computePocketPrice(pricesP.better, "better", leak).pocket : pricesP.better;
-      const effBestFloor = usePocketMargins ? computePocketPrice(pricesP.best, "best", leak).pocket : pricesP.best;
-      const mG = (effGoodFloor - costs.good) / Math.max(effGoodFloor, 1e-6);
-      const mB = (effBetterFloor - costs.better) / Math.max(effBetterFloor, 1e-6);
-      const mH = (effBestFloor - costs.best) / Math.max(effBestFloor, 1e-6);
-      const reasons: string[] = [];
-      if (mG < floors.good) reasons.push("Good margin below floor");
-      if (mB < floors.better) reasons.push("Better margin below floor");
-      if (mH < floors.best) reasons.push("Best margin below floor");
-      const gapGB = pricesP.better - pricesP.good - optConstraints.gapGB;
-      const gapBB = pricesP.best - pricesP.better - optConstraints.gapBB;
-      if (gapGB < 0) reasons.push("Gap G/B below floor");
-      if (gapBB < 0) reasons.push("Gap B/Best below floor");
-      const ok = reasons.length === 0;
-      point.reason = ok ? undefined : reasons.join("; ");
-      points.push(point);
-      (ok ? feasible : infeasible).push(point);
-    }
-    if (points.length === 0)
-      return {
-        points,
-        feasiblePoints: feasible,
-        infeasiblePoints: infeasible,
-        optimum: null as { price: number; profit: number } | null,
-      };
-    const optimum = points.reduce(
-      (a, b) => (b.profit > a.profit ? b : a),
-      points[0]
-    );
-    return { points, feasiblePoints: feasible, infeasiblePoints: infeasible, optimum };
+        const effGoodFloor = usePocketMargins ? computePocketPrice(pricesP.good, "good", leak).pocket : pricesP.good;
+        const effBetterFloor = usePocketMargins ? computePocketPrice(pricesP.better, "better", leak).pocket : pricesP.better;
+        const effBestFloor = usePocketMargins ? computePocketPrice(pricesP.best, "best", leak).pocket : pricesP.best;
+        const mG = (effGoodFloor - costs.good) / Math.max(effGoodFloor, 1e-6);
+        const mB = (effBetterFloor - costs.better) / Math.max(effBetterFloor, 1e-6);
+        const mH = (effBestFloor - costs.best) / Math.max(effBestFloor, 1e-6);
+        const reasons: string[] = [];
+        if (mG < floors.good) reasons.push("Good margin below floor");
+        if (mB < floors.better) reasons.push("Better margin below floor");
+        if (mH < floors.best) reasons.push("Best margin below floor");
+        const gapGB = pricesP.better - pricesP.good - optConstraints.gapGB;
+        const gapBB = pricesP.best - pricesP.better - optConstraints.gapBB;
+        if (gapGB < 0) reasons.push("Gap G/B below floor");
+        if (gapBB < 0) reasons.push("Gap B/Best below floor");
+        const ok = reasons.length === 0;
+        point.reason = ok ? undefined : reasons.join("; ");
+        pts.push(point);
+        (ok ? feasible : infeasible).push(point);
+      }
+      const optimum =
+        pts.length === 0
+          ? null
+          : pts.reduce((a, b) => (b.profit > a.profit ? b : a), pts[0]);
+      return { points: pts, feasiblePoints: feasible, infeasiblePoints: infeasible, optimum };
+    };
+
+    const base = build(!!optConstraints.charm);
+    const alt = frontierCompareCharm ? build(!optConstraints.charm) : null;
+    return { base, alt };
   }, [
     N,
     prices.good,
@@ -1576,7 +1590,10 @@ export default function App() {
     optConstraints.marginFloor,
     optConstraints.gapGB,
     optConstraints.gapBB,
+    optConstraints.charm,
     frontierTier,
+    frontierCompareCharm,
+    snapLadder,
   ]);
 
 
@@ -1985,9 +2002,9 @@ export default function App() {
   }, [baselineKPIs, baselineMeta, optConstraints.usePocketProfit, optResult?.prices, prices, computeScenarioProfit, frontierTier]);
 
   const frontierSummary = useMemo(() => {
-    if (!frontier.optimum) return null;
-    const optBest = frontier.optimum.price;
-    const optProf = frontier.optimum.profit;
+    if (!frontier.base.optimum) return null;
+    const optBest = frontier.base.optimum.price;
+    const optProf = frontier.base.optimum.profit;
     const baselineMarker = frontierMarkers.find((m) => m.kind === "baseline");
     const currentMarker = frontierMarkers.find((m) => m.kind === "current");
     const optimizedMarker = frontierMarkers.find((m) => m.kind === "optimized");
@@ -2001,7 +2018,7 @@ export default function App() {
       anchorLabel,
       anchorPrice: anchor.price,
     };
-  }, [frontier.optimum, frontierMarkers]);
+  }, [frontier.base.optimum, frontierMarkers]);
 
   // ---- Tornado sensitivity data ----
   // ---- Tornado sensitivity data ----
@@ -5833,6 +5850,18 @@ export default function App() {
                 <option value="best">Best</option>
               </select>
             </label>
+            <label className="flex items-center gap-1">
+              Charm comparison
+              <input
+                type="checkbox"
+                checked={frontierCompareCharm}
+                onChange={(e) => setFrontierCompareCharm(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <span className="text-[11px] text-slate-600">
+                Compare {optConstraints.charm ? "with vs without .99" : "without vs with .99"}
+              </span>
+            </label>
           </div>
           {frontierSummary && (
             <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm text-slate-800">
@@ -5857,13 +5886,18 @@ export default function App() {
                 </div>
                 <FrontierChartReal
                   chartId="frontier-main"
-                  points={frontier.points}
+                  points={frontier.base.points}
                   overlay={{
-                    feasiblePoints: frontier.feasiblePoints,
-                    infeasiblePoints: frontier.infeasiblePoints,
+                    feasiblePoints: frontier.base.feasiblePoints,
+                    infeasiblePoints: frontier.base.infeasiblePoints,
                   }}
-                  optimum={frontier.optimum}
+                  optimum={frontier.base.optimum}
                   xLabel={`${frontierTier[0].toUpperCase()}${frontierTier.slice(1)} price`}
+                  comparison={
+                    frontier.alt
+                      ? { label: optConstraints.charm ? "No charm" : "Charm .99", points: frontier.alt.points }
+                      : undefined
+                  }
                   markers={frontierMarkers}
                 />
               </ErrorBoundary>

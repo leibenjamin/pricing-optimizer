@@ -61,6 +61,11 @@ export interface FrontierMarker {
   kind?: "baseline" | "current" | "optimized" | string;
 }
 
+export interface FrontierComparison {
+  label: string;
+  points: FrontierPoint[];
+}
+
 type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
 
 export default function FrontierChartReal({
@@ -70,6 +75,7 @@ export default function FrontierChartReal({
   overlay,
   markers,
   xLabel = "Price",
+  comparison,
 }: {
   points: FrontierPoint[];
   optimum: FrontierPoint | null;
@@ -77,6 +83,7 @@ export default function FrontierChartReal({
   overlay?: FrontierOverlay;
   markers?: FrontierMarker[];
   xLabel?: string;
+  comparison?: FrontierComparison;
 }) {
   const divRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ECharts | null>(null);
@@ -148,6 +155,23 @@ export default function FrontierChartReal({
             fontSize: labelFont,
           },
         } as LineSeriesOption,
+        ...(comparison
+          ? [
+              {
+                type: "line",
+                smooth: true,
+                name: comparison.label,
+                lineStyle: { type: "dashed" },
+                itemStyle: { color: "#0f172a" },
+                data: comparison.points.map((p) => ({
+                  value: [p.price, p.profit],
+                  shares: p.shares,
+                  reason: p.reason,
+                })),
+                label: { show: false },
+              } as LineSeriesOption,
+            ]
+          : []),
         ...(overlay?.feasiblePoints && overlay.feasiblePoints.length
           ? [
               {
@@ -238,7 +262,7 @@ export default function FrontierChartReal({
 
     chartRef.current.setOption(option, true);
     chartRef.current.resize();
-  }, [points, optimum, vw, markers, overlay?.feasiblePoints, overlay?.infeasiblePoints, xLabel]);
+  }, [points, optimum, vw, markers, overlay?.feasiblePoints, overlay?.infeasiblePoints, xLabel, comparison]);
 
   // Listen for export events from ActionCluster
   useEffect(() => {
