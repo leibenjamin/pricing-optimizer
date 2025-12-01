@@ -1936,6 +1936,56 @@ export default function App() {
     });
   }, [cohortScenarios]);
 
+  // --- Frontier markers & summary ---
+  const frontierMarkers = useMemo(() => {
+    const markers: Array<{ label: string; price: number; profit: number; kind: "baseline" | "current" | "optimized" }> = [];
+    const basisPocket = !!optConstraints.usePocketProfit;
+    const profitFor = (ladder: Prices) => computeScenarioProfit(ladder, basisPocket);
+
+    if (baselineKPIs) {
+      markers.push({
+        label: baselineMeta ? formatBaselineLabel(baselineMeta) : "Baseline",
+        price: baselineKPIs.prices.best,
+        profit: profitFor(baselineKPIs.prices),
+        kind: "baseline",
+      });
+    }
+    markers.push({
+      label: baselineKPIs ? "Current" : "Current (unpinned)",
+      price: prices.best,
+      profit: profitFor(prices),
+      kind: "current",
+    });
+    if (optResult?.prices) {
+      markers.push({
+        label: "Optimized",
+        price: optResult.prices.best,
+        profit: profitFor(optResult.prices),
+        kind: "optimized",
+      });
+    }
+    return markers;
+  }, [baselineKPIs, baselineMeta, optConstraints.usePocketProfit, optResult?.prices, prices, computeScenarioProfit]);
+
+  const frontierSummary = useMemo(() => {
+    if (!frontier.optimum) return null;
+    const optBest = frontier.optimum.bestPrice;
+    const optProf = frontier.optimum.profit;
+    const baselineMarker = frontierMarkers.find((m) => m.kind === "baseline");
+    const currentMarker = frontierMarkers.find((m) => m.kind === "current");
+    const optimizedMarker = frontierMarkers.find((m) => m.kind === "optimized");
+
+    const anchor = optimizedMarker ?? currentMarker ?? baselineMarker;
+    if (!anchor) return null;
+    const delta = optProf - anchor.profit;
+    const anchorLabel = optimizedMarker ? "Optimized" : baselineMarker ? "Baseline" : "Current";
+    return {
+      headline: `Frontier peak at $${optBest.toFixed(2)} (profit $${Math.round(optProf).toLocaleString()}); ${anchorLabel} at $${anchor.price.toFixed(2)} (${delta >= 0 ? "+" : "-"}$${Math.abs(Math.round(delta)).toLocaleString()} vs peak on this axis).`,
+      anchorLabel,
+      anchorPrice: anchor.price,
+    };
+  }, [frontier.optimum, frontierMarkers]);
+
   // ---- Tornado sensitivity data ----
   // ---- Tornado sensitivity data ----
   const [tornadoPocket, setTornadoPocket] = useState(TORNADO_DEFAULTS.usePocket);
@@ -5746,18 +5796,23 @@ export default function App() {
 
           <Section
             id="profit-frontier"
-            title="Profit Frontier"
-            className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
-            actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
-          >
-            <Explanation slot="chart.profitFrontier">
-              Frontier sweeps Best while holding Good/Better fixed and computes profit at each step. Look for the peak, check which points are infeasible (gray) due to floors/gaps, and use this to answer quick "what if we nudged premium $X?" before running the full optimizer.
-            </Explanation>
-            <div className="text-[11px] text-slate-600">
-              Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}; Good/Better fixed, sweep Best.
-              Constraints (gaps/floors) are shown as feasible (green) vs infeasible (gray).
-              <InfoTip id="frontier.overlay" ariaLabel="About frontier feasibility overlay" />
+          title="Profit Frontier"
+          className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
+          actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
+        >
+          <Explanation slot="chart.profitFrontier">
+            Frontier sweeps Best while holding Good/Better fixed and computes profit at each step. Markers show Baseline/Current/Optimized Best prices; infeasible points flag where gaps/margins fail. Use this to sanity-check before or after running the optimizer.
+          </Explanation>
+          {frontierSummary && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm text-slate-800">
+              {frontierSummary.headline}
             </div>
+          )}
+          <div className="text-[11px] text-slate-600">
+            Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}; Good/Better fixed, sweep Best.
+            Constraints (gaps/floors) are shown as feasible (green) vs infeasible (gray).
+            <InfoTip id="frontier.overlay" ariaLabel="About frontier feasibility overlay" />
+          </div>
             <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontier... </div>} >
               <ErrorBoundary title="Frontier chart failed">
                 <div className="flex items-center justify-between mb-2">
@@ -5777,6 +5832,7 @@ export default function App() {
                     infeasiblePoints: frontier.infeasiblePoints,
                   }}
                   optimum={frontier.optimum}
+                  markers={frontierMarkers}
                 />
               </ErrorBoundary>
             </Suspense>

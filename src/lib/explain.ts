@@ -35,9 +35,9 @@ export const EXPLAIN: Record<string, string> = {
 
   // --- Charts ---
   "chart.frontier": `
-    <b>Profit frontier</b> sweeps one tier’s price (x) while holding others fixed,
-    plotting projected profit (y). Each dot is a full mixed-logit evaluation.<br>
-    <i>Tip:</i> set gaps/margin floors before reading the frontier.`,
+    <b>Profit frontier</b> sweeps one tier's price (x) while holding others fixed,
+    plotting projected profit (y). Markers show Baseline/Current/Optimized prices on this axis; feasible
+    dots clear gaps/floors. Hover to compare profit and sanity-check before/after running the optimizer.`,
 
   "chart.takeRate": `
     <b>Take-rate bars</b> show segment-mixed shares {None, Good, Better, Best} for baseline/current/optimized.

@@ -51,6 +51,13 @@ export interface FrontierOverlay {
   infeasiblePoints?: FrontierPoint[];
 }
 
+export interface FrontierMarker {
+  label: string;
+  price: number;
+  profit: number;
+  kind?: "baseline" | "current" | "optimized" | string;
+}
+
 type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
 
 export default function FrontierChartReal({
@@ -58,11 +65,13 @@ export default function FrontierChartReal({
   optimum,
   chartId,
   overlay,
+  markers,
 }: {
   points: FrontierPoint[];
   optimum: FrontierPoint | null;
   chartId?: string;
   overlay?: FrontierOverlay;
+  markers?: FrontierMarker[];
 }) {
   const divRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ECharts | null>(null);
@@ -182,12 +191,37 @@ export default function FrontierChartReal({
               } as ScatterSeriesOption,
             ]
           : []),
+        ...(markers && markers.length
+          ? [
+              {
+                type: "scatter",
+                data: markers.map((m) => [m.price, m.profit, m.label]),
+                symbolSize: 10,
+                itemStyle: {
+                  color: "#0ea5e9",
+                  borderColor: "#0a5d80",
+                  borderWidth: 1,
+                },
+                label: {
+                  show: true,
+                  formatter: (p: CallbackDataParams) => {
+                    const v = p?.value as unknown[];
+                    return Array.isArray(v) && v[2] ? String(v[2]) : "";
+                  },
+                  position: "top",
+                  fontSize: labelFont,
+                  color: "#0f172a",
+                },
+                z: 5,
+              } as ScatterSeriesOption,
+            ]
+          : []),
       ],
     };
 
     chartRef.current.setOption(option, true);
     chartRef.current.resize();
-  }, [points, optimum, vw]);
+  }, [points, optimum, vw, markers, overlay?.feasiblePoints, overlay?.infeasiblePoints]);
 
   // Listen for export events from ActionCluster
   useEffect(() => {
