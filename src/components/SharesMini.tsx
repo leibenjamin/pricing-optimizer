@@ -4,11 +4,13 @@ export default function SharesMini({
   labels,
   values,   // 0..1
   height = 140,
+  colors,
 }: {
   title?: string;
   labels: string[];
   values: number[];
   height?: number;
+  colors?: string[];
 }) {
   const w = 520; // SVG scales via width: 100%
   const h = height;
@@ -16,6 +18,7 @@ export default function SharesMini({
 
   const barH = (h - 2 * pad) / Math.max(1, values.length);
   const max = Math.max(1e-6, ...values);
+  const colorFor = (idx: number) => colors?.[idx] ?? "#10b981";
 
   return (
     <div className="w-full">
@@ -37,7 +40,7 @@ export default function SharesMini({
                 width={bw}
                 height={Math.max(6, barH - 10)}
                 rx="2"
-                fill="#10b981"
+                fill={colorFor(i)}
               />
               <text
                 x={pad + bw + 4}

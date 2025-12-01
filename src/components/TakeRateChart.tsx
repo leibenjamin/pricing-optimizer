@@ -1,4 +1,4 @@
-// src/components/TakeRateChart.tsx
+﻿// src/components/TakeRateChart.tsx
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -19,6 +19,7 @@ import {
 import { CanvasRenderer } from "echarts/renderers";
 import type { CallbackDataParams, TopLevelFormatterParams } from "echarts/types/dist/shared";
 import { downloadBlob, csvFromRows } from "../lib/download";
+import { TAKE_RATE_COLORS } from "../lib/colors";
 
 // Register only what we need
 echartsUse([BarChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
@@ -45,12 +46,7 @@ export type TakeRateScenario = {
 
 type Mode = "mix" | "delta";
 
-const COLORS: Record<keyof TakeRateData, string> = {
-  none: "#cbd5e1", // slate-300
-  good: "#22c55e", // emerald-500
-  better: "#0ea5e9", // sky-500
-  best: "#a855f7", // purple-500
-};
+const COLORS = TAKE_RATE_COLORS;
 
 const TIER_LABELS: Array<keyof TakeRateData> = ["none", "good", "better", "best"];
 
@@ -90,7 +86,11 @@ export default function TakeRateChart(props: {
       return TIER_LABELS.map((tier) => ({
         name: tier[0].toUpperCase() + tier.slice(1),
         type: "bar" as const,
-        itemStyle: { color: COLORS[tier] },
+        itemStyle: {
+          color: COLORS[tier],
+          borderColor: "rgba(15,23,42,0.18)",
+          borderWidth: 0.8,
+        },
         data: scenarios.map((s) => {
           const delta = (s.shares[tier] - baseline.shares[tier]) * 100;
           return Math.round(delta * 10) / 10;
@@ -102,16 +102,21 @@ export default function TakeRateChart(props: {
     }
 
     // default: stacked mix view
-    return TIER_LABELS.map((tier) => ({
-      name: tier[0].toUpperCase() + tier.slice(1),
-      type: "bar" as const,
-      stack: "mix",
-      itemStyle: { color: COLORS[tier] },
-      emphasis: { focus: "series" as const },
-      data: scenarios.map((s) => pct(s.shares[tier])),
-      label: {
-        show: false,
-      },
+      return TIER_LABELS.map((tier) => ({
+        name: tier[0].toUpperCase() + tier.slice(1),
+        type: "bar" as const,
+        stack: "mix",
+        itemStyle: {
+          color: COLORS[tier],
+          borderColor: "rgba(15,23,42,0.18)",
+          borderWidth: 0.8,
+          opacity: 0.95,
+        },
+        emphasis: { focus: "series" as const },
+        data: scenarios.map((s) => pct(s.shares[tier])),
+        label: {
+          show: false,
+        },
     }));
   }, [baseline, mode, scenarios]);
 
@@ -146,6 +151,7 @@ export default function TakeRateChart(props: {
         itemWidth: 10,
         itemHeight: 10,
         textStyle: { fontSize: axisFont },
+        data: TIER_LABELS.map((tier) => tier[0].toUpperCase() + tier.slice(1)),
       },
       xAxis: {
         type: "category",
@@ -159,7 +165,7 @@ export default function TakeRateChart(props: {
         splitLine: { show: true },
         ...(mode === "delta"
           ? {
-              name: "Δ pp vs baseline",
+              name: "Delta vs baseline (pp)",
               nameGap: 12,
               axisLine: { onZero: true },
             }
@@ -264,7 +270,7 @@ export default function TakeRateChart(props: {
   return (
     <div className={`w-full ${className ?? ""}`}>
       <div className="text-xs text-gray-600 mb-1">
-        {mode === "delta" ? "Δ vs baseline (pp)" : "Take-rate by tier"}
+        {mode === "delta" ? "Delta vs baseline (pp)" : "Take-rate by tier"}
       </div>
 
       {/* chart root */}
@@ -311,6 +317,13 @@ function formatTooltip(
   });
   return lines.join("<br/>");
 }
+
+
+
+
+
+
+
 
 
 

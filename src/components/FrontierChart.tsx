@@ -1,4 +1,4 @@
-// src/components/FrontierChart.tsx
+﻿// src/components/FrontierChart.tsx
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -135,6 +135,20 @@ export default function FrontierChartReal({
     const topPad = isNarrow ? 20 : 32;
     const rightPad = isNarrow ? 18 : 32;
     const bottomPad = isNarrow ? 36 : 48;
+    const markerSymbolSize = isNarrow ? 18 : 24;
+
+    const markPointData =
+      markers?.map((m) => ({
+        name: m.label,
+        value: m.price,
+        coord: [m.price, m.profit],
+        label: {
+          formatter: (p: CallbackDataParams) => (p.name ? String(p.name) : ""),
+          fontSize: labelFont,
+          color: "#0f172a",
+          padding: [2, 4, 2, 4],
+        },
+      })) ?? [];
 
     const option: ECOption = {
       animation: false,
@@ -160,6 +174,7 @@ export default function FrontierChartReal({
       series: [
         {
           type: "line",
+          name: "Frontier",
           smooth: true,
           data: points.map((p) => ({
             value: [p.price, p.profit],
@@ -174,14 +189,17 @@ export default function FrontierChartReal({
                   show: true,
                   formatter: (p: CallbackDataParams) => {
                     const v = Array.isArray(p?.value) ? p.value : undefined;
-                    return v && v.length ? `$${Number(v[0]).toFixed(2)}` : "";
+                    const price = v && v.length ? Number(v[0]) : NaN;
+                    return Number.isFinite(price) ? `$${price.toFixed(2)}` : "";
                   },
-                  fontSize: labelFont - 1,
+                  fontSize: Math.max(8, labelFont - 2),
                   padding: [2, 4, 2, 4],
                   color: "#0f172a",
+                  rotate: 90,
+                  distance: 6,
                 },
                 lineStyle: { color: "#cbd5e1", type: "dashed" },
-                data: markers.map((m) => ({ xAxis: m.price })),
+                data: markers.map((m) => ({ xAxis: m.price, name: m.label })),
               }
             : undefined,
           label: {
@@ -190,6 +208,25 @@ export default function FrontierChartReal({
             fontSize: labelFont,
           },
           labelLayout: { moveOverlap: "shiftY" },
+          markPoint: markers && markers.length
+            ? {
+                symbol: "circle",
+                symbolSize: markerSymbolSize,
+                itemStyle: {
+                  color: "#0ea5e9",
+                  borderColor: "#0a5d80",
+                  borderWidth: 1,
+                },
+                label: {
+                  show: true,
+                  position: "top",
+                  fontSize: labelFont,
+                  color: "#0f172a",
+                  formatter: (p: CallbackDataParams) => (p.name ? String(p.name) : ""),
+                },
+                data: markPointData,
+              }
+            : undefined,
         } as LineSeriesOption,
         ...(comparison
           ? [
@@ -255,7 +292,7 @@ export default function FrontierChartReal({
                       const price = Number(v[0]);
                       const prof = Number(v[1]);
                       if (Number.isFinite(price) && Number.isFinite(prof)) {
-                        return `$${price.toFixed(2)} • ${prof.toFixed(0)}`;
+                        return `$${price.toFixed(2)} -> ${prof.toFixed(0)}`;
                       }
                     }
                     return "";
@@ -380,7 +417,7 @@ export default function FrontierChartReal({
       {hoverMix && (
         <div className="mt-2 rounded border border-slate-200 bg-slate-50/80 px-2 py-1 text-[11px] text-slate-700">
           <div className="font-semibold text-slate-900">
-            {hoverMix.label || "Point"} — ${hoverMix.price.toFixed(2)} • Profit ${Math.round(hoverMix.profit).toLocaleString()}
+            {hoverMix.label || "Point"} @ ${hoverMix.price.toFixed(2)} | Profit ${Math.round(hoverMix.profit).toLocaleString()}
           </div>
           <div className="flex flex-wrap gap-2">
             <span>None {(hoverMix.shares.none * 100).toFixed(1)}%</span>
@@ -408,16 +445,18 @@ function formatTooltip(params: TopLevelFormatterParams): string {
     : Array.isArray(datum?.value)
     ? (datum?.value as number[])
     : [];
-  const price = val.length >= 1 ? `$${Number(val[0]).toFixed(2)}` : "";
-  const profit = val.length >= 2 ? `$${Number(val[1]).toFixed(0)}` : "";
+  const priceNum = val.length >= 1 ? Number(val[0]) : NaN;
+  const profitNum = val.length >= 2 ? Number(val[1]) : NaN;
+  const price = Number.isFinite(priceNum) ? `$${priceNum.toFixed(2)}` : "";
+  const profit = Number.isFinite(profitNum) ? `$${profitNum.toFixed(0)}` : "";
 
   const shares = datum?.shares;
   const reason = datum?.reason;
 
-  const lines = [price && profit ? `<b>${price}</b> • Profit ${profit}` : "Point"];
+  const lines = [price && profit ? `<b>${price}</b> | Profit ${profit}` : "Point"];
   if (shares) {
     lines.push(
-      `Mix: None ${(shares.none * 100).toFixed(1)}% • Good ${(shares.good * 100).toFixed(1)}% • Better ${(shares.better * 100).toFixed(1)}% • Best ${(shares.best * 100).toFixed(1)}%`
+      `Mix: None ${(shares.none * 100).toFixed(1)}% | Good ${(shares.good * 100).toFixed(1)}% | Better ${(shares.better * 100).toFixed(1)}% | Best ${(shares.best * 100).toFixed(1)}%`
     );
   }
   if (reason) {
@@ -428,3 +467,8 @@ function formatTooltip(params: TopLevelFormatterParams): string {
   }
   return lines.join("<br/>");
 }
+
+
+
+
+

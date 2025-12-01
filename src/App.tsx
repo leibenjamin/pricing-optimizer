@@ -38,6 +38,7 @@ import MiniLine from "./components/MiniLine";
 import { describeSegment } from "./components/SegmentCards";
 
 import { pocketCoverage } from "./lib/coverage";
+import { TAKE_RATE_COLORS } from "./lib/colors";
 
 import HeatmapMini from "./components/HeatmapMini";
 import { feasibilitySliceGB } from "./lib/coverage";
@@ -1040,8 +1041,8 @@ export default function App() {
 
   const TORNADO_DEFAULTS = {
     usePocket: true,
-    priceBump: 10,
-    pctBump: 2,
+    priceBump: 12,
+    pctBump: 3,
     rangeMode: "symmetric" as const,
   };
   const RETENTION_DEFAULT = 92;
@@ -1802,7 +1803,19 @@ export default function App() {
     for (const row of rows) {
       const existing = deduped.find((r) => sameShares(r.shares, row.shares));
       if (existing) {
-        existing.label = `${existing.label} & ${row.label}`;
+        const kinds = new Set([existing.kind, row.kind].filter(Boolean));
+        const hasBaseline = kinds.has("baseline");
+        const hasCurrent = kinds.has("current");
+        const hasOptimized = kinds.has("optimized");
+        if (hasBaseline && hasCurrent && !hasOptimized) {
+          existing.label = "Baseline & Current";
+        } else if (hasBaseline && hasOptimized && !hasCurrent) {
+          existing.label = "Baseline & Optimized";
+        } else if (hasCurrent && hasOptimized && !hasBaseline) {
+          existing.label = "Current & Optimized";
+        } else {
+          existing.label = `${existing.label} & ${row.label}`;
+        }
         if (row.kind === "optimized") existing.kind = "optimized";
         if (row.kind === "baseline") existing.kind = "baseline";
       } else {
@@ -1859,6 +1872,15 @@ export default function App() {
   }, [N, baselineKPIs, baselineMeta, currentKPIs, optimizedKPIs]);
 
   const takeRateBaselineKey = baselineKPIs ? "baseline" : takeRateScenarios[0]?.key;
+  const takeRateColors = useMemo(
+    () => [
+      TAKE_RATE_COLORS.none,
+      TAKE_RATE_COLORS.good,
+      TAKE_RATE_COLORS.better,
+      TAKE_RATE_COLORS.best,
+    ],
+    []
+  );
 
   useEffect(() => {
     if (!takeRateBaselineKey && takeRateMode === "delta") {
@@ -2300,10 +2322,25 @@ export default function App() {
   ]);
 
   const hasOptimizedTornado = Boolean(optResult?.prices ?? quickOpt.best);
-  const activeTornadoRows =
-    tornadoView === "optimized" && hasOptimizedTornado
-      ? tornadoRowsOptim
-      : tornadoRowsCurrent;
+  const trimTornadoRows = useCallback(
+    (rows: typeof tornadoRowsCurrent) => {
+      const meaningful = rows.filter(
+        (r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh)) >= 1
+      );
+      const base = meaningful.length ? meaningful : rows;
+      return base.slice(0, 12);
+    },
+    []
+  );
+  const activeTornadoRows = useMemo(
+    () =>
+      trimTornadoRows(
+        tornadoView === "optimized" && hasOptimizedTornado
+          ? tornadoRowsOptim
+          : tornadoRowsCurrent
+      ),
+    [hasOptimizedTornado, tornadoRowsCurrent, tornadoRowsOptim, tornadoView, trimTornadoRows]
+  );
   const tornadoViewLabel =
     tornadoView === "optimized" && hasOptimizedTornado ? "Optimized" : "Current";
 
@@ -2325,7 +2362,6 @@ export default function App() {
     [defaults]
   );
 
-  // --- UI adapter: nested ? your UI's flattened segment shape ---
   function mapNormalizedToUI(norm: SegmentNested[]): typeof segments {
     const ui = norm.map((s) => ({
       name: "" as string,
@@ -6029,17 +6065,17 @@ export default function App() {
                 ))}
               </div>
             )}
-            <div className="flex items-center gap-2 text-xs">
-              <label className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <label className="flex items-center gap-2 font-medium text-slate-700">
                 <input
                   type="checkbox"
                   className="h-4 w-4"
                   checked={showSegmentMix}
                   onChange={(e) => setShowSegmentMix(e.target.checked)}
                 />
-                Show per-segment mix
+                Segment mix (top 3)
               </label>
-              <span className="text-[11px] text-slate-500">Top 3 segments; baseline/current/optimized.</span>
+              <span className="text-[11px] text-slate-500">Baseline / Current / Optimized mini bars per segment.</span>
             </div>
             {showSegmentMix && segmentMixes.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -6051,6 +6087,7 @@ export default function App() {
                       labels={["None", "Good", "Better", "Best"]}
                       values={[seg.sharesCurrent.none, seg.sharesCurrent.good, seg.sharesCurrent.better, seg.sharesCurrent.best]}
                       height={90}
+                      colors={takeRateColors}
                     />
                     {seg.sharesOptim && (
                       <SharesMini
@@ -6058,6 +6095,7 @@ export default function App() {
                         labels={["None", "Good", "Better", "Best"]}
                         values={[seg.sharesOptim.none, seg.sharesOptim.good, seg.sharesOptim.better, seg.sharesOptim.best]}
                         height={90}
+                        colors={takeRateColors}
                       />
                     )}
                     {seg.sharesBaseline && (
@@ -6066,6 +6104,7 @@ export default function App() {
                         labels={["None", "Good", "Better", "Best"]}
                         values={[seg.sharesBaseline.none, seg.sharesBaseline.good, seg.sharesBaseline.better, seg.sharesBaseline.best]}
                         height={90}
+                        colors={takeRateColors}
                       />
                     )}
                   </div>

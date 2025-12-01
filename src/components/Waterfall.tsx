@@ -103,12 +103,12 @@ export default function Waterfall({
     // viewport-aware sizes
     const isNarrow = vw < 768;
     const axisFont  = localIsMini ? (isNarrow ? 9  : 10) : (isNarrow ? 11 : 12);
-    const labelFont = localIsMini ? (isNarrow ? 9  : 10) : (isNarrow ? 11 : 12);
+    const labelFont = localIsMini ? (isNarrow ? 8  : 9)  : (isNarrow ? 11 : 12);
     const gridTop   = localIsMini ? (isNarrow ? 16 : 22) : (isNarrow ? 32 : 44);
     const gridBot   = localIsMini ? (isNarrow ?  8 : 10) : (isNarrow ? 32 : 44);
-    const rightPad  = isNarrow ? 16 : 28;
-    const leftPad   = isNarrow ? 40 : 60;
-    const barW      = localIsMini ? (isNarrow ? 7  : 9) : (isNarrow ? 16 : 20);
+    const rightPad  = localIsMini ? (isNarrow ? 18 : 26) : (isNarrow ? 26 : 38);
+    const leftPad   = localIsMini ? (isNarrow ? 48 : 66) : (isNarrow ? 64 : 82);
+    const barW      = localIsMini ? (isNarrow ? 7  : 9)  : (isNarrow ? 16 : 20);
 
     if (!ref.current) return;
     if (!chartRef.current) chartRef.current = echarts.init(ref.current);
@@ -151,7 +151,7 @@ export default function Waterfall({
       }
       const lbl =
         idx === changes.length - 1
-          ? { show: true, position: "top" as const, fontSize: 9 }
+          ? { show: true, position: "top" as const, fontSize: Math.max(8, labelFont - 1) }
           : { show: false };
       return { value: v, label: lbl, itemStyle: { color } };
     });
@@ -211,6 +211,8 @@ export default function Waterfall({
               interval: 0,
               margin: 8,
               hideOverlap: true,
+              overflow: "truncate",
+              width: isNarrow ? 72 : 96,
             },
       },
       yAxis: {

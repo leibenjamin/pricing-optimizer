@@ -61,11 +61,13 @@ export default function Tornado({
     const right = rows.map((r) => Math.max(0, r.deltaHigh));
     const isNarrow = vw < 900;
     const axisFont = isNarrow ? 10 : 12;
+    const labelWidth = isNarrow ? 110 : 160;
+    const gridLeft = isNarrow ? 90 : 120;
     const showValueLabels = !isNarrow;
 
     const option: ECOption = {
       title: { text: title, left: "center", top: 4, textStyle: { fontWeight: 700, fontSize: 14 } },
-      grid: { left: isNarrow ? 70 : 90, right: isNarrow ? 40 : 60, top: 36, bottom: 32, containLabel: true },
+      grid: { left: gridLeft, right: isNarrow ? 40 : 60, top: 36, bottom: 32, containLabel: true },
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
@@ -88,7 +90,7 @@ export default function Tornado({
       yAxis: {
         type: "category",
         data: cats,
-        axisLabel: { fontSize: axisFont },
+        axisLabel: { fontSize: axisFont, margin: 12, width: labelWidth, overflow: "break" },
       },
       series: [
         {
