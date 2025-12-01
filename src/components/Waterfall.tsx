@@ -105,10 +105,10 @@ export default function Waterfall({
     const axisFont  = localIsMini ? (isNarrow ? 9  : 10) : (isNarrow ? 11 : 12);
     const labelFont = localIsMini ? (isNarrow ? 9  : 10) : (isNarrow ? 11 : 12);
     const gridTop   = localIsMini ? (isNarrow ? 16 : 22) : (isNarrow ? 32 : 44);
-    const gridBot   = localIsMini ? (isNarrow ?  8 : 10) : (isNarrow ? 28 : 40);
+    const gridBot   = localIsMini ? (isNarrow ?  8 : 10) : (isNarrow ? 32 : 44);
     const rightPad  = isNarrow ? 16 : 28;
-    const leftPad   = isNarrow ? 40 : 56;
-    const barW      = localIsMini ? (isNarrow ? 8  : 10) : (isNarrow ? 18 : 22);
+    const leftPad   = isNarrow ? 40 : 60;
+    const barW      = localIsMini ? (isNarrow ? 7  : 9) : (isNarrow ? 16 : 20);
 
     if (!ref.current) return;
     if (!chartRef.current) chartRef.current = echarts.init(ref.current);

@@ -56,6 +56,7 @@ import { explainGaps, topDriver, explainOptimizerResult } from "./lib/explain";
 import InfoTip from "./components/InfoTip";
 
 import ActionCluster from "./components/ActionCluster";
+import SharesMini from "./components/SharesMini";
 import DataImport from "./components/DataImport";
 import SalesImport from "./components/SalesImport";
 import Modal from "./components/Modal";
@@ -2038,6 +2039,22 @@ export default function App() {
       anchorPrice: anchor.price,
     };
   }, [frontier.base.optimum, frontierMarkers]);
+
+  const [showSegmentMix, setShowSegmentMix] = useState(false);
+  const segmentMixes = useMemo(() => {
+    if (!segments.length) return [];
+    const topSegs = segments.slice(0, 3);
+    return topSegs.map((seg, idx) => {
+      const label = seg.name?.trim() || `Segment ${idx + 1}`;
+      const sharesCurrent = choiceShares(prices, features, [seg], refPrices);
+      const sharesOptim = optResult ? choiceShares(optResult.prices, features, [seg], refPrices) : null;
+      const sharesBaseline =
+        baselineKPIs && baselineKPIs.prices
+          ? choiceShares(baselineKPIs.prices, features, [seg], refPrices)
+          : null;
+      return { label, sharesCurrent, sharesOptim, sharesBaseline };
+    });
+  }, [segments, prices, features, refPrices, optResult, baselineKPIs]);
 
   // ---- Tornado sensitivity data ----
   // ---- Tornado sensitivity data ----
@@ -6008,6 +6025,49 @@ export default function App() {
                     <div className="text-[11px] text-slate-600">
                       Active: {s.active.toLocaleString()} (N={N.toLocaleString()})
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-2 text-xs">
+              <label className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={showSegmentMix}
+                  onChange={(e) => setShowSegmentMix(e.target.checked)}
+                />
+                Show per-segment mix
+              </label>
+              <span className="text-[11px] text-slate-500">Top 3 segments; baseline/current/optimized.</span>
+            </div>
+            {showSegmentMix && segmentMixes.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {segmentMixes.map((seg, idx) => (
+                  <div key={idx} className="rounded border border-slate-200 bg-white px-2.5 py-2 shadow-sm">
+                    <div className="text-[11px] uppercase text-slate-500 mb-1">{seg.label}</div>
+                    <SharesMini
+                      title="Current"
+                      labels={["None", "Good", "Better", "Best"]}
+                      values={[seg.sharesCurrent.none, seg.sharesCurrent.good, seg.sharesCurrent.better, seg.sharesCurrent.best]}
+                      height={90}
+                    />
+                    {seg.sharesOptim && (
+                      <SharesMini
+                        title="Optimized"
+                        labels={["None", "Good", "Better", "Best"]}
+                        values={[seg.sharesOptim.none, seg.sharesOptim.good, seg.sharesOptim.better, seg.sharesOptim.best]}
+                        height={90}
+                      />
+                    )}
+                    {seg.sharesBaseline && (
+                      <SharesMini
+                        title="Baseline"
+                        labels={["None", "Good", "Better", "Best"]}
+                        values={[seg.sharesBaseline.none, seg.sharesBaseline.good, seg.sharesBaseline.better, seg.sharesBaseline.best]}
+                        height={90}
+                      />
+                    )}
                   </div>
                 ))}
               </div>

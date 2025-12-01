@@ -75,7 +75,7 @@ export default function Tornado({
           const lines = items.map((it) => {
             const v = Number(it.value);
             const side = it.seriesName;
-            return `${side}: ${v >= 0 ? "+" : "−"}$${Math.abs(v).toFixed(0)}`;
+            return `${side}: ${v >= 0 ? "+" : "-"}$${Math.abs(v).toFixed(0)}`;
           });
           return `<div><b>${name}</b><br/>${lines.join("<br/>")}</div>`;
         },
@@ -170,3 +170,4 @@ export default function Tornado({
 
   return <div ref={ref} className="w-full h-96" />;
 }
+

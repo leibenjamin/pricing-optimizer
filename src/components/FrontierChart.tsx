@@ -26,6 +26,12 @@ import type { CallbackDataParams, TopLevelFormatterParams } from "echarts/types/
 import { downloadBlob, csvFromRows } from "../lib/download";
 import type { Shares } from "../lib/choice";
 
+type FrontierDatum = {
+  value?: unknown;
+  shares?: Shares;
+  reason?: string;
+};
+
 echartsUse([
   LineChart,
   ScatterChart,
@@ -68,6 +74,12 @@ export interface FrontierComparison {
 
 type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
 
+function getDatum(p: CallbackDataParams): FrontierDatum | null {
+  const d = p?.data as unknown;
+  if (d && typeof d === "object") return d as FrontierDatum;
+  return null;
+}
+
 export default function FrontierChartReal({
   points,
   optimum,
@@ -87,6 +99,12 @@ export default function FrontierChartReal({
 }) {
   const divRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ECharts | null>(null);
+  const [hoverMix, setHoverMix] = useState<{
+    label: string;
+    shares: Shares;
+    price: number;
+    profit: number;
+  } | null>(null);
 
   const [vw, setVw] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1024);
   useEffect(() => {
@@ -130,8 +148,8 @@ export default function FrontierChartReal({
       xAxis: {
         type: "value",
         name: xLabel,
-        nameTextStyle: { fontSize: axisFont },      // axis name font
-        axisLabel: { fontSize: axisFont },          // tick label font
+        nameTextStyle: { fontSize: axisFont },
+        axisLabel: { fontSize: axisFont },
       },
       yAxis: {
         type: "value",
@@ -149,15 +167,29 @@ export default function FrontierChartReal({
             reason: p.reason,
           })),
           symbolSize: 4,
-          // If you want to show data labels on the line, enable this:
+          markLine: markers
+            ? {
+                symbol: "none",
+                label: {
+                  show: true,
+                  formatter: (p: CallbackDataParams) => {
+                    const v = Array.isArray(p?.value) ? p.value : undefined;
+                    return v && v.length ? `$${Number(v[0]).toFixed(2)}` : "";
+                  },
+                  fontSize: labelFont - 1,
+                  padding: [2, 4, 2, 4],
+                  color: "#0f172a",
+                },
+                lineStyle: { color: "#cbd5e1", type: "dashed" },
+                data: markers.map((m) => ({ xAxis: m.price })),
+              }
+            : undefined,
           label: {
-            show: false,               // set to true if wanting labels
+            show: false,
             position: "top",
             fontSize: labelFont,
           },
-          labelLayout: {
-            moveOverlap: "shiftY",
-          },
+          labelLayout: { moveOverlap: "shiftY" },
         } as LineSeriesOption,
         ...(comparison
           ? [
@@ -215,17 +247,18 @@ export default function FrontierChartReal({
                 symbolSize: 10,
                 itemStyle: { borderWidth: 1 },
                 emphasis: { focus: "series" },
-                // If you want to label the optimum dot:
                 label: {
                   show: true,
                   formatter: (p: CallbackDataParams) => {
-                    // ECharts can pass a number, object, or tuple; guard and format only tuples
-                    const v = p?.value as number[] | undefined;
-                    if (Array.isArray(v) && v.length >= 2) {
-                      const [price, prof] = v;
-                      return `$${price.toFixed(2)} • ${prof.toFixed(0)}`;
+                    const v = Array.isArray(p?.value) ? p.value : undefined;
+                    if (v && v.length >= 2) {
+                      const price = Number(v[0]);
+                      const prof = Number(v[1]);
+                      if (Number.isFinite(price) && Number.isFinite(prof)) {
+                        return `$${price.toFixed(2)} • ${prof.toFixed(0)}`;
+                      }
                     }
-                    return ""; // fallback (hides text if value isn’t a tuple)
+                    return "";
                   },
                   fontSize: labelFont - 1,
                   position: "top",
@@ -268,9 +301,36 @@ export default function FrontierChartReal({
 
     chartRef.current.setOption(option, true);
     chartRef.current.resize();
+
+    const onHover = (p: CallbackDataParams) => {
+    const datum = getDatum(p);
+    const val = Array.isArray(p.value)
+      ? p.value
+      : Array.isArray(datum?.value)
+      ? (datum?.value as Array<string | number | Date>)
+      : null;
+    if (!val || val.length < 2) return;
+    const shares = datum?.shares;
+    if (!shares) return;
+    const price = Number(val[0]);
+    const profit = Number(val[1]);
+    if (!Number.isFinite(price) || !Number.isFinite(profit)) return;
+    setHoverMix({
+      label: p.seriesName || "",
+      shares,
+      price,
+      profit,
+      });
+    };
+    const onLeave = () => setHoverMix(null);
+    chartRef.current.on("mouseover", onHover);
+    chartRef.current.on("mouseout", onLeave);
+    return () => {
+      chartRef.current?.off("mouseover", onHover);
+      chartRef.current?.off("mouseout", onLeave);
+    };
   }, [points, optimum, vw, markers, overlay?.feasiblePoints, overlay?.infeasiblePoints, xLabel, comparison]);
 
-  // Listen for export events from ActionCluster
   useEffect(() => {
     if (!chartId) return;
     const onExport = (ev: Event) => {
@@ -284,12 +344,10 @@ export default function FrontierChartReal({
           pixelRatio: 2,
           backgroundColor: "#ffffff",
         });
-        // Fetch the data URL and funnel through downloadBlob for consistency
         fetch(url)
-          .then(r => r.blob())
-          .then(b => downloadBlob(b, "profit_frontier.png", "image/png"))
+          .then((r) => r.blob())
+          .then((b) => downloadBlob(b, "profit_frontier.png", "image/png"))
           .catch(() => {
-            // Fallback to direct-link click if fetch fails
             const a = document.createElement("a");
             a.href = url;
             a.download = "profit_frontier.png";
@@ -298,7 +356,7 @@ export default function FrontierChartReal({
       } else if (e.detail.type === "csv") {
         const rows: (string | number)[][] = [
           ["best_price", "profit", "share.none", "share.good", "share.better", "share.best", "reason"],
-          ...points.map(p => [
+          ...points.map((p) => [
             p.price,
             p.profit,
             p.shares?.none ?? "",
@@ -316,14 +374,24 @@ export default function FrontierChartReal({
     return () => window.removeEventListener("export:frontier", onExport as EventListener);
   }, [chartId, points]);
 
-
   return (
     <div className="w-full">
-      {/* chart root */}
       <div className="h-64 w-full" ref={divRef} role="img" aria-label="Profit frontier chart" />
+      {hoverMix && (
+        <div className="mt-2 rounded border border-slate-200 bg-slate-50/80 px-2 py-1 text-[11px] text-slate-700">
+          <div className="font-semibold text-slate-900">
+            {hoverMix.label || "Point"} — ${hoverMix.price.toFixed(2)} • Profit ${Math.round(hoverMix.profit).toLocaleString()}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span>None {(hoverMix.shares.none * 100).toFixed(1)}%</span>
+            <span>Good {(hoverMix.shares.good * 100).toFixed(1)}%</span>
+            <span>Better {(hoverMix.shares.better * 100).toFixed(1)}%</span>
+            <span>Best {(hoverMix.shares.best * 100).toFixed(1)}%</span>
+          </div>
+        </div>
+      )}
     </div>
   );
-
 }
 
 function isArrayParams(params: TopLevelFormatterParams): params is CallbackDataParams[] {
@@ -334,11 +402,15 @@ function formatTooltip(params: TopLevelFormatterParams): string {
   if (!isArrayParams(params) || !params.length) return "";
   const p = params[0];
 
-  const val = Array.isArray(p.value) ? p.value : [];
+  const datum = getDatum(p);
+  const val = Array.isArray(p.value)
+    ? p.value
+    : Array.isArray(datum?.value)
+    ? (datum?.value as number[])
+    : [];
   const price = val.length >= 1 ? `$${Number(val[0]).toFixed(2)}` : "";
   const profit = val.length >= 2 ? `$${Number(val[1]).toFixed(0)}` : "";
 
-  const datum = p.data as { value?: unknown; shares?: Shares; reason?: string } | undefined;
   const shares = datum?.shares;
   const reason = datum?.reason;
 
