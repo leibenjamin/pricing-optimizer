@@ -3876,10 +3876,11 @@ export default function App() {
                         <ul className="mt-1 list-disc space-y-1 pl-4">
                           <li>Pick a leak preset or blend channels; all tiers inherit it.</li>
                           <li>Promo/volume are per-tier; payment/FX/refunds hit every tier.</li>
-                          <li>Use the mini waterfalls to sanity-check Good/Better/Best spacing.</li>
+                          <li>Use the main chart for precise pocket math; minis are quick spot checks.</li>
+                          <li>Channel blend mixes platform fee profiles (e.g., Stripe + App Store). Skip it if you sell through a single channel.</li>
                         </ul>
                       </Explanation>
-                      <div className="grid gap-5 md:grid-cols-2 items-start text-xs lg:grid-cols-[1.1fr_1fr]">
+                      <div className="space-y-4 text-xs">
                         {/* Controls */}
                         <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                           <div className="space-y-2">
@@ -4203,7 +4204,7 @@ export default function App() {
                               Channel blend (optional)
                             </summary>
                             <div className="text-[11px] text-slate-600 mb-1">
-                              Blend leak presets by channel; applied to leakages and saved in JSON/links. CSV export does not include blends.
+                              Channel blend mixes multiple fee profiles (e.g., Stripe + App Store) into one leakage set. Use only if revenue runs across multiple channels.
                             </div>
                             {channelBlendApplied && (
                               <div className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 mb-2">
@@ -4211,7 +4212,7 @@ export default function App() {
                               </div>
                             )}
                             <div className="text-[11px] text-slate-600 mb-1">
-                              Each row weights a leak preset; normalize % then blend to see a composite fee/discount profile.
+                              Each row weights a leak preset; normalize % then blend to see a composite fee/discount profile. JSON/short links keep blends; CSV exports do not.
                             </div>
                             <div className="mt-2 space-y-2">
                               {channelMix.map((row, i) => (
@@ -4285,7 +4286,7 @@ export default function App() {
                                   </button>
                                   <button
                                     className="border rounded px-3 py-2 bg-white hover:bg-gray-50"
-                                  onClick={() => {
+                                    onClick={() => {
                                       const rows = channelMix.map((r) => ({
                                         w: r.w,
                                         preset: r.preset,
@@ -4295,10 +4296,13 @@ export default function App() {
                                       setChannelBlendApplied(true);
                                     }}
                                   >
-                                    Blend now -&gt; apply to leakages
+                                    Apply blend
                                   </button>
                                 </div>
                               </div>
+                            </div>
+                            <div className="text-[11px] text-slate-600 mt-2">
+                              Tip: Use 100% on one row if you only sell through a single channel; keep blends for multi-channel fee realism.
                             </div>
                           </details>
                         </div>
