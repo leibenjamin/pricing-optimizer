@@ -148,11 +148,15 @@ export default function FrontierChartReal({
             shares: p.shares,
             reason: p.reason,
           })),
+          symbolSize: 4,
           // If you want to show data labels on the line, enable this:
           label: {
             show: false,               // set to true if wanting labels
             position: "top",
             fontSize: labelFont,
+          },
+          labelLayout: {
+            moveOverlap: "shiftY",
           },
         } as LineSeriesOption,
         ...(comparison
@@ -169,6 +173,7 @@ export default function FrontierChartReal({
                   reason: p.reason,
                 })),
                 label: { show: false },
+                symbolSize: 4,
               } as LineSeriesOption,
             ]
           : []),
@@ -207,7 +212,7 @@ export default function FrontierChartReal({
               {
                 type: "scatter",
                 data: [[optimum.price, optimum.profit]],
-                symbolSize: 12,
+                symbolSize: 10,
                 itemStyle: { borderWidth: 1 },
                 emphasis: { focus: "series" },
                 // If you want to label the optimum dot:
@@ -222,8 +227,9 @@ export default function FrontierChartReal({
                     }
                     return ""; // fallback (hides text if value isn’t a tuple)
                   },
-                  fontSize: labelFont,
+                  fontSize: labelFont - 1,
                   position: "top",
+                  distance: 6,
                 },
               } as ScatterSeriesOption,
             ]
@@ -233,7 +239,7 @@ export default function FrontierChartReal({
               {
                 type: "scatter",
                 data: markers.map((m) => [m.price, m.profit, m.label]),
-                symbolSize: 10,
+                symbolSize: 8,
                 itemStyle: {
                   color: "#0ea5e9",
                   borderColor: "#0a5d80",

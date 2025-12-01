@@ -1762,6 +1762,12 @@ export default function App() {
     if (!currentKPIs) return [];
     const rows: TakeRateScenario[] = [];
 
+    const sameShares = (a: SnapshotKPIs["shares"], b: SnapshotKPIs["shares"]) =>
+      Math.abs(a.none - b.none) < 1e-6 &&
+      Math.abs(a.good - b.good) < 1e-6 &&
+      Math.abs(a.better - b.better) < 1e-6 &&
+      Math.abs(a.best - b.best) < 1e-6;
+
     if (baselineKPIs) {
       rows.push({
         key: "baseline",
@@ -1790,7 +1796,20 @@ export default function App() {
       });
     }
 
-    return rows;
+    // Deduplicate identical mixes to reduce clutter (e.g., Current == Baseline)
+    const deduped: TakeRateScenario[] = [];
+    for (const row of rows) {
+      const existing = deduped.find((r) => sameShares(r.shares, row.shares));
+      if (existing) {
+        existing.label = `${existing.label} & ${row.label}`;
+        if (row.kind === "optimized") existing.kind = "optimized";
+        if (row.kind === "baseline") existing.kind = "baseline";
+      } else {
+        deduped.push({ ...row });
+      }
+    }
+
+    return deduped;
   }, [N, baselineKPIs, baselineMeta, currentKPIs, optimizedKPIs]);
 
   const takeRateSummary = useMemo(() => {
