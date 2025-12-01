@@ -22,8 +22,9 @@ import {
   type TooltipComponentOption,
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
-import type { CallbackDataParams } from "echarts/types/dist/shared";
+import type { CallbackDataParams, TopLevelFormatterParams } from "echarts/types/dist/shared";
 import { downloadBlob, csvFromRows } from "../lib/download";
+import type { Shares } from "../lib/choice";
 
 echartsUse([
   LineChart,
@@ -43,8 +44,10 @@ type ECOption = ComposeOption<
 >;
 
 export interface FrontierPoint {
-  bestPrice: number;
+  price: number;
   profit: number;
+  shares?: Shares;
+  reason?: string;
 }
 export interface FrontierOverlay {
   feasiblePoints?: FrontierPoint[];
@@ -66,12 +69,14 @@ export default function FrontierChartReal({
   chartId,
   overlay,
   markers,
+  xLabel = "Price",
 }: {
   points: FrontierPoint[];
   optimum: FrontierPoint | null;
   chartId?: string;
   overlay?: FrontierOverlay;
   markers?: FrontierMarker[];
+  xLabel?: string;
 }) {
   const divRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ECharts | null>(null);
@@ -99,9 +104,6 @@ export default function FrontierChartReal({
   // Update option when data changes
   useEffect(() => {
     if (!chartRef.current) return;
-    const xs = points.map((p) => p.bestPrice);
-    const ys = points.map((p) => p.profit);
-
     const isNarrow = vw < 768;
     const axisFont = isNarrow ? 10 : 12;
     const labelFont = isNarrow ? 10 : 12;
@@ -120,7 +122,7 @@ export default function FrontierChartReal({
       },
       xAxis: {
         type: "value",
-        name: "Best price",
+        name: xLabel,
         nameTextStyle: { fontSize: axisFont },      // axis name font
         axisLabel: { fontSize: axisFont },          // tick label font
       },
@@ -130,12 +132,15 @@ export default function FrontierChartReal({
         nameTextStyle: { fontSize: axisFont },
         axisLabel: { fontSize: axisFont },
       },
-      tooltip: { trigger: "axis" },
       series: [
         {
           type: "line",
           smooth: true,
-          data: xs.map((x, i) => [x, ys[i]]),
+          data: points.map((p) => ({
+            value: [p.price, p.profit],
+            shares: p.shares,
+            reason: p.reason,
+          })),
           // If you want to show data labels on the line, enable this:
           label: {
             show: false,               // set to true if wanting labels
@@ -147,7 +152,11 @@ export default function FrontierChartReal({
           ? [
               {
                 type: "scatter",
-                data: overlay.feasiblePoints.map((p) => [p.bestPrice, p.profit]),
+                data: overlay.feasiblePoints.map((p) => ({
+                  value: [p.price, p.profit],
+                  shares: p.shares,
+                  reason: p.reason,
+                })),
                 symbolSize: 6,
                 itemStyle: { color: "#10b981" },
                 name: "Feasible",
@@ -158,7 +167,11 @@ export default function FrontierChartReal({
           ? [
               {
                 type: "scatter",
-                data: overlay.infeasiblePoints.map((p) => [p.bestPrice, p.profit]),
+                data: overlay.infeasiblePoints.map((p) => ({
+                  value: [p.price, p.profit],
+                  shares: p.shares,
+                  reason: p.reason,
+                })),
                 symbolSize: 6,
                 itemStyle: { color: "#cbd5e1" },
                 name: "Infeasible",
@@ -169,7 +182,7 @@ export default function FrontierChartReal({
           ? [
               {
                 type: "scatter",
-                data: [[optimum.bestPrice, optimum.profit]],
+                data: [[optimum.price, optimum.profit]],
                 symbolSize: 12,
                 itemStyle: { borderWidth: 1 },
                 emphasis: { focus: "series" },
@@ -217,11 +230,15 @@ export default function FrontierChartReal({
             ]
           : []),
       ],
+      tooltip: {
+        trigger: "axis",
+        formatter: (params: TopLevelFormatterParams) => formatTooltip(params),
+      },
     };
 
     chartRef.current.setOption(option, true);
     chartRef.current.resize();
-  }, [points, optimum, vw, markers, overlay?.feasiblePoints, overlay?.infeasiblePoints]);
+  }, [points, optimum, vw, markers, overlay?.feasiblePoints, overlay?.infeasiblePoints, xLabel]);
 
   // Listen for export events from ActionCluster
   useEffect(() => {
@@ -250,8 +267,16 @@ export default function FrontierChartReal({
           });
       } else if (e.detail.type === "csv") {
         const rows: (string | number)[][] = [
-          ["best_price", "profit"],
-          ...points.map(p => [p.bestPrice, p.profit]),
+          ["best_price", "profit", "share.none", "share.good", "share.better", "share.best", "reason"],
+          ...points.map(p => [
+            p.price,
+            p.profit,
+            p.shares?.none ?? "",
+            p.shares?.good ?? "",
+            p.shares?.better ?? "",
+            p.shares?.best ?? "",
+            p.reason ?? "",
+          ]),
         ];
         const csv = csvFromRows(rows);
         downloadBlob(csv, "profit_frontier.csv", "text/csv;charset=utf-8");
@@ -269,4 +294,35 @@ export default function FrontierChartReal({
     </div>
   );
 
+}
+
+function isArrayParams(params: TopLevelFormatterParams): params is CallbackDataParams[] {
+  return Array.isArray(params);
+}
+
+function formatTooltip(params: TopLevelFormatterParams): string {
+  if (!isArrayParams(params) || !params.length) return "";
+  const p = params[0];
+
+  const val = Array.isArray(p.value) ? p.value : [];
+  const price = val.length >= 1 ? `$${Number(val[0]).toFixed(2)}` : "";
+  const profit = val.length >= 2 ? `$${Number(val[1]).toFixed(0)}` : "";
+
+  const datum = p.data as { value?: unknown; shares?: Shares; reason?: string } | undefined;
+  const shares = datum?.shares;
+  const reason = datum?.reason;
+
+  const lines = [price && profit ? `<b>${price}</b> • Profit ${profit}` : "Point"];
+  if (shares) {
+    lines.push(
+      `Mix: None ${(shares.none * 100).toFixed(1)}% • Good ${(shares.good * 100).toFixed(1)}% • Better ${(shares.better * 100).toFixed(1)}% • Best ${(shares.best * 100).toFixed(1)}%`
+    );
+  }
+  if (reason) {
+    lines.push(`<span style="color:#b91c1c">Infeasible: ${reason}</span>`);
+  }
+  if (p.seriesName) {
+    lines.push(`<span style="color:#475569">${p.seriesName}</span>`);
+  }
+  return lines.join("<br/>");
 }
