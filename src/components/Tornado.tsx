@@ -61,13 +61,13 @@ export default function Tornado({
     const right = rows.map((r) => Math.max(0, r.deltaHigh));
     const isNarrow = vw < 900;
     const axisFont = isNarrow ? 10 : 12;
-    const labelWidth = isNarrow ? 110 : 160;
-    const gridLeft = isNarrow ? 90 : 120;
+    const labelWidth = isNarrow ? 120 : 170;
+    const gridLeft = isNarrow ? 110 : 150;
     const showValueLabels = !isNarrow;
 
     const option: ECOption = {
       title: { text: title, left: "center", top: 4, textStyle: { fontWeight: 700, fontSize: 14 } },
-      grid: { left: gridLeft, right: isNarrow ? 40 : 60, top: 36, bottom: 32, containLabel: true },
+      grid: { left: gridLeft, right: isNarrow ? 48 : 70, top: 36, bottom: 36, containLabel: true },
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
@@ -90,7 +90,7 @@ export default function Tornado({
       yAxis: {
         type: "category",
         data: cats,
-        axisLabel: { fontSize: axisFont, margin: 12, width: labelWidth, overflow: "break" },
+        axisLabel: { fontSize: axisFont, margin: 14, width: labelWidth, overflow: "break" },
       },
       series: [
         {
@@ -101,6 +101,7 @@ export default function Tornado({
           label: {
             show: showValueLabels,
             position: "left",
+            distance: 4,
             formatter: (p) => `$${Math.abs(Number(p.value)).toFixed(0)}`,
             fontSize: axisFont,
           },
@@ -113,6 +114,7 @@ export default function Tornado({
           label: {
             show: showValueLabels,
             position: "right",
+            distance: 4,
             formatter: (p) => `$${Math.abs(Number(p.value)).toFixed(0)}`,
             fontSize: axisFont,
           },

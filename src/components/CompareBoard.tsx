@@ -113,7 +113,7 @@ function SnapshotCard({ kpis }: { kpis: SnapshotKPIs }) {
           title="Tier shares"
           labels={["None", "Good", "Better", "Best"]}
           values={[kpis.shares.none, kpis.shares.good, kpis.shares.better, kpis.shares.best]}
-          height={120}
+          height={140}
         />
       </div>
 

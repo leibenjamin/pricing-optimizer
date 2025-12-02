@@ -31,7 +31,7 @@ export default function SharesMini({
           const bw = (v / max) * (w - 2 * pad);
           return (
             <g key={i}>
-              <text x={pad} y={y - 6} fontSize="10" fill="#6b7280">
+              <text x={pad} y={y - 6} fontSize="11" fill="#4b5563">
                 {labels[i] ?? ""}
               </text>
               <rect
@@ -45,8 +45,8 @@ export default function SharesMini({
               <text
                 x={pad + bw + 4}
                 y={y + Math.max(6, barH - 10) - 2}
-                fontSize="10"
-                fill="#374151"
+                fontSize="11"
+                fill="#111827"
               >
                 {(v * 100).toFixed(0)}%
               </text>

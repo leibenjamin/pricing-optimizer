@@ -20,12 +20,12 @@ export default function HeatmapMini({
   chartId,
   exportKind = "coverage",
 }: HeatmapMiniProps) {
-  const W = 440;
+  const W = 520;
   const H = height;
-  const padL = 40;
-  const padB = 30;
-  const padT = 22;
-  const padR = 12;
+  const padL = 52;
+  const padB = 40;
+  const padT = 24;
+  const padR = 16;
 
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
@@ -122,30 +122,38 @@ export default function HeatmapMini({
       >
         <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="#e5e7eb" />
         <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="#e5e7eb" />
-        {gTicks.map((g, i) => (
-          <text
-            key={`gx${i}`}
-            x={xScale(g)}
-            y={H - padB + 12}
-            fontSize={9}
-            textAnchor="middle"
-            fill="#6b7280"
-          >
-            {g}
-          </text>
-        ))}
-        {bTicks.map((b, i) => (
-          <text
-            key={`by${i}`}
-            x={padL - 6}
-            y={yScale(b) + 3}
-            fontSize={9}
-            textAnchor="end"
-            fill="#6b7280"
-          >
-            {b}
-          </text>
-        ))}
+        {gTicks.map((g, i) => {
+          const step = Math.max(1, Math.ceil(gTicks.length / 10));
+          if (i % step !== 0 && i !== gTicks.length - 1) return null;
+          return (
+            <text
+              key={`gx${i}`}
+              x={xScale(g)}
+              y={H - padB + 14}
+              fontSize={9}
+              textAnchor="middle"
+              fill="#6b7280"
+            >
+              {g}
+            </text>
+          );
+        })}
+        {bTicks.map((b, i) => {
+          const step = Math.max(1, Math.ceil(bTicks.length / 10));
+          if (i % step !== 0 && i !== bTicks.length - 1) return null;
+          return (
+            <text
+              key={`by${i}`}
+              x={padL - 8}
+              y={yScale(b) + 3}
+              fontSize={9}
+              textAnchor="end"
+              fill="#6b7280"
+            >
+              {b}
+            </text>
+          );
+        })}
         {cells.map((c, i) => {
           const x = xScale(c.g) - cw / 2;
           const y = yScale(c.b) - ch / 2;

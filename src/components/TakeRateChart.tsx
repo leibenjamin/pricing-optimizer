@@ -156,7 +156,7 @@ export default function TakeRateChart(props: {
       xAxis: {
         type: "category",
         data: scenarios.map((s) => s.label),
-        axisLabel: { fontSize: axisFont, hideOverlap: true },
+        axisLabel: { fontSize: axisFont, hideOverlap: true, margin: 12, rotate: 12 },
         axisPointer: { type: "shadow" },
       },
       yAxis: {

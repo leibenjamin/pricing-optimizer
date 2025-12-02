@@ -190,19 +190,7 @@ export default function FrontierChartReal({
           markLine: markers
             ? {
                 symbol: "none",
-                label: {
-                  show: true,
-                  formatter: (p: CallbackDataParams) => {
-                    const v = Array.isArray(p?.value) ? p.value : undefined;
-                    const price = v && v.length ? Number(v[0]) : NaN;
-                    return Number.isFinite(price) ? `$${price.toFixed(2)}` : "";
-                  },
-                  fontSize: Math.max(8, labelFont - 2),
-                  padding: [2, 4, 2, 4],
-                  color: "#0f172a",
-                  rotate: 90,
-                  distance: 6,
-                },
+                label: { show: false },
                 lineStyle: { color: "#cbd5e1", type: "dashed" },
                 data: markers.map((m) => ({ xAxis: m.price, name: m.label })),
               }
@@ -222,14 +210,7 @@ export default function FrontierChartReal({
                   borderColor: "#0a5d80",
                   borderWidth: 1,
                 },
-                label: {
-                  show: true,
-                  position: "top",
-                  fontSize: labelFont,
-                  color: "#0f172a",
-                  formatter: (p: CallbackDataParams) => (p.name ? String(p.name) : ""),
-                },
-                labelLayout: { hideOverlap: true, moveOverlap: "shiftY" },
+                label: { show: false },
                 data: markPointData,
               }
             : undefined,
