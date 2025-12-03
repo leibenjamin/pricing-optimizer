@@ -64,11 +64,20 @@ export default function Tornado({
     const labelWidth = isNarrow ? 110 : 160;
     const gridLeft = isNarrow ? 110 : 150;
     const showValueLabels = !isNarrow;
-    const padRight = isNarrow ? 56 : 78;
+    const maxAbsDelta = Math.max(
+      ...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh), Math.abs(r.base))),
+      0
+    );
+    const labelDigits = Math.max(
+      1,
+      Math.abs(Math.round(maxAbsDelta)).toLocaleString().length
+    );
+    const padRight = Math.max(isNarrow ? 72 : 96, (isNarrow ? 6 : 8) * labelDigits + (isNarrow ? 52 : 68));
+    const gridBottom = isNarrow ? 64 : 84;
 
     const option: ECOption = {
       title: { text: title, left: "center", top: 4, textStyle: { fontWeight: 700, fontSize: 14 } },
-      grid: { left: gridLeft, right: padRight, top: 36, bottom: 36, containLabel: true },
+      grid: { left: gridLeft, right: padRight, top: 36, bottom: gridBottom, containLabel: true },
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
@@ -85,7 +94,13 @@ export default function Tornado({
       },
       xAxis: {
         type: "value",
-        axisLabel: { formatter: (v: number) => `$${v}`, fontSize: axisFont },
+        axisLabel: {
+          formatter: (v: number) => `$${Math.round(v).toLocaleString()}`,
+          fontSize: axisFont,
+          rotate: -90,
+          margin: 12,
+          hideOverlap: true,
+        },
         splitLine: { lineStyle: { color: "#eef2f7" } },
       },
       yAxis: {
@@ -201,5 +216,5 @@ export default function Tornado({
     );
   }
 
-  return <div ref={ref} className="w-full h-96" />;
+  return <div ref={ref} className="w-full h-[420px] lg:h-[480px]" />;
 }

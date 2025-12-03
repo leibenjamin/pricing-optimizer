@@ -22,12 +22,13 @@ import {
   normalizeWeights,
   type Segment,
   type Prices,
+  type Features,
 } from "./lib/segments";
 import { choiceShares } from "./lib/choice";
-import { type SearchRanges, type GridDiagnostics } from "./lib/optimize";
+import { type SearchRanges, type GridDiagnostics, type Constraints } from "./lib/optimize";
 import { runOptimizeInWorker } from "./lib/optWorker";
 
-import { computePocketPrice, type Tier } from "./lib/waterfall";
+import { computePocketPrice, type Tier, type Leakages } from "./lib/waterfall";
 import { LEAK_PRESETS, blendLeakPresets } from "./lib/waterfallPresets";
 
 import { gridOptimize } from "./lib/optQuick";
@@ -1287,53 +1288,84 @@ export default function App() {
     best: [15, 60],
     step: 1,
   });
-  const [optConstraints, setOptConstraints] = useStickyState("po:constraints", {
+  const [optConstraints, setOptConstraints] = useStickyState<Constraints>("po:constraints", {
     gapGB: 2,
     gapBB: 3,
     marginFloor: { good: 0.25, better: 0.25, best: 0.25 },
     charm: false,
     usePocketMargins: false,
     usePocketProfit: false,
+    maxNoneShare: 0.9,
+    minTakeRate: 0.02,
   });
 
   // Demand scale for demo math
   const N = 1000;
 
-  // Result of last run
-  const [optimizerKind, setOptimizerKind] = useState<OptimizerKind>("grid-worker");
-  const [optResult, setOptResult] = useState<{
-    prices: { good: number; better: number; best: number };
+  type OptRunContext = {
+    pricesAtRun: Prices;
+    costs: Prices;
+    features: Features;
+    segments: Segment[];
+    refPrices: Prices;
+    leak: Leakages;
+    constraints: Constraints;
+    ranges: SearchRanges;
+    usePocketProfit: boolean;
+    usePocketMargins: boolean;
+    N: number;
+  };
+
+  type OptRunResult = {
+    prices: Prices;
     profit: number;
     kpis: SnapshotKPIs;
     diagnostics?: GridDiagnostics;
-  } | null>(null);
+    context: OptRunContext;
+    baselineProfit: number;
+    runId: number;
+  };
+
+  // Result of last run
+  const [optimizerKind, setOptimizerKind] = useState<OptimizerKind>("grid-worker");
+  const [optResult, setOptResult] = useState<OptRunResult | null>(null);
   const [lastOptAt, setLastOptAt] = useState<number | null>(null);
 
   const computeScenarioProfit = useCallback(
-    (ladder: Prices, usePocket: boolean) => {
-      const probs = choiceShares(ladder, features, segments, refPrices);
+    (
+      ladder: Prices,
+      usePocket: boolean,
+      ctx?: { costs?: Prices; features?: Features; segments?: Segment[]; refPrices?: Prices; leak?: Leakages; N?: number }
+    ) => {
+      const ctxCosts = ctx?.costs ?? costs;
+      const ctxFeatures = ctx?.features ?? features;
+      const ctxSegments = ctx?.segments ?? segments;
+      const ctxRefPrices = ctx?.refPrices ?? refPrices;
+      const ctxLeak = ctx?.leak ?? leak;
+      const ctxN = ctx?.N ?? N;
+      const probs = choiceShares(ladder, ctxFeatures, ctxSegments, ctxRefPrices);
       const qty = {
-        good: Math.round(N * probs.good),
-        better: Math.round(N * probs.better),
-        best: Math.round(N * probs.best),
+        good: Math.round(ctxN * probs.good),
+        better: Math.round(ctxN * probs.better),
+        best: Math.round(ctxN * probs.best),
       };
 
       if (!usePocket) {
         return (
-          qty.good * (ladder.good - costs.good) +
-          qty.better * (ladder.better - costs.better) +
-          qty.best * (ladder.best - costs.best)
+          qty.good * (ladder.good - ctxCosts.good) +
+          qty.better * (ladder.better - ctxCosts.better) +
+          qty.best * (ladder.best - ctxCosts.best)
         );
       }
 
-      const pocketGood = computePocketPrice(ladder.good, "good", leak).pocket;
-      const pocketBetter = computePocketPrice(ladder.better, "better", leak).pocket;
-      const pocketBest = computePocketPrice(ladder.best, "best", leak).pocket;
+      const pocketGood = computePocketPrice(ladder.good, "good", ctxLeak).pocket;
+      const pocketBetter = computePocketPrice(ladder.better, "better", ctxLeak).pocket;
+      const pocketBest = computePocketPrice(ladder.best, "best", ctxLeak).pocket;
 
       return (
-        qty.good * (pocketGood - costs.good) +
-        qty.better * (pocketBetter - costs.better) +
-        qty.best * (pocketBest - costs.best)
+        qty.good * (pocketGood - ctxCosts.good) +
+        qty.better * (pocketBetter - ctxCosts.better) +
+        qty.best * (pocketBest - ctxCosts.best)
       );
     },
     [N, features, segments, refPrices, costs, leak]
@@ -1353,16 +1385,54 @@ export default function App() {
     setOptError(null);
     const runId = ++runIdRef.current;
 
+    const constraintsAtRun: Constraints = {
+      gapGB: optConstraints.gapGB,
+      gapBB: optConstraints.gapBB,
+      marginFloor: { ...optConstraints.marginFloor },
+      charm: optConstraints.charm,
+      usePocketMargins: !!optConstraints.usePocketMargins,
+      usePocketProfit: !!optConstraints.usePocketProfit,
+      maxNoneShare: optConstraints.maxNoneShare,
+      minTakeRate: optConstraints.minTakeRate,
+    };
+    const rangesAtRun: SearchRanges = {
+      good: [...optRanges.good] as [number, number],
+      better: [...optRanges.better] as [number, number],
+      best: [...optRanges.best] as [number, number],
+      step: optRanges.step,
+    };
+    const runContext: OptRunContext = {
+      pricesAtRun: { ...prices },
+      costs: { ...costs },
+      features: JSON.parse(JSON.stringify(features)) as Features,
+      segments: segments.map((s) => ({ ...s })),
+      refPrices: { ...refPrices },
+      leak: JSON.parse(JSON.stringify(leak)) as Leakages,
+      constraints: constraintsAtRun,
+      ranges: rangesAtRun,
+      usePocketProfit: !!optConstraints.usePocketProfit,
+      usePocketMargins: !!optConstraints.usePocketMargins,
+      N,
+    };
+    const baseProfitAtRun = computeScenarioProfit(runContext.pricesAtRun, runContext.usePocketProfit, {
+      costs: runContext.costs,
+      features: runContext.features,
+      segments: runContext.segments,
+      refPrices: runContext.refPrices,
+      leak: runContext.leak,
+      N: runContext.N,
+    });
+
     const { promise, cancel } = runOptimizeInWorker({
       runId,
-      ranges: optRanges,
-      costs,
-      feats: features,
-      segs: segments,
-      refPrices,
-      N,
-      C: optConstraints,
-      leak,
+      ranges: rangesAtRun,
+      costs: runContext.costs,
+      feats: runContext.features,
+      segs: runContext.segments,
+      refPrices: runContext.refPrices,
+      N: runContext.N,
+      C: constraintsAtRun,
+      leak: runContext.leak,
     });
     cancelRef.current = cancel;
 
@@ -1372,12 +1442,20 @@ export default function App() {
         if (runIdRef.current !== runId) return;
         setLastOptAt(Date.now());
         const resultKPIs = kpisFromSnapshot(
-          { prices: out.prices, costs, features, segments, refPrices, leak },
-          N,
-          !!optConstraints.usePocketProfit,
-          optConstraints.usePocketMargins ?? !!optConstraints.usePocketProfit
+          { prices: out.prices, costs: runContext.costs, features: runContext.features, segments: runContext.segments, refPrices: runContext.refPrices, leak: runContext.leak },
+          runContext.N,
+          !!constraintsAtRun.usePocketProfit,
+          constraintsAtRun.usePocketMargins ?? !!constraintsAtRun.usePocketProfit
         );
-        setOptResult({ prices: out.prices, profit: out.profit, kpis: resultKPIs, diagnostics: out.diagnostics });
+        setOptResult({
+          prices: out.prices,
+          profit: out.profit,
+          kpis: resultKPIs,
+          diagnostics: out.diagnostics,
+          context: runContext,
+          baselineProfit: baseProfitAtRun,
+          runId,
+        });
         pushJ(
           `[${now()}] Optimizer best ladder $${out.prices.good}/$${out.prices.better}/$${out.prices.best} (profit $${Math.round(out.profit)})`
         );
@@ -2170,21 +2248,22 @@ export default function App() {
   ]);
 
   const robustnessResults = useMemo(
-    () =>
-      optResult
-        ? runRobustnessScenarios({
-            scenarios: ROBUST_SCENARIOS,
-            baseRanges: optRanges,
-            baseConstraints: optConstraints,
-            baseSegments: segments,
-            baseFeatures: features,
-            baseRefPrices: refPrices,
-            baseCosts: costs,
-            baseLeak: leak,
-            N,
-            baseLadder: optResult.prices,
-          })
-        : [],
+    () => {
+      if (!optResult) return [];
+      const ctx = optResult.context;
+      return runRobustnessScenarios({
+        scenarios: ROBUST_SCENARIOS,
+        baseRanges: ctx?.ranges ?? optRanges,
+        baseConstraints: ctx?.constraints ?? optConstraints,
+        baseSegments: ctx?.segments ?? segments,
+        baseFeatures: ctx?.features ?? features,
+        baseRefPrices: ctx?.refPrices ?? refPrices,
+        baseCosts: ctx?.costs ?? costs,
+        baseLeak: ctx?.leak ?? leak,
+        N: ctx?.N ?? N,
+        baseLadder: optResult.prices,
+      });
+    },
     [optResult, optRanges, optConstraints, segments, features, refPrices, costs, leak, N]
   );
   useEffect(() => {
@@ -2195,33 +2274,60 @@ export default function App() {
 
   const optimizerProfitDelta = useMemo(() => {
     if (!optResult) return null;
-    const usePocket = !!optConstraints.usePocketProfit;
-    const baseProfit = computeScenarioProfit(prices, usePocket);
+    const ctx = optResult.context;
+    const baseProfit =
+      optResult.baselineProfit ??
+      computeScenarioProfit(ctx.pricesAtRun, ctx.usePocketProfit, {
+        costs: ctx.costs,
+        features: ctx.features,
+        segments: ctx.segments,
+        refPrices: ctx.refPrices,
+        leak: ctx.leak,
+        N: ctx.N,
+      });
     return { delta: optResult.profit - baseProfit, base: baseProfit };
-  }, [optResult, optConstraints.usePocketProfit, prices, computeScenarioProfit]);
+  }, [optResult, computeScenarioProfit]);
+  const optimizerInputDrift = useMemo(() => {
+    if (!optResult) return [];
+    const ctx = optResult.context;
+    const changed = (a: unknown, b: unknown) => JSON.stringify(a) !== JSON.stringify(b);
+    const notes: string[] = [];
+    if (changed(ctx.pricesAtRun, prices)) notes.push("ladder");
+    if (changed(ctx.costs, costs)) notes.push("costs");
+    if (changed(ctx.leak, leak)) notes.push("leakages");
+    if (changed(ctx.refPrices, refPrices)) notes.push("ref prices");
+    if (changed(ctx.features, features)) notes.push("features");
+    if (changed(ctx.segments, segments)) notes.push("segments");
+    if (changed(ctx.constraints, optConstraints)) notes.push("constraints");
+    return notes;
+  }, [optResult, prices, costs, leak, refPrices, features, segments, optConstraints]);
   const optimizerWhyLines = useMemo(() => {
     if (!optResult) return [];
-    const stale =
-      prices.good !== optResult.prices.good ||
-      prices.better !== optResult.prices.better ||
-      prices.best !== optResult.prices.best;
-    return explainOptimizerResult({
-      basePrices: prices,
+    const ctx = optResult.context;
+    const basePrices = ctx.pricesAtRun;
+    const lines = explainOptimizerResult({
+      basePrices,
       optimizedPrices: optResult.prices,
-      costs,
-      leak,
+      costs: ctx.costs,
+      leak: ctx.leak,
       constraints: {
-        gapGB: optConstraints.gapGB,
-        gapBB: optConstraints.gapBB,
-        marginFloor: optConstraints.marginFloor,
-        usePocketMargins: optConstraints.usePocketMargins,
-        usePocketProfit: optConstraints.usePocketProfit,
+        gapGB: ctx.constraints.gapGB,
+        gapBB: ctx.constraints.gapBB,
+        marginFloor: ctx.constraints.marginFloor,
+        usePocketMargins: ctx.constraints.usePocketMargins,
+        usePocketProfit: ctx.constraints.usePocketProfit,
       },
       profitDelta: optimizerProfitDelta?.delta ?? 0,
-    }).concat(
-      stale ? ["Optimizer run is based on an earlier ladder; rerun to refresh with current state."] : []
-  );
-  }, [optResult, prices, costs, leak, optConstraints, optimizerProfitDelta]);
+    });
+    if (optimizerInputDrift.length) {
+      lines.push(
+        `Optimizer inputs have changed since the last run (${optimizerInputDrift.join(
+          ", "
+        )}). Rerun the optimizer to refresh the recommendation.`
+      );
+    }
+    return lines;
+  }, [optimizerInputDrift, optResult, optimizerProfitDelta]);
 
   // ---- Tornado data (current & optimized) ----
   const tornadoRowsCurrent = useMemo(() => {
@@ -2262,8 +2368,12 @@ export default function App() {
     const p = bestLadder;
     const bumps = computePriceBumps(p);
     const avgSpan = avgFromBumps(bumps);
+    const ctx = optResult?.context;
+    const scenario = ctx
+      ? { N: ctx.N, prices: p, costs: ctx.costs, features: ctx.features, segments: ctx.segments, refPrices: ctx.refPrices, leak: ctx.leak }
+      : { N, prices: p, costs, features, segments, refPrices, leak };
     return tornadoProfit(
-      { N, prices: p, costs, features, segments, refPrices, leak },
+      scenario,
       {
         usePocket: tornadoPocket,
         priceBump: avgSpan,
@@ -2961,20 +3071,22 @@ export default function App() {
   };
 
   const buildGuardrailSummary = useCallback(
-    (activePrices: Prices) => {
+    (activePrices: Prices, overrides?: { constraints?: Constraints; ranges?: SearchRanges; hasOptimizer?: boolean }) => {
+      const constraints = overrides?.constraints ?? optConstraints;
+      const ranges = overrides?.ranges ?? optRanges;
       const gapNotes = explainGaps(activePrices, {
-        gapGB: optConstraints.gapGB,
-        gapBB: optConstraints.gapBB,
+        gapGB: constraints.gapGB,
+        gapBB: constraints.gapBB,
       });
       const gapLine = gapNotes.length
         ? gapNotes[0]
-        : `Gaps slack: ${(activePrices.better - activePrices.good - optConstraints.gapGB).toFixed(2)} / ${(activePrices.best - activePrices.better - optConstraints.gapBB).toFixed(2)} (G/B, B/Best)`;
-      const floorLine = `Floors: Good ${Math.round(optConstraints.marginFloor.good * 100)}% | Better ${Math.round(
-        optConstraints.marginFloor.better * 100
-      )}% | Best ${Math.round(optConstraints.marginFloor.best * 100)}%`;
-      const optimizerReady = Boolean(optResult?.prices);
+        : `Gaps slack: ${(activePrices.better - activePrices.good - constraints.gapGB).toFixed(2)} / ${(activePrices.best - activePrices.better - constraints.gapBB).toFixed(2)} (G/B, B/Best)`;
+      const floorLine = `Floors: Good ${Math.round(constraints.marginFloor.good * 100)}% | Better ${Math.round(
+        constraints.marginFloor.better * 100
+      )}% | Best ${Math.round(constraints.marginFloor.best * 100)}%`;
+      const optimizerReady = overrides?.hasOptimizer ?? Boolean(optResult?.prices);
       const optimizerLine = optimizerReady
-        ? `Optimizer ready - ranges ${optRanges.good[0]}-${optRanges.good[1]} / ${optRanges.better[0]}-${optRanges.better[1]} / ${optRanges.best[0]}-${optRanges.best[1]}`
+        ? `Optimizer ready - ranges ${ranges.good[0]}-${ranges.good[1]} / ${ranges.better[0]}-${ranges.better[1]} / ${ranges.best[0]}-${ranges.best[1]}`
         : "Set ranges and floors, then run the optimizer";
       return { gapLine, floorLine, optimizerLine };
     },
@@ -2986,7 +3098,12 @@ export default function App() {
     [buildGuardrailSummary, prices]
   );
   const guardrailsForOptimized = useMemo(
-    () => buildGuardrailSummary(optResult?.prices ?? prices),
+    () =>
+      buildGuardrailSummary(optResult?.prices ?? prices, {
+        constraints: optResult?.context?.constraints,
+        ranges: optResult?.context?.ranges,
+        hasOptimizer: Boolean(optResult?.prices),
+      }),
     [buildGuardrailSummary, optResult, prices]
   );
 
@@ -5217,35 +5334,29 @@ export default function App() {
                   undo to revert, then call out the delta and which constraints or drivers mattered most.
                 </p>
                 <p className="mt-1 text-slate-600">
-                  Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}.
+                  Basis: {(optResult?.context.usePocketProfit ?? optConstraints.usePocketProfit) ? "Pocket profit (after leakages)" : "List profit"}.
                 </p>
               </div>
               {(() => {
-                const curProfit = optConstraints.usePocketProfit
-                  ? (() => {
-                      const probs = choiceShares(prices, features, segments, refPrices);
-                      const take = {
-                        good: Math.round(N * probs.good),
-                        better: Math.round(N * probs.better),
-                        best: Math.round(N * probs.best),
-                      };
-                      const pG = computePocketPrice(prices.good, "good", leak).pocket;
-                      const pB = computePocketPrice(prices.better, "better", leak).pocket;
-                      const pH = computePocketPrice(prices.best, "best", leak).pocket;
-                      return take.good * (pG - costs.good) + take.better * (pB - costs.better) + take.best * (pH - costs.best);
-                    })()
-                  : (() => {
-                      const probs = choiceShares(prices, features, segments, refPrices);
-                      const take = {
-                        good: Math.round(N * probs.good),
-                        better: Math.round(N * probs.better),
-                        best: Math.round(N * probs.best),
-                      };
-                      return take.good * (prices.good - costs.good) + take.better * (prices.better - costs.better) + take.best * (prices.best - costs.best);
-                    })();
+                if (!optResult)
+                  return <div className="text-xs text-gray-600">Run the optimizer to populate the optimized ladder.</div>;
 
-                const best = optResult?.prices;
-                const bestProfit = optResult?.profit ?? null;
+                const ctx = optResult.context;
+                const basisLabel = ctx.usePocketProfit ? "Pocket profit (after leakages)" : "List profit";
+                const curPrices = ctx.pricesAtRun;
+                const curProfit =
+                  optResult.baselineProfit ??
+                  computeScenarioProfit(curPrices, ctx.usePocketProfit, {
+                    costs: ctx.costs,
+                    features: ctx.features,
+                    segments: ctx.segments,
+                    refPrices: ctx.refPrices,
+                    leak: ctx.leak,
+                    N: ctx.N,
+                  });
+
+                const best = optResult.prices;
+                const bestProfit = optResult.profit ?? null;
 
                 if (!best || bestProfit === null)
                   return <div className="text-xs text-gray-600">Run the optimizer to populate the optimized ladder.</div>;
@@ -5264,10 +5375,14 @@ export default function App() {
                     : null;
                 const guardrails = guardrailsForOptimized;
                 const binds = explainGaps(best, {
-                  gapGB: optConstraints.gapGB,
-                  gapBB: optConstraints.gapBB,
+                  gapGB: ctx.constraints.gapGB,
+                  gapBB: ctx.constraints.gapBB,
                 });
                 const topDriverLine = topDriver(tornadoRowsOptim);
+                const deltaLabel = optimizerInputDrift.length ? "vs run baseline" : "vs current profit";
+                const driftNote = optimizerInputDrift.length
+                  ? `Inputs changed since the optimizer run (${optimizerInputDrift.join(", ")}). Numbers here use the saved run inputs.`
+                  : null;
 
                 return (
                   <div className="space-y-3">
@@ -5281,8 +5396,13 @@ export default function App() {
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] uppercase tracking-wide text-slate-600">
-                          Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}
+                          Basis: {basisLabel}
                         </span>
+                        {driftNote && (
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] text-amber-800">
+                            {driftNote}
+                          </span>
+                        )}
                         <a className="text-sky-600 hover:underline" href="#callouts">
                           Jump to Callouts for the narrative
                         </a>
@@ -5292,9 +5412,9 @@ export default function App() {
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 text-sm">
                       <div className="rounded-xl border border-slate-200 bg-white/70 p-3">
                         <div className="font-semibold mb-1">Current</div>
-                        <div>Good: ${prices.good}</div>
-                        <div>Better: ${prices.better}</div>
-                        <div>Best: ${prices.best}</div>
+                        <div>Good: ${curPrices.good}</div>
+                        <div>Better: ${curPrices.better}</div>
+                        <div>Best: ${curPrices.best}</div>
                         <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(curProfit).toLocaleString()}</div>
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white/70 p-3">
@@ -5311,7 +5431,7 @@ export default function App() {
                             <div className="text-xl font-bold leading-tight">
                               {deltaProfit >= 0 ? "+" : "-"}${Math.abs(Math.round(deltaProfit)).toLocaleString()}
                             </div>
-                            <div className="text-[11px] text-slate-600">vs current profit</div>
+                            <div className="text-[11px] text-slate-600">{deltaLabel}</div>
                           </div>
                           <div className="text-right text-[11px] text-slate-600">
                             <div>Revenue {revenueDeltaCurrent != null ? `${revenueDeltaCurrent >= 0 ? "+" : "-"}$${Math.abs(revenueDeltaCurrent).toLocaleString()}` : "n/a"}</div>
