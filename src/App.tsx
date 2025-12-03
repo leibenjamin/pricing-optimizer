@@ -35,7 +35,7 @@ import { tornadoProfit } from "./lib/sensitivity";
 
 import { simulateCohort } from "./lib/simCohort";
 import MiniLine from "./components/MiniLine";
-import { describeSegment } from "./components/SegmentCards";
+import { describeSegment } from "./lib/segmentNarrative";
 
 import { pocketCoverage } from "./lib/coverage";
 import { TAKE_RATE_COLORS } from "./lib/colors";
@@ -2013,6 +2013,8 @@ export default function App() {
     if (!frontier.base.optimum) return null;
     const optBest = frontier.base.optimum.price;
     const optProf = frontier.base.optimum.profit;
+    const feasibleCount = frontier.base.feasiblePoints?.length ?? 0;
+    const infeasibleCount = frontier.base.infeasiblePoints?.length ?? 0;
     const baselineMarker = frontierMarkers.find((m) => m.kind === "baseline");
     const currentMarker = frontierMarkers.find((m) => m.kind === "current");
     const optimizedMarker = frontierMarkers.find((m) => m.kind === "optimized");
@@ -2027,8 +2029,9 @@ export default function App() {
       headline: `${tierLabel} sweep peak at $${optBest.toFixed(2)} (profit $${Math.round(optProf).toLocaleString()}); ${anchorLabel} at $${anchor.price.toFixed(2)} (${delta >= 0 ? "+" : "-"}$${Math.abs(Math.round(delta)).toLocaleString()} vs peak). Range $${sweep.min.toFixed(2)}-$${sweep.max.toFixed(2)}.`,
       anchorLabel: `${anchorLabel} (${tierLabel})`,
       anchorPrice: anchor.price,
+      feasibility: { feasibleCount, infeasibleCount },
     };
-  }, [frontier.base.optimum, frontierMarkers, frontier.base.sweep, frontierTier]);
+  }, [frontier.base.optimum, frontier.base.feasiblePoints?.length, frontier.base.infeasiblePoints?.length, frontier.base.sweep, frontierMarkers, frontierTier]);
 
   const [showSegmentMix, setShowSegmentMix] = useState(false);
   const segmentMixes = useMemo(() => {
@@ -5911,6 +5914,12 @@ export default function App() {
           {frontierSummary && (
             <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm text-slate-800">
               {frontierSummary.headline}
+              <div className="mt-1 text-[11px] text-slate-600">
+                Feasible points: {frontierSummary.feasibility.feasibleCount.toLocaleString()}{" "}
+                {frontierSummary.feasibility.infeasibleCount
+                  ? `(infeasible flagged: ${frontierSummary.feasibility.infeasibleCount.toLocaleString()})`
+                  : ""}
+              </div>
             </div>
           )}
           <div className="text-[11px] text-slate-600">

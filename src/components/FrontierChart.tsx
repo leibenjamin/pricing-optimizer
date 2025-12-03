@@ -176,6 +176,14 @@ export default function FrontierChartReal({
         },
       })) ?? [];
 
+    const markLineData: Array<{ xAxis?: number; yAxis?: number; name: string }> = markers
+      ? markers.map((m) => ({ xAxis: m.price, name: shortLabel(m.label) }))
+      : [];
+    // Add a zero-profit horizontal line for reference when data crosses zero.
+    if (minProfit != null && maxProfit != null && minProfit < 0 && maxProfit > 0) {
+      markLineData.push({ yAxis: 0, name: "Profit = 0" });
+    }
+
     const option: ECOption = {
       animation: false,
       grid: {
@@ -217,12 +225,12 @@ export default function FrontierChartReal({
             reason: p.reason,
           })),
           symbolSize: 4,
-          markLine: markers
+          markLine: markLineData.length
             ? {
                 symbol: "none",
-                label: { show: false },
+                label: { show: true, formatter: (p) => (p.name ? String(p.name) : ""), fontSize: axisFont - 1 },
                 lineStyle: { color: "#cbd5e1", type: "dashed" },
-                data: markers.map((m) => ({ xAxis: m.price, name: m.label })),
+                data: markLineData,
               }
             : undefined,
           label: {
@@ -489,5 +497,3 @@ function formatTooltip(params: TopLevelFormatterParams): string {
   }
   return lines.join("<br/>");
 }
-
-

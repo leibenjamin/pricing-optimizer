@@ -42,3 +42,5 @@ pricing-optimizer-core-model-and-real-world-enhancements.md
 # temp files
 src/App.tsx.orig
 tmp.txt
+tmp_patch.cjs
+tmp_patch.js

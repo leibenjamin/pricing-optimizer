@@ -64,10 +64,11 @@ export default function Tornado({
     const labelWidth = isNarrow ? 110 : 160;
     const gridLeft = isNarrow ? 110 : 150;
     const showValueLabels = !isNarrow;
+    const padRight = isNarrow ? 56 : 78;
 
     const option: ECOption = {
       title: { text: title, left: "center", top: 4, textStyle: { fontWeight: 700, fontSize: 14 } },
-      grid: { left: gridLeft, right: isNarrow ? 48 : 70, top: 36, bottom: 36, containLabel: true },
+      grid: { left: gridLeft, right: padRight, top: 36, bottom: 36, containLabel: true },
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
@@ -95,7 +96,7 @@ export default function Tornado({
           margin: 14,
           width: labelWidth,
           overflow: "truncate",
-          formatter: (v: string) => (v.length > 26 ? `${v.slice(0, 25)}…` : v),
+          formatter: (v: string) => (v.length > 26 ? `${v.slice(0, 25)}...` : v),
         },
       },
       series: [
@@ -115,6 +116,12 @@ export default function Tornado({
             fontSize: axisFont,
           },
           barMaxWidth: 18,
+          markLine: {
+            symbol: "none",
+            label: { show: true, formatter: "Base profit", fontSize: axisFont },
+            lineStyle: { color: "#94a3b8", type: "dashed" },
+            data: [{ xAxis: 0 }],
+          },
         },
         {
           name: "High",
@@ -186,6 +193,13 @@ export default function Tornado({
     return () => window.removeEventListener("export:tornado", onExport as EventListener);
   }, [chartId, rows]);
 
+  if (!rows.length) {
+    return (
+      <div className="w-full h-64 rounded border border-dashed border-slate-200 flex items-center justify-center text-sm text-slate-500">
+        Run an optimization or adjust ranges to populate tornado sensitivity.
+      </div>
+    );
+  }
+
   return <div ref={ref} className="w-full h-96" />;
 }
-
