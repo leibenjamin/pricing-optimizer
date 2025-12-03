@@ -132,10 +132,34 @@ export default function FrontierChartReal({
     const isNarrow = vw < 768;
     const axisFont = isNarrow ? 10 : 12;
     const labelFont = isNarrow ? 10 : 12;
-    const topPad = isNarrow ? 26 : 40;
-    const rightPad = isNarrow ? 24 : 40;
-    const bottomPad = isNarrow ? 42 : 56;
+    const topPad = isNarrow ? 32 : 46;
+    const rightPad = isNarrow ? 28 : 44;
+    const bottomPad = isNarrow ? 48 : 62;
     const markerSymbolSize = isNarrow ? 18 : 24;
+
+    const allPrices: number[] = [
+      ...points.map((p) => p.price),
+      ...(overlay?.feasiblePoints?.map((p) => p.price) ?? []),
+      ...(overlay?.infeasiblePoints?.map((p) => p.price) ?? []),
+      ...(comparison?.points?.map((p) => p.price) ?? []),
+      ...(markers?.map((m) => m.price) ?? []),
+    ].filter((v) => Number.isFinite(v));
+    const allProfits: number[] = [
+      ...points.map((p) => p.profit),
+      ...(overlay?.feasiblePoints?.map((p) => p.profit) ?? []),
+      ...(overlay?.infeasiblePoints?.map((p) => p.profit) ?? []),
+      ...(comparison?.points?.map((p) => p.profit) ?? []),
+      ...(markers?.map((m) => m.profit) ?? []),
+      ...(optimum ? [optimum.profit] : []),
+    ].filter((v) => Number.isFinite(v));
+    const minPrice = allPrices.length ? Math.min(...allPrices) : undefined;
+    const maxPrice = allPrices.length ? Math.max(...allPrices) : undefined;
+    const priceSpan = minPrice != null && maxPrice != null ? Math.max(maxPrice - minPrice, 1) : undefined;
+    const padPrice = priceSpan != null ? Math.max(priceSpan * 0.06, 0.5) : undefined;
+    const minProfit = allProfits.length ? Math.min(...allProfits) : undefined;
+    const maxProfit = allProfits.length ? Math.max(...allProfits) : undefined;
+    const profitSpan = minProfit != null && maxProfit != null ? Math.max(maxProfit - minProfit, 1) : undefined;
+    const padProfit = profitSpan != null ? Math.max(profitSpan * 0.08, 5) : undefined;
 
     const markPointData =
       markers?.map((m) => ({
@@ -164,8 +188,10 @@ export default function FrontierChartReal({
         name: xLabel,
         nameTextStyle: { fontSize: axisFont },
         axisLabel: { fontSize: axisFont, hideOverlap: true, margin: 10 },
-        boundaryGap: [0.02, 0.05],
+        boundaryGap: [0.05, 0.08],
         axisLine: { onZero: false },
+        ...(minPrice != null && padPrice != null ? { min: minPrice - padPrice } : {}),
+        ...(maxPrice != null && padPrice != null ? { max: maxPrice + padPrice } : {}),
       },
       yAxis: {
         type: "value",
@@ -175,6 +201,8 @@ export default function FrontierChartReal({
         axisLine: { onZero: false },
         splitNumber: 6,
         splitLine: { lineStyle: { color: "#e2e8f0" } },
+        ...(minProfit != null && padProfit != null ? { min: minProfit - padProfit } : {}),
+        ...(maxProfit != null && padProfit != null ? { max: maxProfit + padProfit } : {}),
       },
       series: [
         {
@@ -297,6 +325,7 @@ export default function FrontierChartReal({
                 type: "scatter",
                 data: markers.map((m) => [m.price, m.profit, m.label]),
                 symbolSize: 8,
+                labelLayout: { hideOverlap: true, moveOverlap: "shiftY" },
                 itemStyle: {
                   color: "#0ea5e9",
                   borderColor: "#0a5d80",
@@ -310,6 +339,9 @@ export default function FrontierChartReal({
                   },
                   position: "top",
                   fontSize: labelFont,
+                  overflow: "truncate",
+                  width: isNarrow ? 80 : 120,
+                  distance: 6,
                   color: "#0f172a",
                 },
                 z: 5,
@@ -320,6 +352,7 @@ export default function FrontierChartReal({
       tooltip: {
         trigger: "axis",
         formatter: (params: TopLevelFormatterParams) => formatTooltip(params),
+        confine: true,
       },
     };
 

@@ -200,9 +200,9 @@ export const PRESETS: Preset[] = [
       featB: { good: 0, better: 1, best: 1 },
     },
     segments: [
-      { name: "Procurement guardrail", weight: 0.45, betaPrice: -0.18, betaFeatA: 0.50, betaFeatB: 0.35, betaNone: 0.10, alphaAnchor: 0.35, lambdaLoss: 1.50 },
-      { name: "Ops lead", weight: 0.35, betaPrice: -0.12, betaFeatA: 0.70, betaFeatB: 0.55, betaNone: -0.05, alphaAnchor: 0.25, lambdaLoss: 1.35 },
-      { name: "Exec sponsor", weight: 0.20, betaPrice: -0.07, betaFeatA: 0.90, betaFeatB: 0.85, betaNone: -0.25, alphaAnchor: 0.30, lambdaLoss: 1.25 },
+      { name: "Procurement guardrail", weight: 0.45, betaPrice: -0.0006, betaFeatA: 0.60, betaFeatB: 0.50, betaNone: 0.65, alphaAnchor: 0.0003, lambdaLoss: 1.08 },
+      { name: "Ops lead", weight: 0.35, betaPrice: -0.00045, betaFeatA: 0.85, betaFeatB: 0.65, betaNone: 0.25, alphaAnchor: 0.00028, lambdaLoss: 1.07 },
+      { name: "Exec sponsor", weight: 0.20, betaPrice: -0.0003, betaFeatA: 1.05, betaFeatB: 0.95, betaNone: 0.00, alphaAnchor: 0.00024, lambdaLoss: 1.05 },
     ],
     leak: {
       promo: { good: 0.02, better: 0.08, best: 0.12 },
@@ -226,10 +226,12 @@ export const PRESETS: Preset[] = [
       charm: false,
       usePocketMargins: false,
       usePocketProfit: false,
+      maxNoneShare: 0.7,
+      minTakeRate: 0.08,
     },
     tornado: { usePocket: false, priceBump: 8, pctBump: 1, rangeMode: "data" },
     retentionPct: 95,
     kpiFloorAdj: 0,
-    note: "Enterprise annual deals with structured volume rebates; optimizer runs on list profit with wide ranges and large tier gaps.",
+    note: "Enterprise annual deals with structured volume rebates; optimizer runs on list profit with wide ranges and large tier gaps. Price sensitivity and anchoring are scaled for $1k-$7k ladders so frontier/tornado stay meaningful.",
   },
 ];

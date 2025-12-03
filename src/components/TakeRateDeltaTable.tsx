@@ -8,6 +8,8 @@ type Row = {
   optimized?: number;
 };
 
+const CLOSE_ENOUGH = 0.0005;
+
 export function TakeRateDeltaTable({
   scenarios,
   baselineKey,
@@ -34,8 +36,12 @@ export function TakeRateDeltaTable({
     };
   });
 
+  const baselineEqualsCurrent = rows.every(
+    (r) => Math.abs(r.current - r.baseline) < CLOSE_ENOUGH
+  );
+
   const cell = (val: number | undefined, ref: number) => {
-    if (val == null || Number.isNaN(val)) return "—";
+    if (val == null || Number.isNaN(val)) return "";
     const delta = val - ref;
     const deltaTxt = `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} pp`;
     return `${val.toFixed(1)}% (${deltaTxt})`;
@@ -51,8 +57,14 @@ export function TakeRateDeltaTable({
           <thead>
             <tr className="text-left">
               <th className="py-1 pr-2">Tier</th>
-              <th className="py-1 pr-2">Baseline</th>
-              <th className="py-1 pr-2">Current</th>
+              {baselineEqualsCurrent ? (
+                <th className="py-1 pr-2">Baseline &amp; Current</th>
+              ) : (
+                <>
+                  <th className="py-1 pr-2">Baseline</th>
+                  <th className="py-1 pr-2">Current</th>
+                </>
+              )}
               {optimized ? <th className="py-1 pr-2">Optimized</th> : null}
             </tr>
           </thead>
@@ -71,10 +83,18 @@ export function TakeRateDeltaTable({
                   />
                   {r.tier}
                 </td>
-                <td className="py-1 pr-2 text-slate-800">{r.baseline.toFixed(1)}%</td>
-                <td className="py-1 pr-2 text-slate-800">
-                  {cell(r.current, r.baseline)}
-                </td>
+                {baselineEqualsCurrent ? (
+                  <td className="py-1 pr-2 text-slate-800">
+                    {r.baseline.toFixed(1)}% (no change)
+                  </td>
+                ) : (
+                  <>
+                    <td className="py-1 pr-2 text-slate-800">{r.baseline.toFixed(1)}%</td>
+                    <td className="py-1 pr-2 text-slate-800">
+                      {cell(r.current, r.baseline)}
+                    </td>
+                  </>
+                )}
                 {optimized ? (
                   <td className="py-1 pr-2 text-slate-800">
                     {cell(r.optimized, r.baseline)}
