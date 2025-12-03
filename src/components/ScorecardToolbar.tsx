@@ -59,31 +59,12 @@ export default function ScorecardToolbar({
   hasOptimized,
 }: ScorecardToolbarProps) {
   return (
-    <div className="flex w-full flex-col gap-3 text-xs text-slate-600">
+    <div className="flex w-full flex-col gap-2 text-xs text-slate-600">
       <div className="flex items-center justify-between gap-2">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-          Comparison context
+          Scorecard context
         </div>
-        <button
-          type="button"
-          className="whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-          onClick={onPinBaseline}
-        >
-          Pin current as baseline
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-        <ToolbarChip label="Baseline for deltas" value={baselineText} hint="Frozen reference for charts" />
-        <ToolbarChip label="Pinned basis" value={pinnedBasisText} hint="Use to narrate or export" />
-        <ToolbarChip label="Active basis" value={activeBasisText} hint="What cards below are showing" />
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3">
-        <div className="text-[11px] text-slate-500">
-          Toggle what the scorecard tiles display; optimized view requires a successful run.
-        </div>
-        <div className="inline-flex items-center gap-1">
+        <div className="flex items-center gap-2">
           <span className="text-[10px] uppercase tracking-wide text-slate-500">View</span>
           <div className="inline-flex overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
             <ToolbarToggle
@@ -98,7 +79,20 @@ export default function ScorecardToolbar({
               onClick={() => hasOptimized && onChangeView("optimized")}
             />
           </div>
+          <button
+            type="button"
+            className="whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            onClick={onPinBaseline}
+          >
+            Pin current as baseline
+          </button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <ToolbarChip label="Baseline (deltas)" value={baselineText} hint="Reference for lifts" />
+        <ToolbarChip label="Active view" value={activeBasisText} hint="Tiles show this basis" />
+        <ToolbarChip label="Pinned for story" value={pinnedBasisText} hint="Use in exports/narrative" />
       </div>
     </div>
   );

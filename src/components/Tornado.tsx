@@ -61,7 +61,7 @@ export default function Tornado({
     const right = rows.map((r) => Math.max(0, r.deltaHigh));
     const isNarrow = vw < 900;
     const axisFont = isNarrow ? 10 : 12;
-    const labelWidth = isNarrow ? 120 : 170;
+    const labelWidth = isNarrow ? 110 : 160;
     const gridLeft = isNarrow ? 110 : 150;
     const showValueLabels = !isNarrow;
 
@@ -90,7 +90,13 @@ export default function Tornado({
       yAxis: {
         type: "category",
         data: cats,
-        axisLabel: { fontSize: axisFont, margin: 14, width: labelWidth, overflow: "break" },
+        axisLabel: {
+          fontSize: axisFont,
+          margin: 14,
+          width: labelWidth,
+          overflow: "truncate",
+          formatter: (v: string) => (v.length > 26 ? `${v.slice(0, 25)}…` : v),
+        },
       },
       series: [
         {
@@ -102,9 +108,13 @@ export default function Tornado({
             show: showValueLabels,
             position: "left",
             distance: 4,
-            formatter: (p) => `$${Math.abs(Number(p.value)).toFixed(0)}`,
+            formatter: (p) => {
+              const v = Math.abs(Number(p.value));
+              return v >= 1 ? `$${v.toFixed(0)}` : "";
+            },
             fontSize: axisFont,
           },
+          barMaxWidth: 18,
         },
         {
           name: "High",
@@ -115,9 +125,13 @@ export default function Tornado({
             show: showValueLabels,
             position: "right",
             distance: 4,
-            formatter: (p) => `$${Math.abs(Number(p.value)).toFixed(0)}`,
+            formatter: (p) => {
+              const v = Math.abs(Number(p.value));
+              return v >= 1 ? `$${v.toFixed(0)}` : "";
+            },
             fontSize: axisFont,
           },
+          barMaxWidth: 18,
         },
       ],
       animation: true,

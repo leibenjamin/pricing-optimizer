@@ -80,6 +80,8 @@ function getDatum(p: CallbackDataParams): FrontierDatum | null {
   return null;
 }
 
+const shortLabel = (s: string) => (s.length > 18 ? `${s.slice(0, 17)}…` : s);
+
 export default function FrontierChartReal({
   points,
   optimum,
@@ -132,9 +134,9 @@ export default function FrontierChartReal({
     const isNarrow = vw < 768;
     const axisFont = isNarrow ? 10 : 12;
     const labelFont = isNarrow ? 10 : 12;
-    const topPad = isNarrow ? 32 : 46;
-    const rightPad = isNarrow ? 28 : 44;
-    const bottomPad = isNarrow ? 48 : 62;
+    const topPad = isNarrow ? 40 : 54;
+    const rightPad = isNarrow ? 30 : 46;
+    const bottomPad = isNarrow ? 54 : 68;
     const markerSymbolSize = isNarrow ? 18 : 24;
 
     const allPrices: number[] = [
@@ -163,7 +165,7 @@ export default function FrontierChartReal({
 
     const markPointData =
       markers?.map((m) => ({
-        name: m.label,
+        name: shortLabel(m.label),
         value: m.price,
         coord: [m.price, m.profit],
         label: {
@@ -323,7 +325,7 @@ export default function FrontierChartReal({
           ? [
               {
                 type: "scatter",
-                data: markers.map((m) => [m.price, m.profit, m.label]),
+                data: markers.map((m) => [m.price, m.profit, shortLabel(m.label)]),
                 symbolSize: 8,
                 labelLayout: { hideOverlap: true, moveOverlap: "shiftY" },
                 itemStyle: {
@@ -487,8 +489,5 @@ function formatTooltip(params: TopLevelFormatterParams): string {
   }
   return lines.join("<br/>");
 }
-
-
-
 
 
