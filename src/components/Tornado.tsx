@@ -62,16 +62,16 @@ export default function Tornado({
     const isNarrow = vw < 900;
     const axisFont = isNarrow ? 10 : 12;
     const labelWidth = isNarrow ? 150 : 190;
-    const labelGap = isNarrow ? 34 : 44; // larger separation between y-labels and bars
+    const labelGap = isNarrow ? 44 : 54; // larger separation between y-labels and bars
     const maxAbsDelta = Math.max(...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh))), 0);
     // Ensure tiny values (cents) still render a sliver
     const spanFloor = isNarrow ? 5 : 10;
     const paddedSpan = Math.max(spanFloor, maxAbsDelta * 1.2 + 5);
     const labelDigits = Math.max(1, Math.abs(Math.round(paddedSpan)).toLocaleString().length);
     // Keep plot wide; modest grid left, rely on y-axis margin for separation
-    const gridLeft = isNarrow ? 110 : 130;
+    const gridLeft = isNarrow ? 70 : 90;
     const showValueLabels = !isNarrow;
-    const padRight = Math.max(isNarrow ? 120 : 150, (isNarrow ? 8 : 11) * labelDigits + (isNarrow ? 80 : 110));
+    const padRight = Math.max(isNarrow ? 90 : 110, (isNarrow ? 8 : 11) * labelDigits + (isNarrow ? 80 : 110));
     const gridBottom = isNarrow ? 76 : 96;
 
     const option: ECOption = {
@@ -96,7 +96,7 @@ export default function Tornado({
         min: -paddedSpan,
         max: paddedSpan,
         axisLine: { onZero: false },
-        splitNumber: 5,
+        splitNumber: 4,
         axisLabel: {
           formatter: (v: number) => `$${Math.round(v).toLocaleString()}`,
           fontSize: axisFont,
