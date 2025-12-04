@@ -62,17 +62,15 @@ export default function Tornado({
     const isNarrow = vw < 900;
     const axisFont = isNarrow ? 10 : 12;
     const labelWidth = isNarrow ? 140 : 190;
-    const labelGap = isNarrow ? 20 : 28; // space between y-labels and bars
-    const gridLeft = labelWidth + labelGap;
-    const showValueLabels = !isNarrow;
+    const labelGap = isNarrow ? 22 : 30; // space between y-labels and bars
     const maxAbsDelta = Math.max(
       ...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh), Math.abs(r.base))),
       0
     );
-    const labelDigits = Math.max(
-      1,
-      Math.abs(Math.round(maxAbsDelta)).toLocaleString().length
-    );
+    const labelDigits = Math.max(1, Math.abs(Math.round(maxAbsDelta)).toLocaleString().length);
+    const valueLabelPadLeft = (isNarrow ? 8 : 11) * labelDigits + (isNarrow ? 32 : 42);
+    const gridLeft = labelWidth + labelGap + valueLabelPadLeft;
+    const showValueLabels = !isNarrow;
     const padRight = Math.max(isNarrow ? 86 : 120, (isNarrow ? 7 : 10) * labelDigits + (isNarrow ? 60 : 86));
     const gridBottom = isNarrow ? 72 : 92;
 
