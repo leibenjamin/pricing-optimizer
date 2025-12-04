@@ -61,17 +61,18 @@ export default function Tornado({
     const right = rows.map((r) => Math.max(0, r.deltaHigh));
     const isNarrow = vw < 900;
     const axisFont = isNarrow ? 10 : 12;
-    const labelWidth = isNarrow ? 140 : 190;
-    const labelGap = isNarrow ? 22 : 30; // space between y-labels and bars
+    const labelWidth = isNarrow ? 160 : 210;
+    const labelGap = isNarrow ? 26 : 36; // space between y-labels and bars
     const maxAbsDelta = Math.max(
-      ...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh), Math.abs(r.base))),
+      ...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh))),
       0
     );
-    const labelDigits = Math.max(1, Math.abs(Math.round(maxAbsDelta)).toLocaleString().length);
-    const valueLabelPadLeft = (isNarrow ? 8 : 11) * labelDigits + (isNarrow ? 32 : 42);
+    const paddedSpan = Math.max(1, maxAbsDelta * 1.1);
+    const labelDigits = Math.max(1, Math.abs(Math.round(paddedSpan)).toLocaleString().length);
+    const valueLabelPadLeft = (isNarrow ? 10 : 14) * labelDigits + (isNarrow ? 40 : 60);
     const gridLeft = labelWidth + labelGap + valueLabelPadLeft;
     const showValueLabels = !isNarrow;
-    const padRight = Math.max(isNarrow ? 86 : 120, (isNarrow ? 7 : 10) * labelDigits + (isNarrow ? 60 : 86));
+    const padRight = Math.max(isNarrow ? 96 : 136, (isNarrow ? 7 : 10) * labelDigits + (isNarrow ? 72 : 96));
     const gridBottom = isNarrow ? 72 : 92;
 
     const option: ECOption = {
@@ -93,6 +94,8 @@ export default function Tornado({
       },
       xAxis: {
         type: "value",
+        min: -paddedSpan,
+        max: paddedSpan,
         axisLabel: {
           formatter: (v: number) => `$${Math.round(v).toLocaleString()}`,
           fontSize: axisFont,
@@ -215,5 +218,5 @@ export default function Tornado({
     );
   }
 
-  return <div ref={ref} className="w-full h-[420px] lg:h-[480px]" />;
+  return <div ref={ref} className="w-full min-h-[420px] lg:min-h-[520px]" />;
 }
