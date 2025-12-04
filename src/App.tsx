@@ -6210,37 +6210,44 @@ export default function App() {
               <span className="text-[11px] text-slate-500">Baseline / Current / Optimized per segment; use table above for exact deltas.</span>
             </div>
             {showSegmentMix && segmentMixes.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {segmentMixes.map((seg, idx) => (
-                  <div key={idx} className="rounded border border-slate-200 bg-white px-2.5 py-2 shadow-sm">
-                    <div className="text-[11px] uppercase text-slate-500 mb-1">{seg.label}</div>
-                    <SharesMini
-                      title="Current"
-                      labels={["None", "Good", "Better", "Best"]}
-                      values={[seg.sharesCurrent.none, seg.sharesCurrent.good, seg.sharesCurrent.better, seg.sharesCurrent.best]}
-                      height={90}
-                      colors={takeRateColors}
-                    />
-                    {seg.sharesOptim && (
-                      <SharesMini
-                        title="Optimized"
-                        labels={["None", "Good", "Better", "Best"]}
-                        values={[seg.sharesOptim.none, seg.sharesOptim.good, seg.sharesOptim.better, seg.sharesOptim.best]}
-                        height={90}
-                        colors={takeRateColors}
-                      />
-                    )}
-                    {seg.sharesBaseline && (
-                      <SharesMini
-                        title="Baseline"
-                        labels={["None", "Good", "Better", "Best"]}
-                        values={[seg.sharesBaseline.none, seg.sharesBaseline.good, seg.sharesBaseline.better, seg.sharesBaseline.best]}
-                        height={90}
-                        colors={takeRateColors}
-                      />
-                    )}
-                  </div>
-                ))}
+              <div className="flex flex-col gap-3">
+                {segmentMixes.map((seg, idx) => {
+                  const entries: Array<{ label: string; shares: typeof seg.sharesCurrent }> = [
+                    { label: "Current", shares: seg.sharesCurrent },
+                    ...(seg.sharesOptim ? [{ label: "Optimized", shares: seg.sharesOptim }] : []),
+                    ...(seg.sharesBaseline ? [{ label: "Baseline", shares: seg.sharesBaseline }] : []),
+                  ];
+                  const sig = (s: typeof seg.sharesCurrent) =>
+                    [s.none, s.good, s.better, s.best].map((v) => v.toFixed(6)).join("|");
+                  const grouped = new Map<string, { labels: string[]; shares: typeof seg.sharesCurrent }>();
+                  entries.forEach((e) => {
+                    const key = sig(e.shares);
+                    const g = grouped.get(key);
+                    if (g) g.labels.push(e.label);
+                    else grouped.set(key, { labels: [e.label], shares: e.shares });
+                  });
+                  const charts = Array.from(grouped.values()).map((g) => ({
+                    title: g.labels.join(" / "),
+                    shares: g.shares,
+                  }));
+                  return (
+                    <div key={idx} className="rounded border border-slate-200 bg-white px-3 py-3 shadow-sm">
+                      <div className="text-[11px] uppercase text-slate-500 mb-2">{seg.label}</div>
+                      <div className="flex flex-col gap-2">
+                        {charts.map((c, i) => (
+                          <SharesMini
+                            key={i}
+                            title={c.title}
+                            labels={["None", "Good", "Better", "Best"]}
+                            values={[c.shares.none, c.shares.good, c.shares.better, c.shares.best]}
+                            height={110}
+                            colors={takeRateColors}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </Section>
