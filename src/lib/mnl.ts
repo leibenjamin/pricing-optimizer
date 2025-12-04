@@ -287,3 +287,9 @@ export function fitLatentClass(rows: AltRow[], opts: FitOptions & { classes?: nu
     converged,
   };
 }
+
+// Compatibility aliases for older worker callers
+// fitLC: legacy name for latent-class fitting (supports classes<=3)
+export const fitLC = fitLatentClass;
+// emFit: legacy export expected by estimator worker (same implementation)
+export const emFit = fitLatentClass;
