@@ -2358,14 +2358,17 @@ export default function App() {
   const tornadoRowsCurrent = useMemo(() => {
     const bumps = computePriceBumps(prices);
     const avgSpan = avgFromBumps(bumps);
+    const avgPrice = (prices.good + prices.better + prices.best) / 3;
+    const pctBumpAbs = Math.max(0.005, tornadoPctBump / 100);
     return tornadoProfit(
       { N, prices, costs, features, segments, refPrices, leak },
       {
         usePocket: tornadoPocket,
         priceBump: avgSpan,
         priceBumps: bumps,
-        pctSmall: tornadoPctBump / 100,
-        payPct: tornadoPctBump / 200,
+        pctSmall: pctBumpAbs,
+        payPct: pctBumpAbs,
+        payFixed: Math.max(0.05, avgPrice * pctBumpAbs * 0.02),
       }
     ).map((r) => ({
       name: r.name,
@@ -2393,6 +2396,8 @@ export default function App() {
     const p = bestLadder;
     const bumps = computePriceBumps(p);
     const avgSpan = avgFromBumps(bumps);
+    const avgPrice = (p.good + p.better + p.best) / 3;
+    const pctBumpAbs = Math.max(0.005, tornadoPctBump / 100);
     const ctx = optResult?.context;
     const scenario = ctx
       ? { N: ctx.N, prices: p, costs: ctx.costs, features: ctx.features, segments: ctx.segments, refPrices: ctx.refPrices, leak: ctx.leak }
@@ -2403,8 +2408,9 @@ export default function App() {
         usePocket: tornadoPocket,
         priceBump: avgSpan,
         priceBumps: bumps,
-        pctSmall: tornadoPctBump / 100,
-        payPct: tornadoPctBump / 200,
+        pctSmall: pctBumpAbs,
+        payPct: pctBumpAbs,
+        payFixed: Math.max(0.05, avgPrice * pctBumpAbs * 0.02),
       }
     ).map((r) => ({
       name: r.name,
