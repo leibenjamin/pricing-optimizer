@@ -14,7 +14,7 @@ export default function SharesMini({
 }) {
   const w = 520; // SVG scales via width: 100%
   const h = height;
-  const pad = 32; // increased padding for more breathing room left/right
+  const pad = 42; // +30% more padding left/right to avoid label clipping
 
   const barH = (h - 2 * pad) / Math.max(1, values.length);
   const max = Math.max(1e-6, ...values);
