@@ -14,7 +14,7 @@ export default function SharesMini({
 }) {
   const w = 520; // SVG scales via width: 100%
   const h = height;
-  const pad = 20;
+  const pad = 32; // increased padding for more breathing room left/right
 
   const barH = (h - 2 * pad) / Math.max(1, values.length);
   const max = Math.max(1e-6, ...values);
@@ -31,7 +31,7 @@ export default function SharesMini({
           const bw = (v / max) * (w - 2 * pad);
           return (
             <g key={i}>
-              <text x={pad} y={y - 6} fontSize="11" fill="#4b5563">
+              <text x={pad - 8} y={y + Math.max(6, barH - 10) / 2} fontSize="11" fill="#4b5563" textAnchor="end" dominantBaseline="middle">
                 {labels[i] ?? ""}
               </text>
               <rect
@@ -44,9 +44,10 @@ export default function SharesMini({
               />
               <text
                 x={pad + bw + 4}
-                y={y + Math.max(6, barH - 10) - 2}
+                y={y + Math.max(6, barH - 10) / 2}
                 fontSize="11"
                 fill="#111827"
+                dominantBaseline="middle"
               >
                 {(v * 100).toFixed(0)}%
               </text>

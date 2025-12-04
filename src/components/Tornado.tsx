@@ -61,18 +61,15 @@ export default function Tornado({
     const right = rows.map((r) => Math.max(0, r.deltaHigh));
     const isNarrow = vw < 900;
     const axisFont = isNarrow ? 10 : 12;
-    const labelWidth = isNarrow ? 160 : 210;
-    const labelGap = isNarrow ? 26 : 36; // space between y-labels and bars
-    const maxAbsDelta = Math.max(
-      ...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh))),
-      0
-    );
+    const labelWidth = isNarrow ? 170 : 220;
+    const labelGap = isNarrow ? 22 : 28; // space between y-labels and bars
+    const maxAbsDelta = Math.max(...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh))), 0);
     const paddedSpan = Math.max(1, maxAbsDelta * 1.1);
     const labelDigits = Math.max(1, Math.abs(Math.round(paddedSpan)).toLocaleString().length);
-    const valueLabelPadLeft = (isNarrow ? 10 : 14) * labelDigits + (isNarrow ? 40 : 60);
-    const gridLeft = labelWidth + labelGap + valueLabelPadLeft;
+    // Keep plot wide; only reserve modest left padding for labels
+    const gridLeft = labelWidth + labelGap + (isNarrow ? 12 : 16);
     const showValueLabels = !isNarrow;
-    const padRight = Math.max(isNarrow ? 96 : 136, (isNarrow ? 7 : 10) * labelDigits + (isNarrow ? 72 : 96));
+    const padRight = Math.max(isNarrow ? 110 : 150, (isNarrow ? 8 : 11) * labelDigits + (isNarrow ? 72 : 104));
     const gridBottom = isNarrow ? 72 : 92;
 
     const option: ECOption = {
@@ -100,7 +97,7 @@ export default function Tornado({
           formatter: (v: number) => `$${Math.round(v).toLocaleString()}`,
           fontSize: axisFont,
           rotate: -90,
-          margin: 12,
+          margin: 14,
           hideOverlap: true,
         },
         splitLine: { lineStyle: { color: "#eef2f7" } },
@@ -110,7 +107,7 @@ export default function Tornado({
         data: cats,
         axisLabel: {
           fontSize: axisFont,
-          margin: labelGap,
+          margin: labelGap + 6,
           width: labelWidth,
           overflow: "truncate",
           formatter: (v: string) => (v.length > 26 ? `${v.slice(0, 25)}...` : v),
@@ -125,7 +122,7 @@ export default function Tornado({
           label: {
             show: showValueLabels,
             position: "left",
-            distance: 8,
+            distance: isNarrow ? 14 : 18,
             formatter: (p) => {
               const v = Math.abs(Number(p.value));
               return v >= 1 ? `$${v.toFixed(0)}` : "";
@@ -148,14 +145,14 @@ export default function Tornado({
           label: {
             show: showValueLabels,
             position: "right",
-            distance: 8,
+            distance: isNarrow ? 14 : 18,
             formatter: (p) => {
               const v = Math.abs(Number(p.value));
               return v >= 1 ? `$${v.toFixed(0)}` : "";
             },
             fontSize: axisFont,
           },
-          barMaxWidth: 18,
+          barMaxWidth: 22,
         },
       ],
       animation: true,
