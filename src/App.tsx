@@ -2058,33 +2058,58 @@ export default function App() {
 
   // --- Frontier markers & summary ---
   const frontierMarkers = useMemo(() => {
-    const markers: Array<{ label: string; price: number; profit: number; kind: "baseline" | "current" | "optimized" }> = [];
+    const raw: Array<{ label: string; price: number; profit: number; kind: "baseline" | "current" | "optimized" }> = [];
     const basisPocket = !!optConstraints.usePocketProfit;
     const profitFor = (ladder: Prices) => computeScenarioProfit(ladder, basisPocket);
 
     if (baselineKPIs) {
-      markers.push({
+      raw.push({
         label: "Baseline",
         price: baselineKPIs.prices[frontierTier],
         profit: profitFor(baselineKPIs.prices),
         kind: "baseline",
       });
     }
-    markers.push({
+    raw.push({
       label: "Current",
       price: prices[frontierTier],
       profit: profitFor(prices),
       kind: "current",
     });
     if (optResult?.prices) {
-      markers.push({
+      raw.push({
         label: "Optimized",
         price: optResult.prices[frontierTier],
         profit: profitFor(optResult.prices),
         kind: "optimized",
       });
     }
-    return markers;
+
+    // Merge markers that sit on the exact same coordinate to avoid label overlap.
+    const order = ["baseline", "current", "optimized"] as const;
+    const grouped = new Map<string, { price: number; profit: number; labels: string[]; kinds: Set<string> }>();
+    raw.forEach((m) => {
+      const key = `${m.price.toFixed(4)}|${m.profit.toFixed(4)}`;
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.labels.push(m.label);
+        existing.kinds.add(m.kind);
+      } else {
+        grouped.set(key, { price: m.price, profit: m.profit, labels: [m.label], kinds: new Set([m.kind]) });
+      }
+    });
+
+    const merged = Array.from(grouped.values()).map((g) => {
+      const kinds = Array.from(g.kinds);
+      const kind = (order.find((k) => kinds.includes(k)) ?? "current") as "baseline" | "current" | "optimized";
+      const labels = order.filter((k) => kinds.includes(k)).map((k) =>
+        k === "baseline" ? "Baseline" : k === "current" ? "Current" : "Optimized"
+      );
+      const label = labels.length ? labels.join(" / ") : g.labels.join(" / ");
+      return { label, price: g.price, profit: g.profit, kind };
+    });
+
+    return merged;
   }, [baselineKPIs, optConstraints.usePocketProfit, optResult?.prices, prices, computeScenarioProfit, frontierTier]);
 
   const frontierSummary = useMemo(() => {

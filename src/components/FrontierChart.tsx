@@ -135,8 +135,8 @@ export default function FrontierChartReal({
     const axisFont = isNarrow ? 10 : 12;
     const labelFont = isNarrow ? 10 : 12;
     const topPad = isNarrow ? 40 : 54;
-    const rightPad = isNarrow ? 30 : 46;
-    const bottomPad = isNarrow ? 54 : 68;
+    const rightPad = isNarrow ? 70 : 96;
+    const bottomPad = isNarrow ? 60 : 76;
     const markerSymbolSize = isNarrow ? 18 : 24;
 
     const allPrices: number[] = [
@@ -197,8 +197,9 @@ export default function FrontierChartReal({
         type: "value",
         name: xLabel,
         nameTextStyle: { fontSize: axisFont },
-        axisLabel: { fontSize: axisFont, hideOverlap: true, margin: 10 },
-        boundaryGap: [0.05, 0.08],
+        nameGap: isNarrow ? 28 : 36,
+        axisLabel: { fontSize: axisFont, hideOverlap: true, margin: 12 },
+        boundaryGap: [0.07, 0.12],
         axisLine: { onZero: false },
         ...(minPrice != null && padPrice != null ? { min: minPrice - padPrice } : {}),
         ...(maxPrice != null && padPrice != null ? { max: maxPrice + padPrice } : {}),

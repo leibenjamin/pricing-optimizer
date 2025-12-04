@@ -61,8 +61,9 @@ export default function Tornado({
     const right = rows.map((r) => Math.max(0, r.deltaHigh));
     const isNarrow = vw < 900;
     const axisFont = isNarrow ? 10 : 12;
-    const labelWidth = isNarrow ? 110 : 160;
-    const gridLeft = isNarrow ? 110 : 150;
+    const labelWidth = isNarrow ? 140 : 190;
+    const labelGap = isNarrow ? 20 : 28; // space between y-labels and bars
+    const gridLeft = labelWidth + labelGap;
     const showValueLabels = !isNarrow;
     const maxAbsDelta = Math.max(
       ...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh), Math.abs(r.base))),
@@ -72,8 +73,8 @@ export default function Tornado({
       1,
       Math.abs(Math.round(maxAbsDelta)).toLocaleString().length
     );
-    const padRight = Math.max(isNarrow ? 72 : 96, (isNarrow ? 6 : 8) * labelDigits + (isNarrow ? 52 : 68));
-    const gridBottom = isNarrow ? 64 : 84;
+    const padRight = Math.max(isNarrow ? 86 : 120, (isNarrow ? 7 : 10) * labelDigits + (isNarrow ? 60 : 86));
+    const gridBottom = isNarrow ? 72 : 92;
 
     const option: ECOption = {
       title: { text: title, left: "center", top: 4, textStyle: { fontWeight: 700, fontSize: 14 } },
@@ -108,7 +109,7 @@ export default function Tornado({
         data: cats,
         axisLabel: {
           fontSize: axisFont,
-          margin: 14,
+          margin: labelGap,
           width: labelWidth,
           overflow: "truncate",
           formatter: (v: string) => (v.length > 26 ? `${v.slice(0, 25)}...` : v),
@@ -123,7 +124,7 @@ export default function Tornado({
           label: {
             show: showValueLabels,
             position: "left",
-            distance: 4,
+            distance: 8,
             formatter: (p) => {
               const v = Math.abs(Number(p.value));
               return v >= 1 ? `$${v.toFixed(0)}` : "";
@@ -146,7 +147,7 @@ export default function Tornado({
           label: {
             show: showValueLabels,
             position: "right",
-            distance: 4,
+            distance: 8,
             formatter: (p) => {
               const v = Math.abs(Number(p.value));
               return v >= 1 ? `$${v.toFixed(0)}` : "";
