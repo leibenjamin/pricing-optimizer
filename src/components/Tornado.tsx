@@ -69,10 +69,10 @@ export default function Tornado({
     const paddedSpan = Math.max(spanFloor, maxAbsDelta * 1.2 + 5);
     const labelDigits = Math.max(1, Math.abs(Math.round(paddedSpan)).toLocaleString().length);
     // Keep plot wide; modest grid left, rely on y-axis margin for separation
-    const gridLeft = isNarrow ? 70 : 90;
+    const gridLeft = isNarrow ? 30 : 50;
     const showValueLabels = !isNarrow;
-    const padRight = Math.max(isNarrow ? 90 : 110, (isNarrow ? 8 : 11) * labelDigits + (isNarrow ? 80 : 110));
-    const gridBottom = isNarrow ? 76 : 96;
+    const padRight = Math.max(isNarrow ? 50 : 70, (isNarrow ? 8 : 11) * labelDigits + (isNarrow ? 80 : 110));
+    const gridBottom = isNarrow ? 56 : 76;
 
     const option: ECOption = {
       title: { text: title, left: "center", top: 4, textStyle: { fontWeight: 700, fontSize: 14 } },
@@ -126,7 +126,7 @@ export default function Tornado({
           label: {
             show: showValueLabels,
             position: "left",
-            distance: isNarrow ? 12 : 14,
+            distance: isNarrow ? 8 : 10,
             formatter: (p) => {
               const v = Math.abs(Number(p.value));
               return v >= 1 ? `$${v.toFixed(0)}` : "";
@@ -149,7 +149,7 @@ export default function Tornado({
           label: {
             show: showValueLabels,
             position: "right",
-            distance: isNarrow ? 12 : 14,
+            distance: isNarrow ? 8 : 10,
             formatter: (p) => {
               const v = Math.abs(Number(p.value));
               return v >= 1 ? `$${v.toFixed(0)}` : "";
