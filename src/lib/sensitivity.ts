@@ -146,7 +146,14 @@ export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
     Math.max(Math.abs(b.deltaLow), Math.abs(b.deltaHigh)) -
     Math.max(Math.abs(a.deltaLow), Math.abs(a.deltaHigh))
   );
-  return rows;
+
+  // Add a tiny floor so downstream visuals don’t collapse to zero-width bars when spans are tiny.
+  const minVisible = 0.5;
+  return rows.map((r) => {
+    const adjLow = Math.abs(r.deltaLow) < minVisible ? (r.deltaLow === 0 ? -minVisible : Math.sign(r.deltaLow) * minVisible) : r.deltaLow;
+    const adjHigh = Math.abs(r.deltaHigh) < minVisible ? (r.deltaHigh === 0 ? minVisible : Math.sign(r.deltaHigh) * minVisible) : r.deltaHigh;
+    return { ...r, deltaLow: adjLow, deltaHigh: adjHigh };
+  });
 }
 
 

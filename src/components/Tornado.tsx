@@ -61,15 +61,18 @@ export default function Tornado({
     const right = rows.map((r) => Math.max(0, r.deltaHigh));
     const isNarrow = vw < 900;
     const axisFont = isNarrow ? 10 : 12;
-    const labelWidth = isNarrow ? 170 : 220;
-    const labelGap = isNarrow ? 24 : 32; // space between y-labels and bars
+    const labelWidth = isNarrow ? 150 : 190;
+    const labelGap = isNarrow ? 28 : 36; // separation between y-labels and bars
     const maxAbsDelta = Math.max(...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh))), 0);
-    const labelDigits = Math.max(1, Math.abs(Math.round(Math.max(1, maxAbsDelta))).toLocaleString().length);
-    // Keep the plot wide; give generous left padding for labels plus extra gutter
-    const gridLeft = Math.max(labelWidth + labelGap + 60, isNarrow ? 240 : 280);
+    // Ensure tiny values (cents) still render a sliver
+    const spanFloor = isNarrow ? 5 : 10;
+    const paddedSpan = Math.max(spanFloor, maxAbsDelta * 1.2 + 5);
+    const labelDigits = Math.max(1, Math.abs(Math.round(paddedSpan)).toLocaleString().length);
+    // Keep plot wide; modest grid left, rely on y-axis margin for separation
+    const gridLeft = isNarrow ? 110 : 130;
     const showValueLabels = !isNarrow;
-    const padRight = Math.max(isNarrow ? 140 : 180, (isNarrow ? 8 : 11) * labelDigits + (isNarrow ? 80 : 110));
-    const gridBottom = isNarrow ? 72 : 92;
+    const padRight = Math.max(isNarrow ? 120 : 150, (isNarrow ? 8 : 11) * labelDigits + (isNarrow ? 70 : 96));
+    const gridBottom = isNarrow ? 76 : 96;
 
     const option: ECOption = {
       title: { text: title, left: "center", top: 4, textStyle: { fontWeight: 700, fontSize: 14 } },
@@ -90,11 +93,13 @@ export default function Tornado({
       },
       xAxis: {
         type: "value",
+        min: -paddedSpan,
+        max: paddedSpan,
         axisLabel: {
           formatter: (v: number) => `$${Math.round(v).toLocaleString()}`,
           fontSize: axisFont,
           rotate: -90,
-          margin: 12,
+          margin: 14,
           hideOverlap: true,
         },
         splitLine: { lineStyle: { color: "#eef2f7" } },
@@ -104,7 +109,7 @@ export default function Tornado({
         data: cats,
         axisLabel: {
           fontSize: axisFont,
-          margin: labelGap + 6,
+          margin: labelGap,
           width: labelWidth,
           overflow: "truncate",
           formatter: (v: string) => (v.length > 26 ? `${v.slice(0, 25)}...` : v),
@@ -119,14 +124,14 @@ export default function Tornado({
           label: {
             show: showValueLabels,
             position: "left",
-            distance: isNarrow ? 16 : 20,
+            distance: isNarrow ? 12 : 14,
             formatter: (p) => {
               const v = Math.abs(Number(p.value));
               return v >= 1 ? `$${v.toFixed(0)}` : "";
             },
             fontSize: axisFont,
           },
-          barMaxWidth: 24,
+          barMaxWidth: 26,
           markLine: {
             symbol: "none",
             label: { show: true, formatter: "Base profit", fontSize: axisFont },
@@ -142,14 +147,14 @@ export default function Tornado({
           label: {
             show: showValueLabels,
             position: "right",
-            distance: isNarrow ? 16 : 20,
+            distance: isNarrow ? 12 : 14,
             formatter: (p) => {
               const v = Math.abs(Number(p.value));
               return v >= 1 ? `$${v.toFixed(0)}` : "";
             },
             fontSize: axisFont,
           },
-          barMaxWidth: 24,
+          barMaxWidth: 26,
         },
       ],
       animation: true,
