@@ -207,10 +207,10 @@ export const PRESETS: Preset[] = [
     leak: {
       promo: { good: 0.02, better: 0.08, best: 0.12 },
       volume: { good: 0.00, better: 0.10, best: 0.15 },
-      paymentPct: 0.015,
-      paymentFixed: 0.00,
-      fxPct: 0.00,
-      refundsPct: 0.00,
+      paymentPct: 0.02,
+      paymentFixed: 0.10,
+      fxPct: 0.01,
+      refundsPct: 0.01,
     },
     priceRange: {
       good: { min: 1000, max: 1500 },
@@ -229,7 +229,7 @@ export const PRESETS: Preset[] = [
       maxNoneShare: 0.7,
       minTakeRate: 0.08,
     },
-    tornado: { usePocket: false, priceBump: 8, pctBump: 1, rangeMode: "data" },
+    tornado: { usePocket: true, priceBump: 10, pctBump: 2.5, rangeMode: "data" },
     retentionPct: 95,
     kpiFloorAdj: 0,
     note: "Enterprise annual deals with structured volume rebates; optimizer runs on list profit with wide ranges and large tier gaps. Price sensitivity and anchoring are scaled for $1k-$7k ladders so frontier/tornado stay meaningful.",
