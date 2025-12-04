@@ -95,6 +95,8 @@ export default function Tornado({
         type: "value",
         min: -paddedSpan,
         max: paddedSpan,
+        axisLine: { onZero: false },
+        splitNumber: 6,
         axisLabel: {
           formatter: (v: number) => `$${Math.round(v).toLocaleString()}`,
           fontSize: axisFont,

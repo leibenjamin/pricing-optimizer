@@ -60,7 +60,7 @@ export type TornadoOpts = {
   priceBump?: number;   // delta$ on ladder
   priceBumps?: Partial<Record<Tier, number>>;
   costBump?: number;    // delta$ on unit cost
-  pctSmall?: number;    // deltapp for FX/refunds (0.02 = 2pp)
+  pctSmall?: number;    // deltapp for FX/refunds (0.02 = 2pp) — will be floored below
   payPct?: number;      // deltapp for processor %
   payFixed?: number;    // delta$ for processor fixed
   refBump?: number;     // delta$ shift in ref price
@@ -79,6 +79,9 @@ export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
     refBump   = 2,
     segTilt   = 0.10,
   } = o;
+  const pctSmallFloor = Math.max(0.0025, pctSmall); // floor to 0.25pp to ensure visibility
+  const payPctAdj = Math.max(0.001, payPct);
+  const payFixedAdj = Math.max(0.01, payFixed);
 
   const evalProfit = usePocket ? evalProfitPocket : evalProfitList;
 
@@ -124,11 +127,11 @@ export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
     s.refPrices.best   += sign * refBump;
   }, "Refs (all)");
 
-  // Processor / FX / Refunds (relevant when usePocket = true, but we still show list-mode results for “what-if”)
-  vary((s, sign) => { s.leak.paymentPct   = clamp01(s.leak.paymentPct   + sign * payPct);   }, "Payment %");
-  vary((s, sign) => { s.leak.paymentFixed = Math.max(0, s.leak.paymentFixed + sign * payFixed); }, "Payment $");
-  vary((s, sign) => { s.leak.fxPct        = clamp01(s.leak.fxPct        + sign * pctSmall); }, "FX %");
-  vary((s, sign) => { s.leak.refundsPct   = clamp01(s.leak.refundsPct   + sign * pctSmall); }, "Refunds %");
+  // Processor / FX / Refunds (relevant when usePocket = true, but we still show list-mode results for "what-if")
+  vary((s, sign) => { s.leak.paymentPct   = clamp01(s.leak.paymentPct   + sign * payPctAdj);   }, "Payment %");
+  vary((s, sign) => { s.leak.paymentFixed = Math.max(0, s.leak.paymentFixed + sign * payFixedAdj); }, "Payment $");
+  vary((s, sign) => { s.leak.fxPct        = clamp01(s.leak.fxPct        + sign * pctSmallFloor); }, "FX %");
+  vary((s, sign) => { s.leak.refundsPct   = clamp01(s.leak.refundsPct   + sign * pctSmallFloor); }, "Refunds %");
 
   // Segment tilt (between first two segments)
   if (s0.segments.length >= 2) {
@@ -148,7 +151,7 @@ export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
   );
 
   // Add a tiny floor so downstream visuals don’t collapse to zero-width bars when spans are tiny.
-  const minVisible = 0.5;
+  const minVisible = 0.25;
   return rows.map((r) => {
     const adjLow = Math.abs(r.deltaLow) < minVisible ? (r.deltaLow === 0 ? -minVisible : Math.sign(r.deltaLow) * minVisible) : r.deltaLow;
     const adjHigh = Math.abs(r.deltaHigh) < minVisible ? (r.deltaHigh === 0 ? minVisible : Math.sign(r.deltaHigh) * minVisible) : r.deltaHigh;

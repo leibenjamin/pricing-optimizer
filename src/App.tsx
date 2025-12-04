@@ -2430,8 +2430,9 @@ export default function App() {
   const hasOptimizedTornado = Boolean(optResult?.prices ?? quickOpt.best);
   const trimTornadoRows = useCallback(
     (rows: typeof tornadoRowsCurrent) => {
+      // Keep rows with any visible signal; if everything is tiny, keep the top few anyway.
       const meaningful = rows.filter(
-        (r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh)) >= 1
+        (r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh)) >= 0.25
       );
       const base = meaningful.length ? meaningful : rows;
       return base.slice(0, 12);
