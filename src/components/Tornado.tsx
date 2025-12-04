@@ -62,14 +62,13 @@ export default function Tornado({
     const isNarrow = vw < 900;
     const axisFont = isNarrow ? 10 : 12;
     const labelWidth = isNarrow ? 170 : 220;
-    const labelGap = isNarrow ? 22 : 28; // space between y-labels and bars
+    const labelGap = isNarrow ? 24 : 32; // space between y-labels and bars
     const maxAbsDelta = Math.max(...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh))), 0);
-    const paddedSpan = Math.max(1, maxAbsDelta * 1.1);
-    const labelDigits = Math.max(1, Math.abs(Math.round(paddedSpan)).toLocaleString().length);
-    // Keep plot wide; only reserve modest left padding for labels
-    const gridLeft = labelWidth + labelGap + (isNarrow ? 12 : 16);
+    const labelDigits = Math.max(1, Math.abs(Math.round(Math.max(1, maxAbsDelta))).toLocaleString().length);
+    // Keep the plot wide; give generous left padding for labels plus extra gutter
+    const gridLeft = Math.max(labelWidth + labelGap + 60, isNarrow ? 240 : 280);
     const showValueLabels = !isNarrow;
-    const padRight = Math.max(isNarrow ? 110 : 150, (isNarrow ? 8 : 11) * labelDigits + (isNarrow ? 72 : 104));
+    const padRight = Math.max(isNarrow ? 140 : 180, (isNarrow ? 8 : 11) * labelDigits + (isNarrow ? 80 : 110));
     const gridBottom = isNarrow ? 72 : 92;
 
     const option: ECOption = {
@@ -91,13 +90,11 @@ export default function Tornado({
       },
       xAxis: {
         type: "value",
-        min: -paddedSpan,
-        max: paddedSpan,
         axisLabel: {
           formatter: (v: number) => `$${Math.round(v).toLocaleString()}`,
           fontSize: axisFont,
           rotate: -90,
-          margin: 14,
+          margin: 12,
           hideOverlap: true,
         },
         splitLine: { lineStyle: { color: "#eef2f7" } },
@@ -122,14 +119,14 @@ export default function Tornado({
           label: {
             show: showValueLabels,
             position: "left",
-            distance: isNarrow ? 14 : 18,
+            distance: isNarrow ? 16 : 20,
             formatter: (p) => {
               const v = Math.abs(Number(p.value));
               return v >= 1 ? `$${v.toFixed(0)}` : "";
             },
             fontSize: axisFont,
           },
-          barMaxWidth: 18,
+          barMaxWidth: 24,
           markLine: {
             symbol: "none",
             label: { show: true, formatter: "Base profit", fontSize: axisFont },
@@ -145,14 +142,14 @@ export default function Tornado({
           label: {
             show: showValueLabels,
             position: "right",
-            distance: isNarrow ? 14 : 18,
+            distance: isNarrow ? 16 : 20,
             formatter: (p) => {
               const v = Math.abs(Number(p.value));
               return v >= 1 ? `$${v.toFixed(0)}` : "";
             },
             fontSize: axisFont,
           },
-          barMaxWidth: 22,
+          barMaxWidth: 24,
         },
       ],
       animation: true,
