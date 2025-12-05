@@ -103,8 +103,9 @@ export function buildFrontier(args: {
     (reasons.length ? infeasible : feasible).push(point);
   }
 
+  const setForPeak = feasible.length ? feasible : points;
   const optimum =
-    points.length === 0 ? null : points.reduce((a, b) => (b.profit > a.profit ? b : a), points[0]);
+    setForPeak.length === 0 ? null : setForPeak.reduce((a, b) => (b.profit > a.profit ? b : a), setForPeak[0]);
 
   return { points, feasiblePoints: feasible, infeasiblePoints: infeasible, optimum, sweep };
 }
@@ -116,7 +117,11 @@ export function deriveFrontierSweep(input: {
   optRange?: [number, number] | null;
 }): FrontierSweep {
   const basePrice = input.prices[input.tier] || 1;
-  const fromRange = input.priceRange ?? (input.optRange ? { min: input.optRange[0], max: input.optRange[1] } : null);
+  const fromRange = input.optRange
+    ? { min: input.optRange[0], max: input.optRange[1] }
+    : input.priceRange
+    ? { min: input.priceRange.min, max: input.priceRange.max }
+    : null;
   const min = fromRange?.min ?? Math.max(0.01, basePrice * 0.45);
   let max = fromRange?.max ?? Math.max(min + 1, basePrice * 1.6);
 

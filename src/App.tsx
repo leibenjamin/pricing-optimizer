@@ -2062,28 +2062,43 @@ export default function App() {
   // --- Frontier markers & summary ---
   const frontierMarkers = useMemo(() => {
     const raw: Array<{ label: string; price: number; profit: number; kind: "baseline" | "current" | "optimized" }> = [];
-    const basisPocket = !!optConstraints.usePocketProfit;
-    const profitFor = (ladder: Prices) => computeScenarioProfit(ladder, basisPocket);
 
+    // Current marker uses today's ladder and today's pocket/list basis.
+    const profitCurrent = computeScenarioProfit(prices, !!optConstraints.usePocketProfit);
+    raw.push({
+      label: "Current",
+      price: prices[frontierTier],
+      profit: profitCurrent,
+      kind: "current",
+    });
+
+    // Baseline marker should respect the pinned baseline KPIs/basis (no drift if knobs changed after pin).
     if (baselineKPIs) {
       raw.push({
         label: "Baseline",
         price: baselineKPIs.prices[frontierTier],
-        profit: profitFor(baselineKPIs.prices),
+        profit: baselineKPIs.profit,
         kind: "baseline",
       });
     }
-    raw.push({
-      label: "Current",
-      price: prices[frontierTier],
-      profit: profitFor(prices),
-      kind: "current",
-    });
+
+    // Optimized marker should reflect the optimizer run context/profit (not recomputed on new knobs).
     if (optResult?.prices) {
+      const profitOptimized =
+        typeof optResult.profit === "number"
+          ? optResult.profit
+          : computeScenarioProfit(optResult.prices, !!optResult.context.usePocketProfit, {
+              costs: optResult.context.costs,
+              features: optResult.context.features,
+              segments: optResult.context.segments,
+              refPrices: optResult.context.refPrices,
+              leak: optResult.context.leak,
+              N: optResult.context.N,
+            });
       raw.push({
         label: "Optimized",
         price: optResult.prices[frontierTier],
-        profit: profitFor(optResult.prices),
+        profit: profitOptimized,
         kind: "optimized",
       });
     }
@@ -2105,15 +2120,29 @@ export default function App() {
     const merged = Array.from(grouped.values()).map((g) => {
       const kinds = Array.from(g.kinds);
       const kind = (order.find((k) => kinds.includes(k)) ?? "current") as "baseline" | "current" | "optimized";
-      const labels = order.filter((k) => kinds.includes(k)).map((k) =>
-        k === "baseline" ? "Baseline" : k === "current" ? "Current" : "Optimized"
-      );
-      const label = labels.length ? labels.join(" / ") : g.labels.join(" / ");
+      const hasBaseline = kinds.includes("baseline");
+      const hasCurrent = kinds.includes("current");
+      const hasOptimized = kinds.includes("optimized");
+      let label: string;
+      if (hasBaseline && hasCurrent && !hasOptimized) {
+        label = "Current & Baseline";
+      } else if (hasBaseline && hasCurrent && hasOptimized) {
+        label = "Optimized + Current & Baseline";
+      } else if (hasBaseline && hasOptimized && !hasCurrent) {
+        label = "Optimized & Baseline";
+      } else if (hasCurrent && hasOptimized && !hasBaseline) {
+        label = "Optimized & Current";
+      } else {
+        const labels = order
+          .filter((k) => kinds.includes(k))
+          .map((k) => (k === "baseline" ? "Baseline" : k === "current" ? "Current" : "Optimized"));
+        label = labels.length ? labels.join(" / ") : g.labels.join(" / ");
+      }
       return { label, price: g.price, profit: g.profit, kind };
     });
 
     return merged;
-  }, [baselineKPIs, optConstraints.usePocketProfit, optResult?.prices, prices, computeScenarioProfit, frontierTier]);
+  }, [baselineKPIs, optConstraints.usePocketProfit, optResult, prices, computeScenarioProfit, frontierTier]);
 
   const frontierSummary = useMemo(() => {
     if (!frontier.base.optimum) return null;
@@ -2127,7 +2156,7 @@ export default function App() {
 
     const anchor = optimizedMarker ?? currentMarker ?? baselineMarker;
     if (!anchor) return null;
-    const delta = optProf - anchor.profit;
+    const delta = anchor.profit - optProf;
     const anchorLabel = optimizedMarker ? "Optimized" : baselineMarker ? "Baseline" : "Current";
     const sweep = frontier.base.sweep;
     const tierLabel = `${frontierTier[0].toUpperCase()}${frontierTier.slice(1)}`;
