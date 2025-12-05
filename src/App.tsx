@@ -244,6 +244,16 @@ type SegmentNested = {
   weight: number;
   beta: { price: number; featA: number; featB: number; refAnchor?: number };
 };
+const isFullSegment = (s: unknown): s is Segment =>
+  !!s &&
+  typeof s === "object" &&
+  typeof (s as Segment).name === "string" &&
+  typeof (s as Segment).betaPrice === "number" &&
+  typeof (s as Segment).betaFeatA === "number" &&
+  typeof (s as Segment).betaFeatB === "number" &&
+  typeof (s as Segment).betaNone === "number" &&
+  typeof (s as Segment).weight === "number";
+
 type SegmentFlat = {
   weight: number;
   price: number;
@@ -349,6 +359,51 @@ function mapFitToSegments(
   }));
 }
 
+function coerceSegmentsForCalc(input: unknown, fallback: Segment[]): Segment[] {
+  if (Array.isArray(input) && input.every(isFullSegment)) {
+    return normalizeWeights(input as Segment[]);
+  }
+  if (Array.isArray(input)) {
+    const fallbackSeg = (idx: number): Segment | null => {
+      const base = fallback[idx] ?? fallback[0] ?? null;
+      return base ? { ...base } : null;
+    };
+    const mapped: Segment[] = [];
+    (input as unknown[]).forEach((raw, idx) => {
+      const base = fallbackSeg(idx);
+      if (!raw || typeof raw !== "object") {
+        if (base) mapped.push(base);
+        return;
+      }
+      const anyR = raw as Record<string, unknown>;
+      if (isFullSegment(anyR)) {
+        mapped.push(anyR);
+        return;
+      }
+      const beta = (anyR["beta"] as Record<string, unknown>) || {};
+      const seg: Segment = {
+        name:
+          typeof anyR["name"] === "string" && anyR["name"].trim()
+            ? (anyR["name"] as string)
+            : base?.name ?? `Segment ${idx + 1}`,
+        weight: typeof anyR["weight"] === "number" ? anyR["weight"] : base?.weight ?? 1,
+        betaPrice: typeof beta["price"] === "number" ? (beta["price"] as number) : base?.betaPrice ?? 0,
+        betaFeatA: typeof beta["featA"] === "number" ? (beta["featA"] as number) : base?.betaFeatA ?? 0,
+        betaFeatB: typeof beta["featB"] === "number" ? (beta["featB"] as number) : base?.betaFeatB ?? 0,
+        betaNone: typeof anyR["betaNone"] === "number" ? (anyR["betaNone"] as number) : base?.betaNone ?? 0,
+        alphaAnchor:
+          typeof anyR["alphaAnchor"] === "number" ? (anyR["alphaAnchor"] as number) : base?.alphaAnchor ?? 0,
+        lambdaLoss:
+          typeof anyR["lambdaLoss"] === "number" ? (anyR["lambdaLoss"] as number) : base?.lambdaLoss ?? 1,
+        ...(typeof beta["refAnchor"] === "number" ? { betaRefAnchor: beta["refAnchor"] as number } : {}),
+      };
+      mapped.push(seg);
+    });
+    if (mapped.length) return normalizeWeights(mapped);
+  }
+  return fallback;
+}
+
 export default function App() {
   const [journal, setJournal] = useState<string[]>([]);
   const [showSalesImport, setShowSalesImport] = useState(false);
@@ -372,6 +427,9 @@ export default function App() {
   const [baselineMeta, setBaselineMeta] = useState<BaselineMeta | null>(null);
   const [scorecardView, setScorecardView] = useState<"current" | "optimized">("current");
   const [takeRateMode, setTakeRateMode] = useState<"mix" | "delta">("mix");
+  const [takeRateSegmentKey, setTakeRateSegmentKey] = useState<"all" | string>("all");
+  const [showSegmentBreakdown, setShowSegmentBreakdown] = useState(false);
+  const [segmentBreakdownScenarioKey, setSegmentBreakdownScenarioKey] = useState<string | null>(null);
 
   // --- Toasts ---
   type Toast = {
@@ -1806,10 +1864,131 @@ export default function App() {
     }
   }, [scorecardView, optimizedKPIs]);
 
+  type TakeRateContext = {
+    key: string;
+    label: string;
+    kind: "baseline" | "current" | "optimized";
+    prices: Prices;
+    features: Features;
+    refPrices?: Prices;
+    segments: Segment[];
+    N: number;
+    kpis?: SnapshotKPIs | null;
+  };
+
+  const takeRateSegmentOptions = useMemo(() => {
+    if (!segments.length) return [];
+    const normalized = normalizeWeights(segments);
+    return normalized
+      .map((seg, idx) => ({ seg, idx }))
+      .sort((a, b) => b.seg.weight - a.seg.weight)
+      .slice(0, 3)
+      .map(({ seg, idx }) => {
+        const name = seg.name?.trim() || `Segment ${idx + 1}`;
+        return {
+          key: `${name}-${idx}`,
+          label: name,
+          nameLower: name.toLowerCase(),
+          idx,
+          weight: seg.weight,
+        };
+      });
+  }, [segments]);
+
+  const takeRateContexts = useMemo<TakeRateContext[]>(() => {
+    const list: TakeRateContext[] = [];
+    if (baselineKPIs) {
+      const snap = scenarioBaseline?.snapshot;
+      const snapSegments = coerceSegmentsForCalc(snap?.segments, segments);
+      list.push({
+        key: "baseline",
+        label: baselineMeta ? formatBaselineLabel(baselineMeta) : "Baseline (pinned)",
+        kind: "baseline",
+        prices: snap?.prices ?? baselineKPIs.prices,
+        features: snap?.features ?? features,
+        refPrices: snap?.refPrices ?? refPrices,
+        segments: snapSegments,
+        N,
+        kpis: baselineKPIs,
+      });
+    }
+
+    if (currentKPIs) {
+      list.push({
+        key: "current",
+        label: baselineKPIs ? "Current" : "Current (no baseline pinned yet)",
+        kind: "current",
+        prices,
+        features,
+        refPrices,
+        segments,
+        N,
+        kpis: currentKPIs,
+      });
+    }
+
+    if (optimizedKPIs && optResult?.prices) {
+      list.push({
+        key: "optimized",
+        label: "Optimized",
+        kind: "optimized",
+        prices: optResult.prices,
+        features: optResult.context.features,
+        refPrices: optResult.context.refPrices,
+        segments: coerceSegmentsForCalc(optResult.context.segments, segments),
+        N: optResult.context.N,
+        kpis: optimizedKPIs,
+      });
+    }
+
+    return list;
+  }, [
+    N,
+    baselineKPIs,
+    baselineMeta,
+    currentKPIs,
+    features,
+    optimizedKPIs,
+    optResult?.context.features,
+    optResult?.context.refPrices,
+    optResult?.context.segments,
+    optResult?.context.N,
+    optResult?.prices,
+    prices,
+    refPrices,
+    scenarioBaseline?.snapshot,
+    segments,
+  ]);
+
+  useEffect(() => {
+    if (takeRateSegmentKey !== "all" && !takeRateSegmentOptions.some((o) => o.key === takeRateSegmentKey)) {
+      setTakeRateSegmentKey("all");
+    }
+  }, [takeRateSegmentKey, takeRateSegmentOptions]);
+
+  useEffect(() => {
+    const hasSelection =
+      segmentBreakdownScenarioKey && takeRateContexts.some((c) => c.key === segmentBreakdownScenarioKey);
+    if (hasSelection) return;
+    const fallback =
+      takeRateContexts.find((c) => c.kind === "optimized")?.key ??
+      takeRateContexts.find((c) => c.kind === "current")?.key ??
+      takeRateContexts[0]?.key ??
+      null;
+    setSegmentBreakdownScenarioKey(fallback);
+  }, [segmentBreakdownScenarioKey, takeRateContexts]);
+
+  const selectedSegmentLabel = useMemo(
+    () =>
+      takeRateSegmentKey === "all"
+        ? null
+        : takeRateSegmentOptions.find((o) => o.key === takeRateSegmentKey)?.label ?? null,
+    [takeRateSegmentKey, takeRateSegmentOptions]
+  );
+
   // --- Take-rate comparison data (baseline/current/optimized) ---
   const takeRateScenarios: TakeRateScenario[] = useMemo(() => {
-    if (!currentKPIs) return [];
-    const rows: TakeRateScenario[] = [];
+    if (!takeRateContexts.length) return [];
 
     const sameShares = (a: SnapshotKPIs["shares"], b: SnapshotKPIs["shares"]) =>
       Math.abs(a.none - b.none) < 1e-6 &&
@@ -1817,33 +1996,46 @@ export default function App() {
       Math.abs(a.better - b.better) < 1e-6 &&
       Math.abs(a.best - b.best) < 1e-6;
 
-    if (baselineKPIs) {
-      rows.push({
-        key: "baseline",
-        label: baselineMeta ? formatBaselineLabel(baselineMeta) : "Baseline (pinned)",
-        shares: baselineKPIs.shares,
-        active: Math.round(N * (1 - baselineKPIs.shares.none)),
-        kind: "baseline",
-      });
-    }
+    const findSegmentForContext = (ctxSegments: Segment[]) => {
+      if (takeRateSegmentKey === "all") return null;
+      const opt = takeRateSegmentOptions.find((o) => o.key === takeRateSegmentKey);
+      if (!opt) return null;
+      const normalized = normalizeWeights(ctxSegments);
+      const byNameIdx = normalized.findIndex(
+        (s) => (s.name?.trim().toLowerCase() ?? "") === opt.nameLower
+      );
+      const idx = byNameIdx >= 0 ? byNameIdx : opt.idx;
+      const seg = normalized[idx] ?? normalized[0];
+      if (!seg) return null;
+      return { seg, weight: seg.weight };
+    };
 
-    rows.push({
-      key: "current",
-      label: baselineKPIs ? "Current" : "Current (no baseline pinned yet)",
-      shares: currentKPIs.shares,
-      active: Math.round(N * (1 - currentKPIs.shares.none)),
-      kind: "current",
+    const rows: TakeRateScenario[] = [];
+    takeRateContexts.forEach((ctx) => {
+      let shares: SnapshotKPIs["shares"];
+      let active = 0;
+      let population = ctx.N;
+      if (takeRateSegmentKey === "all") {
+        shares =
+          ctx.kpis?.shares ??
+          choiceShares(ctx.prices, ctx.features, ctx.segments, ctx.refPrices);
+        active = Math.round(ctx.N * (1 - shares.none));
+      } else {
+        const segPick = findSegmentForContext(ctx.segments);
+        if (!segPick) return;
+        shares = choiceShares(ctx.prices, ctx.features, [segPick.seg], ctx.refPrices);
+        active = Math.round(ctx.N * segPick.weight * (1 - shares.none));
+        population = Math.round(ctx.N * segPick.weight);
+      }
+      rows.push({
+        key: ctx.key,
+        label: ctx.label,
+        shares,
+        active,
+        kind: ctx.kind,
+        population,
+      });
     });
-
-    if (optimizedKPIs) {
-      rows.push({
-        key: "optimized",
-        label: "Optimized",
-        shares: optimizedKPIs.shares,
-        active: Math.round(N * (1 - optimizedKPIs.shares.none)),
-        kind: "optimized",
-      });
-    }
 
     // Deduplicate identical mixes to reduce clutter (e.g., Current == Baseline)
     const deduped: TakeRateScenario[] = [];
@@ -1855,7 +2047,7 @@ export default function App() {
         const hasCurrent = kinds.has("current");
         const hasOptimized = kinds.has("optimized");
         if (hasBaseline && hasCurrent && !hasOptimized) {
-          existing.label = "Baseline & Current";
+          existing.label = "Current & Baseline";
         } else if (hasBaseline && hasOptimized && !hasCurrent) {
           existing.label = "Baseline & Optimized";
         } else if (hasCurrent && hasOptimized && !hasBaseline) {
@@ -1871,11 +2063,21 @@ export default function App() {
     }
 
     return deduped;
-  }, [N, baselineKPIs, baselineMeta, currentKPIs, optimizedKPIs]);
+  }, [takeRateContexts, takeRateSegmentKey, takeRateSegmentOptions]);
+
+  const takeRateBaselineKey = takeRateContexts.some((ctx) => ctx.kind === "baseline")
+    ? "baseline"
+    : takeRateScenarios[0]?.key;
 
   const takeRateSummary = useMemo(() => {
-    const base = baselineKPIs ?? currentKPIs;
-    const target = optimizedKPIs ?? currentKPIs;
+    if (!takeRateScenarios.length) return null;
+    const base =
+      takeRateScenarios.find((s) => s.key === takeRateBaselineKey) ??
+      takeRateScenarios[0];
+    const target =
+      takeRateScenarios.find((s) => s.kind === "optimized") ??
+      takeRateScenarios.find((s) => s.kind === "current") ??
+      base;
     if (!base || !target) return null;
 
     const delta = {
@@ -1884,11 +2086,10 @@ export default function App() {
       better: (target.shares.better - base.shares.better) * 100,
       best: (target.shares.best - base.shares.best) * 100,
     };
-    const activeDelta = Math.round(
-      N * ((1 - target.shares.none) - (1 - base.shares.none))
-    );
+    const activeDelta = target.active - base.active;
     const fmt = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v * 10) / 10} pp`;
-    const fmtActive = activeDelta === 0 ? "+/-0" : `${activeDelta > 0 ? "+" : ""}${activeDelta.toLocaleString()}`;
+    const fmtActive =
+      activeDelta === 0 ? "+/-0" : `${activeDelta > 0 ? "+" : ""}${activeDelta.toLocaleString()}`;
 
     const labels: Record<keyof typeof delta, string> = {
       none: "None",
@@ -1906,19 +2107,47 @@ export default function App() {
       { key: "best", mag: Math.abs(delta.best) }
     );
 
+    const segmentPrefix = selectedSegmentLabel ? `${selectedSegmentLabel}: ` : "";
+    const baselineLabel =
+      base.kind === "baseline"
+        ? baselineMeta
+          ? formatBaselineLabel(baselineMeta)
+          : base.label
+        : null;
+
     return {
-      headline: `Best ${fmt(delta.best)}, None ${fmt(delta.none)}; Active ${fmtActive} vs ${
-        baselineKPIs ? "baseline" : "start"
-      }.`,
+      headline: `${segmentPrefix}${target.label} vs ${base.label}: Best ${fmt(
+        delta.best
+      )}, None ${fmt(delta.none)}; Active ${fmtActive}.`,
       detail: `Biggest mover: ${labels[biggest.key]} ${fmt(delta[biggest.key])}. Better ${fmt(
         delta.better
       )}, Good ${fmt(delta.good)}.`,
-      baselineLabel: baselineKPIs ? formatBaselineLabel(baselineMeta) : null,
-      targetLabel: optimizedKPIs ? "Optimized" : "Current",
+      baselineLabel,
+      targetLabel: target.label,
     };
-  }, [N, baselineKPIs, baselineMeta, currentKPIs, optimizedKPIs]);
+  }, [baselineMeta, selectedSegmentLabel, takeRateBaselineKey, takeRateScenarios]);
+  const segmentBreakdownScenarios = useMemo(() => {
+    if (!showSegmentBreakdown || !segmentBreakdownScenarioKey) return [];
+    const ctx = takeRateContexts.find((c) => c.key === segmentBreakdownScenarioKey);
+    if (!ctx) return [];
 
-  const takeRateBaselineKey = baselineKPIs ? "baseline" : takeRateScenarios[0]?.key;
+    const ranked = normalizeWeights(ctx.segments)
+      .map((seg, idx) => ({ seg, idx }))
+      .sort((a, b) => b.seg.weight - a.seg.weight)
+      .slice(0, 3);
+
+    return ranked.map(({ seg, idx }) => {
+      const shares = choiceShares(ctx.prices, ctx.features, [seg], ctx.refPrices);
+      return {
+        key: `${ctx.key}-seg-${idx}`,
+        label: seg.name?.trim() || `Segment ${idx + 1}`,
+        shares,
+        active: Math.round(ctx.N * seg.weight * (1 - shares.none)),
+        kind: `segment-${ctx.key}`,
+        population: Math.round(ctx.N * seg.weight),
+      };
+    });
+  }, [segmentBreakdownScenarioKey, showSegmentBreakdown, takeRateContexts]);
   const takeRateColors = useMemo(
     () => [
       TAKE_RATE_COLORS.none,
@@ -2171,18 +2400,51 @@ export default function App() {
   const [showSegmentMix, setShowSegmentMix] = useState(false);
   const segmentMixes = useMemo(() => {
     if (!segments.length) return [];
-    const topSegs = segments.slice(0, 3);
-    return topSegs.map((seg, idx) => {
+    const ranked = normalizeWeights(segments)
+      .map((seg, idx) => ({ seg, idx }))
+      .sort((a, b) => b.seg.weight - a.seg.weight)
+      .slice(0, 3);
+    const baselineSnap = scenarioBaseline?.snapshot;
+    const baselineSegs = coerceSegmentsForCalc(baselineSnap?.segments, segments);
+    const optCtx = optResult?.context;
+    const optSegs = coerceSegmentsForCalc(optCtx?.segments, segments);
+
+    const pickSeg = (list: Segment[] | undefined, name: string | undefined, idx: number) => {
+      if (!list || !list.length) return null;
+      const normalized = normalizeWeights(list);
+      const nameLower = (name ?? "").toLowerCase();
+      const byNameIdx = normalized.findIndex(
+        (s) => (s.name?.trim().toLowerCase() ?? "") === nameLower
+      );
+      const targetIdx = byNameIdx >= 0 ? byNameIdx : idx;
+      return normalized[targetIdx] ?? normalized[0];
+    };
+
+    return ranked.map(({ seg, idx }) => {
       const label = seg.name?.trim() || `Segment ${idx + 1}`;
-      const sharesCurrent = choiceShares(prices, features, [seg], refPrices);
-      const sharesOptim = optResult ? choiceShares(optResult.prices, features, [seg], refPrices) : null;
+      const currentSeg = seg;
+      const baseSeg = pickSeg(baselineSegs, seg.name, idx) ?? currentSeg;
+      const optSeg = pickSeg(optSegs, seg.name, idx) ?? currentSeg;
+
+      const sharesCurrent = choiceShares(prices, features, [currentSeg], refPrices);
+      const sharesOptim =
+        optResult && optCtx
+          ? choiceShares(optResult.prices, optCtx.features, [optSeg], optCtx.refPrices)
+          : optResult
+          ? choiceShares(optResult.prices, features, [currentSeg], refPrices)
+          : null;
       const sharesBaseline =
-        baselineKPIs && baselineKPIs.prices
-          ? choiceShares(baselineKPIs.prices, features, [seg], refPrices)
+        baselineKPIs && (baselineSnap?.prices ?? baselineKPIs.prices)
+          ? choiceShares(
+              baselineSnap?.prices ?? baselineKPIs.prices,
+              baselineSnap?.features ?? features,
+              [baseSeg],
+              baselineSnap?.refPrices ?? refPrices
+            )
           : null;
       return { label, sharesCurrent, sharesOptim, sharesBaseline };
     });
-  }, [segments, prices, features, refPrices, optResult, baselineKPIs]);
+  }, [baselineKPIs, features, optResult, prices, refPrices, scenarioBaseline?.snapshot, segments]);
 
   // ---- Tornado sensitivity data ----
   // ---- Tornado sensitivity data ----
@@ -6217,16 +6479,16 @@ export default function App() {
           </Explanation>
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
             <span>Demand-only view: leakages and guardrails do not apply here. Use delta view or the table for small differences.</span>
-            {takeRateSummary?.baselineLabel && (
-              <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
-                Baseline: {takeRateSummary.baselineLabel}
-              </span>
-            )}
-              <div className="ml-auto flex items-center gap-2 text-xs">
-                <span>View</span>
-                <div className="inline-flex overflow-hidden rounded border">
-                  <button
-                    type="button"
+              {takeRateSummary?.baselineLabel && (
+                <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
+                  Baseline: {takeRateSummary.baselineLabel}
+                </span>
+              )}
+                <div className="ml-auto flex items-center gap-2 text-xs">
+                  <span>View</span>
+                  <div className="inline-flex overflow-hidden rounded border">
+                    <button
+                      type="button"
                     className={`px-2 h-7 ${takeRateMode === "mix" ? "bg-gray-900 text-white" : "bg-white"}`}
                     onClick={() => setTakeRateMode("mix")}
                   >
@@ -6239,22 +6501,68 @@ export default function App() {
                     } ${!takeRateBaselineKey ? "opacity-50 cursor-not-allowed" : ""}`}
                     onClick={() => takeRateBaselineKey && setTakeRateMode("delta")}
                     disabled={!takeRateBaselineKey}
+                    >
+                      Delta vs baseline
+                    </button>
+                  </div>
+                  <InfoTip id="takeRate.bars" ariaLabel="How take-rate bars are computed" />
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <label className="flex items-center gap-2 font-medium text-slate-700">
+                  <span>Segment scope (top 3)</span>
+                  <select
+                    className="h-8 rounded border px-2 bg-white"
+                    value={takeRateSegmentKey}
+                    onChange={(e) => setTakeRateSegmentKey(e.target.value)}
+                    disabled={!takeRateSegmentOptions.length}
                   >
-                    Delta vs baseline
-                  </button>
-                </div>
-                <InfoTip id="takeRate.bars" ariaLabel="How take-rate bars are computed" />
+                    <option value="all">All segments</option>
+                    {takeRateSegmentOptions.map((opt) => (
+                      <option key={opt.key} value={opt.key}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <span className="text-[11px] text-slate-500">
+                  {selectedSegmentLabel
+                    ? `Filtering mix for ${selectedSegmentLabel}; active counts scale by that segment's weight.`
+                    : "Aggregated across all segments."}
+                </span>
+                <label className="flex items-center gap-2 font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={showSegmentBreakdown}
+                    onChange={(e) => setShowSegmentBreakdown(e.target.checked)}
+                  />
+                  Breakdown by segment (top 3)
+                </label>
+                {showSegmentBreakdown && (
+                  <label className="flex items-center gap-2 text-[11px]">
+                    <span>Scenario</span>
+                    <select
+                      className="h-8 rounded border px-2 bg-white"
+                      value={segmentBreakdownScenarioKey ?? ""}
+                      onChange={(e) => setSegmentBreakdownScenarioKey(e.target.value)}
+                    >
+                      {takeRateContexts.map((ctx) => (
+                        <option key={ctx.key} value={ctx.key}>
+                          {ctx.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
               </div>
-            </div>
 
-            {takeRateSummary ? (
-              <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm text-slate-800">
-                <div className="font-semibold">
-                  {takeRateSummary.targetLabel} vs {takeRateSummary.baselineLabel ?? "start"}: {takeRateSummary.headline}
+              {takeRateSummary ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm text-slate-800">
+                  <div className="font-semibold">{takeRateSummary.headline}</div>
+                  <div className="text-[11px] text-slate-600 mt-0.5">{takeRateSummary.detail}</div>
                 </div>
-                <div className="text-[11px] text-slate-600 mt-0.5">{takeRateSummary.detail}</div>
-              </div>
-            ) : (
+              ) : (
               <div className="rounded border border-dashed border-slate-300 bg-slate-50/60 px-3 py-2 text-sm text-slate-600">
                 Pin a baseline (preset or optimizer run) to see mix deltas.
               </div>
@@ -6275,26 +6583,53 @@ export default function App() {
                     ariaLabel="How should I read take-rate bars?"
                   />
                 </div>
-                <TakeRateChart
-                  chartId="takerate-main"
-                  scenarios={takeRateScenarios}
-                  baselineKey={takeRateBaselineKey}
-                  mode={takeRateMode}
-                />
-              </ErrorBoundary>
-            </Suspense>
-            {takeRateScenarios.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
-                {takeRateScenarios.map((s) => (
-                  <div key={s.key} className="rounded border border-slate-200 bg-white px-2.5 py-2 shadow-sm">
-                    <div className="font-semibold text-slate-900">{s.label}</div>
-                    <div className="text-[11px] text-slate-600">
-                      Active: {s.active.toLocaleString()} (N={N.toLocaleString()})
+                  <TakeRateChart
+                    chartId="takerate-main"
+                    scenarios={takeRateScenarios}
+                    baselineKey={takeRateBaselineKey}
+                    mode={takeRateMode}
+                  />
+                </ErrorBoundary>
+              </Suspense>
+              {showSegmentBreakdown && (
+                <div className="rounded border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-semibold text-slate-700">
+                      Segment mix by tier (
+                      {segmentBreakdownScenarioKey
+                        ? takeRateContexts.find((c) => c.key === segmentBreakdownScenarioKey)?.label ?? "Scenario"
+                        : "Scenario"}
+                      )
                     </div>
+                    <InfoTip
+                      id="takeRate.segmentBreakdown"
+                      ariaLabel="Segment-level take-rate mix for the selected scenario"
+                      align="right"
+                    />
                   </div>
-                ))}
-              </div>
-            )}
+                  {segmentBreakdownScenarios.length > 0 ? (
+                    <TakeRateChart
+                      chartId="takerate-segment-breakdown"
+                      scenarios={segmentBreakdownScenarios}
+                      mode="mix"
+                    />
+                  ) : (
+                    <div className="text-xs text-slate-500">No segment breakdown available.</div>
+                  )}
+                </div>
+              )}
+              {takeRateScenarios.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
+                  {takeRateScenarios.map((s) => (
+                    <div key={s.key} className="rounded border border-slate-200 bg-white px-2.5 py-2 shadow-sm">
+                      <div className="font-semibold text-slate-900">{s.label}</div>
+                      <div className="text-[11px] text-slate-600">
+                        Active: {s.active.toLocaleString()} (N={(s.population ?? N).toLocaleString()})
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             {takeRateBaselineKey && takeRateScenarios.length > 1 && (
               <div className="mt-2">
                 <TakeRateDeltaTable scenarios={takeRateScenarios} baselineKey={takeRateBaselineKey} />
@@ -6323,16 +6658,25 @@ export default function App() {
                   const sig = (s: typeof seg.sharesCurrent) =>
                     [s.none, s.good, s.better, s.best].map((v) => v.toFixed(6)).join("|");
                   const grouped = new Map<string, { labels: string[]; shares: typeof seg.sharesCurrent }>();
-                  entries.forEach((e) => {
-                    const key = sig(e.shares);
-                    const g = grouped.get(key);
-                    if (g) g.labels.push(e.label);
-                    else grouped.set(key, { labels: [e.label], shares: e.shares });
-                  });
-                  const charts = Array.from(grouped.values()).map((g) => ({
-                    title: g.labels.join(" / "),
-                    shares: g.shares,
-                  }));
+                    entries.forEach((e) => {
+                      const key = sig(e.shares);
+                      const g = grouped.get(key);
+                      if (g) g.labels.push(e.label);
+                      else grouped.set(key, { labels: [e.label], shares: e.shares });
+                    });
+                    const charts = Array.from(grouped.values()).map((g) => {
+                      const labels = g.labels;
+                      const has = (s: string) => labels.includes(s);
+                      let title = labels.join(" / ");
+                      if (labels.length === 2 && has("Current") && has("Baseline")) {
+                        title = "Current & Baseline";
+                      } else if (labels.length === 2 && has("Baseline") && has("Optimized")) {
+                        title = "Baseline & Optimized";
+                      } else if (labels.length === 2 && has("Current") && has("Optimized")) {
+                        title = "Current & Optimized";
+                      }
+                      return { title, shares: g.shares };
+                    });
                   return (
                     <div key={idx} className="rounded border border-slate-200 bg-white px-3 py-3 shadow-sm">
                       <div className="text-[11px] uppercase text-slate-500 mb-2">{seg.label}</div>

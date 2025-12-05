@@ -41,6 +41,7 @@ export type TakeRateScenario = {
   label: string;
   shares: TakeRateData;
   active: number;
+  population?: number;
   kind?: "baseline" | "current" | "optimized" | string;
 };
 
