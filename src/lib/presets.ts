@@ -33,6 +33,8 @@ export type Preset = {
     priceBump?: number;
     pctBump?: number;
     rangeMode?: "symmetric" | "data";
+    metric?: "profit" | "revenue";
+    valueMode?: "absolute" | "percent";
   };
   retentionPct?: number;
   kpiFloorAdj?: number;

@@ -28,18 +28,24 @@ type ECOption = ComposeOption<
 export type TornadoDatum = {
   name: string;
   base: number;
-  deltaLow: number;   // negative or positive
-  deltaHigh: number;  // negative or positive
+  deltaLow: number;   // negative or positive, display units ($ or %)
+  deltaHigh: number;  // negative or positive, display units ($ or %)
+  absLow: number;     // raw $ delta (unfloored)
+  absHigh: number;    // raw $ delta (unfloored)
 };
 
 export default function Tornado({
-  title = "Tornado: Profit sensitivity",
+  title = "Tornado sensitivity",
   rows,
   chartId,
+  valueMode = "absolute",
+  metric = "profit",
 }: {
   title?: string;
   rows: TornadoDatum[];
   chartId?: string;
+  valueMode?: "absolute" | "percent";
+  metric?: "profit" | "revenue";
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
@@ -55,6 +61,10 @@ export default function Tornado({
     if (!ref.current) return;
     if (!chartRef.current) chartRef.current = echarts.init(ref.current);
 
+    const isPct = valueMode === "percent";
+    const metricLabel = metric === "revenue" ? "revenue" : "profit";
+    const digits = isPct ? 1 : 0;
+
     // Prepare series: left bars (low deltas), right bars (high deltas)
     const cats = rows.map((r) => r.name);
     const left = rows.map((r) => Math.min(0, r.deltaLow));
@@ -65,9 +75,12 @@ export default function Tornado({
     const labelGap = isNarrow ? 40 : 50; // larger separation between y-labels and bars
     const maxAbsDelta = Math.max(...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh))), 0);
     // Ensure tiny values (cents) still render a sliver
-    const spanFloor = isNarrow ? 5 : 10;
-    const paddedSpan = Math.max(spanFloor, maxAbsDelta * 1.2 + 5);
-    const labelDigits = Math.max(1, Math.abs(Math.round(paddedSpan)).toLocaleString().length);
+    const spanFloor = isPct ? (isNarrow ? 2.5 : 4.5) : isNarrow ? 5 : 10;
+    const paddedSpan = Math.max(spanFloor, maxAbsDelta * 1.25 + (isPct ? 1 : 5));
+    const labelDigits = Math.max(
+      1,
+      Math.abs(Math.round(paddedSpan)).toLocaleString(undefined, { maximumFractionDigits: digits }).length
+    );
     // Keep plot wide; modest grid left, rely on y-axis margin for separation
     const gridLeft = isNarrow ? 30 : 50;
     const showValueLabels = !isNarrow;
@@ -83,12 +96,26 @@ export default function Tornado({
         formatter: (p) => {
           const items = Array.isArray(p) ? p : [p];
           const name = items[0]?.name ?? "";
+          const row = rows.find((r) => r.name === name);
           const lines = items.map((it) => {
             const v = Number(it.value);
             const side = it.seriesName;
-            return `${side}: ${v >= 0 ? "+" : "-"}$${Math.abs(v).toFixed(0)}`;
+            const abs = row ? (side === "Low" ? row.absLow : row.absHigh) : null;
+            const disp =
+              v >= 0
+                ? `+${Math.abs(v).toFixed(digits)}${isPct ? "%" : ""}`
+                : `-${Math.abs(v).toFixed(digits)}${isPct ? "%" : ""}`;
+            const absLine =
+              abs != null && isPct
+                ? ` (${abs >= 0 ? "+" : "-"}$${Math.abs(abs).toFixed(0)})`
+                : "";
+            return `${side}: ${isPct ? disp : `${disp.startsWith("+") ? "+" : "-"}$${Math.abs(v).toFixed(0)}`}${absLine}`;
           });
-          return `<div><b>${name}</b><br/>${lines.join("<br/>")}</div>`;
+          const baseStr =
+            row?.base != null && Number.isFinite(row.base)
+              ? `$${Math.round(row.base).toLocaleString()}`
+              : "n/a";
+          return `<div><b>${name}</b><br/>${lines.join("<br/>")}<br/><span style="color:#64748b">Base ${metricLabel}: ${baseStr}</span></div>`;
         },
       },
       xAxis: {
@@ -98,7 +125,10 @@ export default function Tornado({
         axisLine: { onZero: false },
         splitNumber: 4,
         axisLabel: {
-          formatter: (v: number) => `$${Math.round(v).toLocaleString()}`,
+          formatter: (v: number) =>
+            isPct
+              ? `${Math.round(v * 10) / 10}%`
+              : `$${Math.round(v).toLocaleString()}`,
           fontSize: axisFont,
           rotate: -90,
           margin: 14,
@@ -129,6 +159,7 @@ export default function Tornado({
             distance: isNarrow ? 8 : 10,
             formatter: (p) => {
               const v = Math.abs(Number(p.value));
+              if (isPct) return v >= 0.1 ? `${v.toFixed(1)}%` : "";
               return v >= 1 ? `$${v.toFixed(0)}` : "";
             },
             fontSize: axisFont,
@@ -136,7 +167,7 @@ export default function Tornado({
           barMaxWidth: 26,
           markLine: {
             symbol: "none",
-            label: { show: true, formatter: "Base profit", fontSize: axisFont },
+            label: { show: true, formatter: `Base ${metricLabel}`, fontSize: axisFont },
             lineStyle: { color: "#94a3b8", type: "dashed" },
             data: [{ xAxis: 0 }],
           },
@@ -152,6 +183,7 @@ export default function Tornado({
             distance: isNarrow ? 8 : 10,
             formatter: (p) => {
               const v = Math.abs(Number(p.value));
+              if (isPct) return v >= 0.1 ? `${v.toFixed(1)}%` : "";
               return v >= 1 ? `$${v.toFixed(0)}` : "";
             },
             fontSize: axisFont,
@@ -170,7 +202,7 @@ export default function Tornado({
       chartRef.current?.dispose();
       chartRef.current = null;
     };
-  }, [rows, title, vw]);
+  }, [rows, title, vw, valueMode, metric]);
 
   type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
 
@@ -193,8 +225,17 @@ export default function Tornado({
         a.click();
       } else if (e.detail.type === "csv") {
         const rowsCsv = [
-          ["name", "base", "delta_low", "delta_high"],
-          ...rows.map((r) => [r.name, r.base, r.deltaLow, r.deltaHigh]),
+          ["name", "base_usd", "delta_low_display", "delta_high_display", "delta_low_abs", "delta_high_abs", "unit", "metric"],
+          ...rows.map((r) => [
+            r.name,
+            r.base,
+            r.deltaLow,
+            r.deltaHigh,
+            r.absLow,
+            r.absHigh,
+            valueMode,
+            metric,
+          ]),
         ];
         const csv = rowsCsv.map((r) => r.join(",")).join("\n");
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -209,7 +250,7 @@ export default function Tornado({
 
     window.addEventListener("export:tornado", onExport as EventListener);
     return () => window.removeEventListener("export:tornado", onExport as EventListener);
-  }, [chartId, rows]);
+  }, [chartId, rows, valueMode, metric]);
 
   if (!rows.length) {
     return (

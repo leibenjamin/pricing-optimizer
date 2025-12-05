@@ -76,9 +76,9 @@ export const EXPLAIN: Record<string, string> = {
 
   "chart.tornado": `
     <b>Tornado sensitivity</b> varies one factor at a time around the base ladder and
-    shows profit deltas (low/high) on either list or pocket basis. Price bump nudges each
-    tier, while leak bump tweaks FX/refunds/payment fees to stress downstream take-rate.
-    Use it to spot which inputs matter most, then sanity-check the spans with operators.`,
+    shows profit or revenue deltas (low/high) on list or pocket basis. Use $ for absolute moves and % of base for relative lift.
+    Price bump nudges each tier, while leak bump tweaks FX/refunds/payment fees to stress downstream take-rate.
+    Toggle metric/units to match the story, then sanity-check the spans with operators.`,
   "optimizer.pocketMargins": `
     Check floors on <b>pocket</b> prices (after promo/payment/FX/refunds). Disable if you want floors on list prices instead.`,
   "optimizer.pocketProfit": `
@@ -163,7 +163,8 @@ export function explainGaps(
 }
 
 export function topDriver(
-  tornadoRows: { name: string; deltaLow: number; deltaHigh: number }[]
+  tornadoRows: { name: string; deltaLow: number; deltaHigh: number }[],
+  opts: { unit?: "usd" | "percent"; metric?: "profit" | "revenue" } = {}
 ) {
   if (!tornadoRows.length) return null;
   const withMag = tornadoRows.map(r => ({
@@ -173,8 +174,14 @@ export function topDriver(
   withMag.sort((a, b) => b.mag - a.mag);
   const t = withMag[0];
   const dir = Math.abs(t.deltaHigh) >= Math.abs(t.deltaLow) ? "up" : "down";
-  const amt = Math.round(Math.max(Math.abs(t.deltaLow), Math.abs(t.deltaHigh)));
-  return `${t.name} (${dir}): ±$${amt}`;
+  const mag = Math.max(Math.abs(t.deltaLow), Math.abs(t.deltaHigh));
+  const unit = opts.unit ?? "usd";
+  const metricLabel = opts.metric ? ` ${opts.metric}` : "";
+  const amt =
+    unit === "percent"
+      ? `${mag.toFixed(1)}%`
+      : `$${Math.round(mag).toLocaleString()}`;
+  return `${t.name} (${dir}${metricLabel}): ${amt}`;
 }
 
 const TIER_LABELS: Record<Tier, string> = {

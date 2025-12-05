@@ -32,7 +32,6 @@ import { computePocketPrice, type Tier, type Leakages } from "./lib/waterfall";
 import { LEAK_PRESETS, blendLeakPresets } from "./lib/waterfallPresets";
 
 import { gridOptimize } from "./lib/optQuick";
-import { tornadoProfit } from "./lib/sensitivity";
 
 import { simulateCohort } from "./lib/simCohort";
 import MiniLine from "./components/MiniLine";
@@ -75,6 +74,8 @@ import CompareBoard from "./components/CompareBoard";
 import ScorecardToolbar from "./components/ScorecardToolbar";
 import { kpisFromSnapshot, type SnapshotKPIs } from "./lib/snapshots";
 import { runRobustnessScenarios, type UncertaintyScenario } from "./lib/robustness";
+import { buildTornadoRows, tornadoSignalThreshold, type TornadoValueMode } from "./lib/tornadoView";
+import type { TornadoMetric, Scenario as TornadoScenario } from "./lib/sensitivity";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -1047,6 +1048,8 @@ export default function App() {
     priceBump: 12,
     pctBump: 3,
     rangeMode: "symmetric" as const,
+    metric: "profit" as TornadoMetric,
+    valueMode: "absolute" as TornadoValueMode,
   };
   const RETENTION_DEFAULT = 92;
   const KPI_FLOOR_ADJ_DEFAULT = 0;
@@ -2159,6 +2162,8 @@ export default function App() {
   const [tornadoPriceBump, setTornadoPriceBump] = useState(TORNADO_DEFAULTS.priceBump); // percent span for symmetric mode
   const [tornadoRangeMode, setTornadoRangeMode] = useState<"symmetric" | "data">(TORNADO_DEFAULTS.rangeMode);
   const [tornadoPctBump, setTornadoPctBump] = useState(TORNADO_DEFAULTS.pctBump); // pp
+  const [tornadoMetric, setTornadoMetric] = useState<TornadoMetric>(TORNADO_DEFAULTS.metric);
+  const [tornadoValueMode, setTornadoValueMode] = useState<TornadoValueMode>(TORNADO_DEFAULTS.valueMode);
 
   const dataDrivenBumps = useMemo(() => {
     const ranges = priceRangeState?.map;
@@ -2206,6 +2211,24 @@ export default function App() {
     if (!vals.length) return 1;
     return vals.reduce((a, b) => a + b, 0) / vals.length;
   }, []);
+
+  const buildTornadoScenario = useCallback(
+    (priceSet: Prices, ctx?: OptRunContext | null): TornadoScenario => {
+      if (ctx) {
+        return {
+          N: ctx.N,
+          prices: priceSet,
+          costs: ctx.costs,
+          features: ctx.features,
+          segments: ctx.segments,
+          refPrices: ctx.refPrices,
+          leak: ctx.leak,
+        };
+      }
+      return { N, prices: priceSet, costs, features, segments, refPrices, leak };
+    },
+    [N, costs, features, segments, refPrices, leak]
+  );
 
 
   const dataRangeSummary = useMemo(() => {
@@ -2363,34 +2386,28 @@ export default function App() {
     // Scale leak bumps relative to price span so non-price factors remain visible.
     const leakPct = Math.max(pctBumpAbs, (avgSpan / Math.max(1, avgPrice)) * 0.3);
     const leakFixed = Math.max(0.05, avgPrice * leakPct * 0.1);
-    return tornadoProfit(
-      { N, prices, costs, features, segments, refPrices, leak },
-      {
+    return buildTornadoRows({
+      metric: tornadoMetric,
+      mode: tornadoValueMode,
+      scenario: buildTornadoScenario(prices),
+      opts: {
         usePocket: tornadoPocket,
         priceBump: avgSpan,
         priceBumps: bumps,
         pctSmall: leakPct,
         payPct: leakPct,
         payFixed: leakFixed,
-      }
-    ).map((r) => ({
-      name: r.name,
-      base: r.base,
-      deltaLow: r.deltaLow,
-      deltaHigh: r.deltaHigh,
-    }));
+      },
+    });
   }, [
-    N,
     prices,
-    costs,
-    features,
-    segments,
-    refPrices,
-    leak,
-    tornadoPocket,
     tornadoPctBump,
+    tornadoMetric,
+    tornadoValueMode,
+    buildTornadoScenario,
     computePriceBumps,
     avgFromBumps,
+    tornadoPocket,
   ]);
 
   const tornadoRowsOptim = useMemo(() => {
@@ -2403,37 +2420,28 @@ export default function App() {
     const pctBumpAbs = Math.max(0.005, tornadoPctBump / 100);
     const leakPct = Math.max(pctBumpAbs, (avgSpan / Math.max(1, avgPrice)) * 0.3);
     const leakFixed = Math.max(0.05, avgPrice * leakPct * 0.1);
-    const ctx = optResult?.context;
-    const scenario = ctx
-      ? { N: ctx.N, prices: p, costs: ctx.costs, features: ctx.features, segments: ctx.segments, refPrices: ctx.refPrices, leak: ctx.leak }
-      : { N, prices: p, costs, features, segments, refPrices, leak };
-    return tornadoProfit(
-      scenario,
-      {
+    const ctx = optResult?.context ?? null;
+    return buildTornadoRows({
+      metric: tornadoMetric,
+      mode: tornadoValueMode,
+      scenario: buildTornadoScenario(p, ctx),
+      opts: {
         usePocket: tornadoPocket,
         priceBump: avgSpan,
         priceBumps: bumps,
         pctSmall: leakPct,
         payPct: leakPct,
         payFixed: leakFixed,
-      }
-    ).map((r) => ({
-      name: r.name,
-      base: r.base,
-      deltaLow: r.deltaLow,
-      deltaHigh: r.deltaHigh,
-    }));
+      },
+    });
   }, [
     optResult,
     quickOpt.best,
-    N,
-    costs,
-    features,
-    segments,
-    refPrices,
-    leak,
-    tornadoPocket,
     tornadoPctBump,
+    tornadoMetric,
+    tornadoValueMode,
+    buildTornadoScenario,
+    tornadoPocket,
     computePriceBumps,
     avgFromBumps,
   ]);
@@ -2443,12 +2451,12 @@ export default function App() {
     (rows: typeof tornadoRowsCurrent) => {
       // Keep rows with any visible signal; if everything is tiny, keep the top few anyway.
       const meaningful = rows.filter(
-        (r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh)) >= 0.25
+        (r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh)) >= tornadoSignalThreshold(tornadoValueMode)
       );
       const base = meaningful.length ? meaningful : rows;
       return base.slice(0, 12);
     },
-    []
+    [tornadoValueMode]
   );
   const activeTornadoRows = useMemo(
     () =>
@@ -2461,7 +2469,13 @@ export default function App() {
   );
   const tornadoViewLabel =
     tornadoView === "optimized" && hasOptimizedTornado ? "Optimized" : "Current";
-  const tornadoHasSignal = useMemo(() => activeTornadoRows.some((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh)) >= 1), [activeTornadoRows]);
+  const tornadoHasSignal = useMemo(() => {
+    const minSignal = tornadoValueMode === "percent" ? 0.5 : 1;
+    return activeTornadoRows.some((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh)) >= minSignal);
+  }, [activeTornadoRows, tornadoValueMode]);
+  const tornadoMetricLabel = tornadoMetric === "revenue" ? "Revenue" : "Profit";
+  const tornadoUnitLabel = tornadoValueMode === "percent" ? "% delta" : "$ delta";
+  const tornadoChartTitle = `Tornado: ${tornadoViewLabel} ${tornadoMetricLabel.toLowerCase()} sensitivity (${tornadoUnitLabel})`;
 
   const normalizeChannelMix = useCallback(
     (rows: Array<{ w: number; preset: string }>) => {
@@ -2507,6 +2521,8 @@ export default function App() {
     tornadoPriceBump: number;
     tornadoPctBump: number;
     tornadoRangeMode: "symmetric" | "data";
+    tornadoMetric: TornadoMetric;
+    tornadoValueMode: TornadoValueMode;
     retentionPct: number;
     retentionMonths: number;
     kpiFloorAdj: number;
@@ -2529,6 +2545,8 @@ export default function App() {
         tornadoPriceBump: args.tornadoPriceBump,
         tornadoPctBump: args.tornadoPctBump,
         tornadoRangeMode: args.tornadoRangeMode,
+        tornadoMetric: args.tornadoMetric,
+        tornadoValueMode: args.tornadoValueMode,
         retentionPct: args.retentionPct,
         retentionMonths: args.retentionMonths,
         kpiFloorAdj: args.kpiFloorAdj,
@@ -2613,15 +2631,17 @@ export default function App() {
         tornadoPriceBump,
         tornadoPctBump,
         tornadoRangeMode,
+        tornadoMetric,
+        tornadoValueMode,
         retentionPct,
         retentionMonths,
-      kpiFloorAdj,
-      priceRange: priceRangeState,
-      optRanges,
-      optConstraints,
-      channelMix,
-      optimizerKind,
-    });
+        kpiFloorAdj,
+        priceRange: priceRangeState,
+        optRanges,
+        optConstraints,
+        channelMix,
+        optimizerKind,
+      });
       setBaselineKPIs(currentKPIs);
       setBaselineMeta(meta);
       setScenarioBaseline({
@@ -2634,7 +2654,7 @@ export default function App() {
         meta,
       });
     }
-  }, [baselineKPIs, currentKPIs, scenarioBaseline, buildScenarioSnapshot, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, setScenarioBaseline, optimizerKind]);
+  }, [baselineKPIs, currentKPIs, scenarioBaseline, buildScenarioSnapshot, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, setScenarioBaseline, optimizerKind]);
 
 
   async function handleImportJson(e: ChangeEvent<HTMLInputElement>) {
@@ -2670,6 +2690,18 @@ export default function App() {
           setTornadoPriceBump(sc.analysis.tornadoPriceBump);
         if (typeof sc.analysis.tornadoPctBump === "number")
           setTornadoPctBump(sc.analysis.tornadoPctBump);
+        if (
+          sc.analysis.tornadoMetric === "profit" ||
+          sc.analysis.tornadoMetric === "revenue"
+        ) {
+          setTornadoMetric(sc.analysis.tornadoMetric);
+        }
+        if (
+          sc.analysis.tornadoValueMode === "absolute" ||
+          sc.analysis.tornadoValueMode === "percent"
+        ) {
+          setTornadoValueMode(sc.analysis.tornadoValueMode);
+        }
         if (
           sc.analysis.tornadoRangeMode === "symmetric" ||
           sc.analysis.tornadoRangeMode === "data"
@@ -2768,6 +2800,8 @@ export default function App() {
       tornadoPriceBump,
       tornadoPctBump,
       tornadoRangeMode,
+      tornadoMetric,
+      tornadoValueMode,
       retentionPct,
       retentionMonths,
       kpiFloorAdj,
@@ -2903,6 +2937,8 @@ export default function App() {
         tornadoPriceBump,
         tornadoPctBump,
         tornadoRangeMode,
+        tornadoMetric,
+        tornadoValueMode,
         retentionPct,
         retentionMonths,
         kpiFloorAdj,
@@ -2977,6 +3013,8 @@ export default function App() {
       tornadoPriceBump,
       tornadoPctBump,
       tornadoRangeMode,
+      tornadoMetric,
+      tornadoValueMode,
       retentionPct,
       retentionMonths,
       kpiFloorAdj,
@@ -3014,6 +3052,16 @@ export default function App() {
         setTornadoPriceBump(sc.analysis.tornadoPriceBump);
       if (typeof sc.analysis.tornadoPctBump === "number")
         setTornadoPctBump(sc.analysis.tornadoPctBump);
+      if (
+        sc.analysis.tornadoMetric === "profit" ||
+        sc.analysis.tornadoMetric === "revenue"
+      )
+        setTornadoMetric(sc.analysis.tornadoMetric);
+      if (
+        sc.analysis.tornadoValueMode === "absolute" ||
+        sc.analysis.tornadoValueMode === "percent"
+      )
+        setTornadoValueMode(sc.analysis.tornadoValueMode);
       if (sc.analysis.optRanges) setOptRanges(sc.analysis.optRanges);
       if (sc.analysis.optConstraints) setOptConstraints(sc.analysis.optConstraints);
       if (
@@ -3173,6 +3221,8 @@ export default function App() {
         tornadoPriceBump,
         tornadoPctBump,
         tornadoRangeMode,
+        tornadoMetric,
+        tornadoValueMode,
         retentionPct,
         retentionMonths,
         kpiFloorAdj,
@@ -3226,7 +3276,7 @@ export default function App() {
         toast(kind, opts?.toastMessage ?? "Baseline pinned");
       }
     },
-    [prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, setScenarioBaseline, buildScenarioSnapshot, toast]
+    [prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, setScenarioBaseline, buildScenarioSnapshot, toast]
   );
 
   const pinBaselineNow = () => {
@@ -3265,6 +3315,8 @@ export default function App() {
       setTornadoPocket(p.tornado?.usePocket ?? TORNADO_DEFAULTS.usePocket);
       setTornadoPriceBump(p.tornado?.priceBump ?? TORNADO_DEFAULTS.priceBump);
       setTornadoPctBump(p.tornado?.pctBump ?? TORNADO_DEFAULTS.pctBump);
+      setTornadoMetric(p.tornado?.metric ?? TORNADO_DEFAULTS.metric);
+      setTornadoValueMode(p.tornado?.valueMode ?? TORNADO_DEFAULTS.valueMode);
       const desiredRangeMode = p.tornado?.rangeMode ?? (p.priceRange ? "data" : TORNADO_DEFAULTS.rangeMode);
       const hasRange = p.priceRange && hasMeaningfulRange(p.priceRange);
       const priceRangeForBaseline = hasRange
@@ -3307,6 +3359,8 @@ export default function App() {
           tornadoPriceBump: p.tornado?.priceBump ?? TORNADO_DEFAULTS.priceBump,
           tornadoPctBump: p.tornado?.pctBump ?? TORNADO_DEFAULTS.pctBump,
           tornadoRangeMode: tornadoRangeModeNext,
+          tornadoMetric: p.tornado?.metric ?? TORNADO_DEFAULTS.metric,
+          tornadoValueMode: p.tornado?.valueMode ?? TORNADO_DEFAULTS.valueMode,
           retentionPct: retention,
           kpiFloorAdj: floorAdj,
           priceRange: priceRangeForBaseline,
@@ -3318,7 +3372,7 @@ export default function App() {
       );
       pushJ(`Loaded preset: ${p.name}`);
     },
-    [KPI_FLOOR_ADJ_DEFAULT, RETENTION_DEFAULT, TORNADO_DEFAULTS.priceBump, TORNADO_DEFAULTS.pctBump, TORNADO_DEFAULTS.rangeMode, TORNADO_DEFAULTS.usePocket, defaults, fallbackToSyntheticRanges, normalizeChannelMix, pinBaseline, pushJ, setChannelBlendApplied, setChannelMix, setCosts, setCoverageUsePocket, setFeatures, setKpiFloorAdj, setLeak, setLastOptAt, setOptConstraints, setOptError, setOptRanges, setOptResult, setPresetSel, setPriceRangeFromData, setPrices, setRefPrices, setRetentionPct, setScenarioPresetId, setScorecardView, setSegments, setTornadoPctBump, setTornadoPocket, setTornadoPriceBump, setTornadoRangeMode, setTornadoView]
+    [KPI_FLOOR_ADJ_DEFAULT, RETENTION_DEFAULT, TORNADO_DEFAULTS.metric, TORNADO_DEFAULTS.priceBump, TORNADO_DEFAULTS.pctBump, TORNADO_DEFAULTS.rangeMode, TORNADO_DEFAULTS.usePocket, TORNADO_DEFAULTS.valueMode, defaults, fallbackToSyntheticRanges, normalizeChannelMix, pinBaseline, pushJ, setChannelBlendApplied, setChannelMix, setCosts, setCoverageUsePocket, setFeatures, setKpiFloorAdj, setLeak, setLastOptAt, setOptConstraints, setOptError, setOptRanges, setOptResult, setPresetSel, setPriceRangeFromData, setPrices, setRefPrices, setRetentionPct, setScenarioPresetId, setScorecardView, setSegments, setTornadoMetric, setTornadoPctBump, setTornadoPocket, setTornadoPriceBump, setTornadoRangeMode, setTornadoValueMode, setTornadoView]
   );
 
 
@@ -4462,6 +4516,8 @@ export default function App() {
                         tornadoPriceBump,
                         tornadoPctBump,
                         tornadoRangeMode,
+                        tornadoMetric,
+                        tornadoValueMode,
                         retentionPct,
                         retentionMonths,
                       kpiFloorAdj,
@@ -4667,7 +4723,7 @@ export default function App() {
                   </button>
                 </div>
                 <div className="text-[11px] text-slate-600">
-                  JSON/short link includes prices/costs/features/refs/leak/segments + optimizer ranges/constraints, tornado/retention, price ranges, channel blend, and optimizer engine. CSV/long URL are lighter: CSV carries ladder/leak/segments only (no constraints/features/analysis), long URL carries ladder + feature flags only.
+                  JSON/short link includes prices/costs/features/refs/leak/segments + optimizer ranges/constraints, tornado/retention (with KPI/unit), price ranges, channel blend, and optimizer engine. CSV/long URL are lighter: CSV carries ladder/leak/segments only (no constraints/features/analysis), long URL carries ladder + feature flags only.
                 </div>
               </Section>
             <Section id="recent-short-links" title="Recent short links" className="order-5">
@@ -5415,7 +5471,10 @@ export default function App() {
                   gapGB: ctx.constraints.gapGB,
                   gapBB: ctx.constraints.gapBB,
                 });
-                const topDriverLine = topDriver(tornadoRowsOptim);
+                const topDriverLine = topDriver(tornadoRowsOptim, {
+                  unit: tornadoValueMode === "percent" ? "percent" : "usd",
+                  metric: tornadoMetric,
+                });
                 const deltaLabel = optimizerInputDrift.length ? "vs run baseline" : "vs current profit";
                 const driftNote = optimizerInputDrift.length
                   ? `Inputs changed since the optimizer run (${optimizerInputDrift.join(", ")}). Numbers here use the saved run inputs.`
@@ -5520,6 +5579,8 @@ export default function App() {
                                     tornadoPriceBump,
                                     tornadoPctBump,
                                     tornadoRangeMode,
+                                    tornadoMetric,
+                                    tornadoValueMode,
                                     retentionPct,
                                     retentionMonths,
                                     kpiFloorAdj,
@@ -5553,7 +5614,7 @@ export default function App() {
                         </div>
                         <ul className="list-disc ml-4 space-y-1 text-slate-700 leading-snug">
                           {binds.length ? binds.map((b, i) => <li key={i}>{b}</li>) : <li>No gap constraints binding.</li>}
-                          <li>Largest profit driver near optimum: {topDriverLine ? topDriverLine : "n/a"}.</li>
+                          <li>Largest {tornadoMetricLabel.toLowerCase()} driver near optimum: {topDriverLine ? topDriverLine : "n/a"}.</li>
                           <li>{guardrails.floorLine}</li>
                         </ul>
                       </div>
@@ -6387,7 +6448,7 @@ export default function App() {
             actions={<ActionCluster chart="tornado" id="tornado-main" csv />}
           >
             <Explanation slot="chart.tornado">
-              Tornado varies one factor at a time around the base ladder and shows profit sensitivity (low/high). Switch between Current and Optimized to see how drivers change. Pocket toggle includes leakages; leak bump stress-tests FX/refunds/payment assumptions.
+              Tornado varies one factor at a time around the base ladder and shows profit or revenue sensitivity (low/high) as $ or % of base. Switch between Current and Optimized to see how drivers change. Pocket toggles leakages; leak bump stress-tests FX/refunds/payment assumptions.
             </Explanation>
             <div className="flex flex-wrap items-center gap-3 text-xs mb-2">
               <label className="flex items-center gap-2">
@@ -6396,7 +6457,31 @@ export default function App() {
                   checked={tornadoPocket}
                   onChange={(e) => setTornadoPocket(e.target.checked)}
                 />
-                Compute using <span className="font-medium">pocket</span> margin
+                Use <span className="font-medium">pocket</span> (after leakages)
+              </label>
+
+              <label className="flex items-center gap-1">
+                KPI
+                <select
+                  className="border rounded px-2 h-7 bg-white"
+                  value={tornadoMetric}
+                  onChange={(e) => setTornadoMetric(e.target.value as TornadoMetric)}
+                >
+                  <option value="profit">Profit</option>
+                  <option value="revenue">Revenue</option>
+                </select>
+              </label>
+
+              <label className="flex items-center gap-1">
+                Units
+                <select
+                  className="border rounded px-2 h-7 bg-white"
+                  value={tornadoValueMode}
+                  onChange={(e) => setTornadoValueMode(e.target.value as TornadoValueMode)}
+                >
+                  <option value="absolute">$ delta</option>
+                  <option value="percent">% of base</option>
+                </select>
               </label>
 
               <label className="flex items-center gap-1">
@@ -6457,41 +6542,41 @@ export default function App() {
                 <span>pp</span>
               </label>
 
-                          <div className="flex items-center gap-1">
-                            <span>View</span>
-                            <div className="inline-flex overflow-hidden rounded border">
-                              <button
-                                type="button"
-                                className={`px-2 h-7 ${tornadoView === "current" ? "bg-gray-900 text-white" : "bg-white"}`}
-                                onClick={() => setTornadoView("current")}
-                              >
-                                Current
-                              </button>
-                              <button
-                                type="button"
-                                className={`px-2 h-7 ${
-                                  tornadoView === "optimized" && hasOptimizedTornado
-                                    ? "bg-gray-900 text-white"
-                                    : "bg-white"
-                                } ${!hasOptimizedTornado ? "opacity-50 cursor-not-allowed" : ""}`}
-                                onClick={() => hasOptimizedTornado && setTornadoView("optimized")}
-                                disabled={!hasOptimizedTornado}
-                              >
-                                Optimized
-                              </button>
-                              <InfoTip id="chart.tornado" ariaLabel="How to read tornado chart?" />
-                            </div>
-                          </div>
+              <div className="flex items-center gap-1">
+                <span>View</span>
+                <div className="inline-flex overflow-hidden rounded border">
+                  <button
+                    type="button"
+                    className={`px-2 h-7 ${tornadoView === "current" ? "bg-gray-900 text-white" : "bg-white"}`}
+                    onClick={() => setTornadoView("current")}
+                  >
+                    Current
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-2 h-7 ${
+                      tornadoView === "optimized" && hasOptimizedTornado
+                        ? "bg-gray-900 text-white"
+                        : "bg-white"
+                    } ${!hasOptimizedTornado ? "opacity-50 cursor-not-allowed" : ""}`}
+                    onClick={() => hasOptimizedTornado && setTornadoView("optimized")}
+                    disabled={!hasOptimizedTornado}
+                  >
+                    Optimized
+                  </button>
+                </div>
+                <InfoTip id="chart.tornado" ariaLabel="How to read tornado chart?" />
+              </div>
             </div>
 
             <div className="text-[11px] text-slate-600 mb-2">
               {tornadoView === "optimized" && !hasOptimizedTornado
                 ? "Run the optimizer to enable the Optimized view and compare driver magnitudes."
-                : "Use the controls above to test pocket/list assumptions and to resize the span used for each driver."}
+                : "Use the controls above (pocket/list, KPI, units, span) to stress assumptions and resize the span used for each driver."}
             </div>
 
             <div className="flex items-center justify-between mb-2 text-xs text-slate-600">
-              <span>Showing: {tornadoViewLabel} ladder</span>
+              <span>Showing: {tornadoViewLabel} ladder • {tornadoMetricLabel} • {tornadoUnitLabel}</span>
               <InfoTip
                 className="ml-1"
                 align="right"
@@ -6502,7 +6587,7 @@ export default function App() {
 
             {!tornadoHasSignal && (
               <div className="mb-2 rounded border border-dashed border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Tornado deltas are near zero at this span. Try widening the span, switching range mode, or toggling pocket/list to stress assumptions.
+                Tornado deltas are near zero at this span/view. Try widening the span, switching range mode, toggling pocket/list, or swapping KPI/units to stress assumptions.
               </div>
             )}
 
@@ -6516,8 +6601,10 @@ export default function App() {
               <ErrorBoundary title="Tornado chart failed">
                 <Tornado
                   chartId="tornado-main"
-                  title={`Tornado: ${tornadoViewLabel} profit sensitivity`}
+                  title={tornadoChartTitle}
                   rows={activeTornadoRows}
+                  valueMode={tornadoValueMode}
+                  metric={tornadoMetric}
                 />
               </ErrorBoundary>
             </Suspense>

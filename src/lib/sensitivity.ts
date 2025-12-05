@@ -53,6 +53,8 @@ export type TornadoRow = {
   high: number;
   deltaLow: number;
   deltaHigh: number;
+  rawDeltaLow?: number;
+  rawDeltaHigh?: number;
 };
 
 export type TornadoOpts = {
@@ -67,7 +69,40 @@ export type TornadoOpts = {
   segTilt?: number;     // delta share tilt between first two segments
 };
 
-export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
+export type TornadoMetric = "profit" | "revenue";
+
+function evalRevenueList(s: Scenario): number {
+  const probs = choiceShares(s.prices, s.features, s.segments, s.refPrices);
+  const take = {
+    good: Math.round(s.N * probs.good),
+    better: Math.round(s.N * probs.better),
+    best: Math.round(s.N * probs.best),
+  };
+  return (
+    take.good * s.prices.good +
+    take.better * s.prices.better +
+    take.best * s.prices.best
+  );
+}
+
+function evalRevenuePocket(s: Scenario): number {
+  const probs = choiceShares(s.prices, s.features, s.segments, s.refPrices);
+  const take = {
+    good: Math.round(s.N * probs.good),
+    better: Math.round(s.N * probs.better),
+    best: Math.round(s.N * probs.best),
+  };
+  const pG = computePocketPrice(s.prices.good,   "good",   s.leak).pocket;
+  const pB = computePocketPrice(s.prices.better, "better", s.leak).pocket;
+  const pH = computePocketPrice(s.prices.best,   "best",   s.leak).pocket;
+  return (
+    take.good   * pG +
+    take.better * pB +
+    take.best   * pH
+  );
+}
+
+function tornadoMetric(kind: TornadoMetric, s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
   const {
     usePocket = false,
     priceBump = 5,
@@ -83,7 +118,10 @@ export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
   const payPctAdj = Math.max(0.001, payPct);
   const payFixedAdj = Math.max(0.01, payFixed);
 
-  const evalProfit = usePocket ? evalProfitPocket : evalProfitList;
+  const evalMetric =
+    kind === "profit"
+      ? (usePocket ? evalProfitPocket : evalProfitList)
+      : (usePocket ? evalRevenuePocket : evalRevenueList);
 
   const bumpFor = (tier: Tier) => {
     const raw = priceBumps?.[tier];
@@ -94,7 +132,7 @@ export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
     return fallback;
   };
 
-  const base = evalProfit(s0);
+  const base = evalMetric(s0);
 
   const rows: TornadoRow[] = [];
   function vary(mutator: (s: Scenario, sign: -1|1) => void, name: string) {
@@ -102,9 +140,16 @@ export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
     const sHigh: Scenario = structuredClone(s0);
     mutator(sLow, -1);
     mutator(sHigh,  1);
-    const low  = evalProfit(sLow);
-    const high = evalProfit(sHigh);
-    rows.push({ name, base, low, high, deltaLow: low-base, deltaHigh: high-base });
+    const low  = evalMetric(sLow);
+    const high = evalMetric(sHigh);
+    rows.push({
+      name,
+      base,
+      low,
+      high,
+      deltaLow: low - base,
+      deltaHigh: high - base,
+    });
   }
 
   // Prices
@@ -150,13 +195,21 @@ export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
     Math.max(Math.abs(a.deltaLow), Math.abs(a.deltaHigh))
   );
 
-  // Add a tiny floor so downstream visuals don’t collapse to zero-width bars when spans are tiny.
+  // Add a tiny floor so downstream visuals don't collapse to zero-width bars when spans are tiny.
   const minVisible = 0.25;
   return rows.map((r) => {
-    const adjLow = Math.abs(r.deltaLow) < minVisible ? (r.deltaLow === 0 ? -minVisible : Math.sign(r.deltaLow) * minVisible) : r.deltaLow;
-    const adjHigh = Math.abs(r.deltaHigh) < minVisible ? (r.deltaHigh === 0 ? minVisible : Math.sign(r.deltaHigh) * minVisible) : r.deltaHigh;
-    return { ...r, deltaLow: adjLow, deltaHigh: adjHigh };
+    const adjLow = Math.abs(r.deltaLow) < minVisible ? (r.deltaLow === 0 ? r.deltaLow : Math.sign(r.deltaLow) * minVisible) : r.deltaLow;
+    const adjHigh = Math.abs(r.deltaHigh) < minVisible ? (r.deltaHigh === 0 ? r.deltaHigh : Math.sign(r.deltaHigh) * minVisible) : r.deltaHigh;
+    return { ...r, rawDeltaLow: r.deltaLow, rawDeltaHigh: r.deltaHigh, deltaLow: adjLow, deltaHigh: adjHigh };
   });
+}
+
+export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
+  return tornadoMetric("profit", s0, o);
+}
+
+export function tornadoRevenue(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
+  return tornadoMetric("revenue", s0, o);
 }
 
 
