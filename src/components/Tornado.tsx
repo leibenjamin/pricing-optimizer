@@ -65,15 +65,18 @@ export default function Tornado({
     const metricLabel = metric === "revenue" ? "revenue" : "profit";
     const digits = isPct ? 1 : 0;
 
-    // Prepare series: left bars (low deltas), right bars (high deltas)
+    // Prepare series: left bars show the worst (most-negative) delta; right bars show the best (most-positive) delta.
     const cats = rows.map((r) => r.name);
-    const left = rows.map((r) => Math.min(0, r.deltaLow));
-    const right = rows.map((r) => Math.max(0, r.deltaHigh));
+    const left = rows.map((r) => Math.min(0, r.deltaLow, r.deltaHigh));
+    const right = rows.map((r) => Math.max(0, r.deltaLow, r.deltaHigh));
     const isNarrow = vw < 900;
     const axisFont = isNarrow ? 10 : 12;
     const labelWidth = isNarrow ? 150 : 190;
     const labelGap = isNarrow ? 40 : 50; // larger separation between y-labels and bars
-    const maxAbsDelta = Math.max(...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh))), 0);
+    const maxAbsDelta = Math.max(
+      ...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh))),
+      0
+    );
     // Ensure tiny values (cents) still render a sliver
     const spanFloor = isPct ? (isNarrow ? 2.5 : 4.5) : isNarrow ? 5 : 10;
     const paddedSpan = Math.max(spanFloor, maxAbsDelta * 1.25 + (isPct ? 1 : 5));
@@ -100,7 +103,11 @@ export default function Tornado({
           const lines = items.map((it) => {
             const v = Number(it.value);
             const side = it.seriesName;
-            const abs = row ? (side === "Low" ? row.absLow : row.absHigh) : null;
+            const abs = row
+              ? side === "Low"
+                ? Math.min(row.absLow, row.absHigh)
+                : Math.max(row.absLow, row.absHigh)
+              : null;
             const disp =
               v >= 0
                 ? `+${Math.abs(v).toFixed(digits)}${isPct ? "%" : ""}`

@@ -2454,7 +2454,8 @@ export default function App() {
         (r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh)) >= tornadoSignalThreshold(tornadoValueMode)
       );
       const base = meaningful.length ? meaningful : rows;
-      return base.slice(0, 12);
+      // Show more rows so non-price drivers remain visible (tornado has 15 drivers today).
+      return base.slice(0, 15);
     },
     [tornadoValueMode]
   );
