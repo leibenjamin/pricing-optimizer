@@ -131,6 +131,20 @@ export default function FrontierChartReal({
   // Update option when data changes
   useEffect(() => {
     if (!chartRef.current) return;
+    const niceExtent = (min: number | undefined, max: number | undefined, ticks = 6) => {
+      if (min == null || max == null || !Number.isFinite(min) || !Number.isFinite(max)) return null;
+      if (min === max) return { min, max, step: 1 };
+      const span = Math.max(max - min, 1e-6);
+      const raw = span / Math.max(1, ticks);
+      const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+      const mult = raw / pow;
+      const niceMult = mult <= 1 ? 1 : mult <= 2 ? 2 : mult <= 5 ? 5 : 10;
+      const step = niceMult * pow;
+      const nMin = Math.floor(min / step) * step;
+      const nMax = Math.ceil(max / step) * step;
+      return { min: nMin, max: nMax, step };
+    };
+
     const isNarrow = vw < 768;
     const axisFont = isNarrow ? 10 : 12;
     const labelFont = isNarrow ? 10 : 12;
@@ -162,6 +176,16 @@ export default function FrontierChartReal({
     const maxProfit = allProfits.length ? Math.max(...allProfits) : undefined;
     const profitSpan = minProfit != null && maxProfit != null ? Math.max(maxProfit - minProfit, 1) : undefined;
     const padProfit = profitSpan != null ? Math.max(profitSpan * 0.08, 5) : undefined;
+
+    const priceExtent = niceExtent(
+      minPrice != null && padPrice != null ? minPrice - padPrice : undefined,
+      maxPrice != null && padPrice != null ? maxPrice + padPrice : undefined
+    );
+    const profitExtent = niceExtent(
+      minProfit != null && padProfit != null ? minProfit - padProfit : undefined,
+      maxProfit != null && padProfit != null ? maxProfit + padProfit : undefined
+    );
+    const priceDecimals = priceExtent ? (priceExtent.step < 1 ? 2 : 0) : 0;
 
     const markPointData =
       markers?.map((m) => ({
@@ -198,22 +222,31 @@ export default function FrontierChartReal({
         name: xLabel,
         nameTextStyle: { fontSize: axisFont },
         nameGap: isNarrow ? 28 : 36,
-        axisLabel: { fontSize: axisFont, hideOverlap: true, margin: 12 },
+        axisLabel: {
+          fontSize: axisFont,
+          hideOverlap: true,
+          margin: 12,
+          formatter: (v: number) =>
+            priceDecimals > 0 ? v.toFixed(priceDecimals) : Math.round(v).toLocaleString(),
+        },
         boundaryGap: [0.07, 0.12],
         axisLine: { onZero: false },
-        ...(minPrice != null && padPrice != null ? { min: minPrice - padPrice } : {}),
-        ...(maxPrice != null && padPrice != null ? { max: maxPrice + padPrice } : {}),
+        ...(priceExtent ? { min: priceExtent.min, max: priceExtent.max } : {}),
       },
       yAxis: {
         type: "value",
         name: "Profit (N=1000)",
         nameTextStyle: { fontSize: axisFont },
-        axisLabel: { fontSize: axisFont, hideOverlap: true, margin: 8 },
+        axisLabel: {
+          fontSize: axisFont,
+          hideOverlap: true,
+          margin: 8,
+          formatter: (v: number) => Math.round(v).toLocaleString(),
+        },
         axisLine: { onZero: false },
         splitNumber: 6,
         splitLine: { lineStyle: { color: "#e2e8f0" } },
-        ...(minProfit != null && padProfit != null ? { min: minProfit - padProfit } : {}),
-        ...(maxProfit != null && padProfit != null ? { max: maxProfit + padProfit } : {}),
+        ...(profitExtent ? { min: profitExtent.min, max: profitExtent.max } : {}),
       },
       series: [
         {
