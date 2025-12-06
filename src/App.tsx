@@ -3457,39 +3457,6 @@ export default function App() {
     return () => observer.disconnect();
   }, [NAV_SECTIONS]);
 
-  const renderDeltaBadge = (
-    delta: number | null | undefined,
-    formatter: (n: number) => string,
-    suffix = "",
-    pct: number | null | undefined = null
-  ) => {
-    if (delta === null || delta === undefined || !Number.isFinite(delta)) {
-      return <span className="text-[11px] text-slate-400">Baseline pending</span>;
-    }
-    const positive = delta >= 0;
-    const pctText =
-      pct !== null && pct !== undefined && Number.isFinite(pct)
-        ? ` (${pct >= 0 ? "+" : "-"}${Math.abs(pct as number).toFixed(1)}%)`
-        : "";
-    return (
-      <span
-        className={
-          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] " +
-          (positive
-            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-            : "border-rose-200 bg-rose-50 text-rose-700")
-        }
-      >
-        <span>{positive ? "+" : "-"}</span>
-        <span>
-          {formatter(Math.abs(delta))}
-          {pctText}
-          {suffix} vs baseline
-        </span>
-      </span>
-    );
-  };
-
   const buildGuardrailSummary = useCallback(
     (activePrices: Prices, overrides?: { constraints?: Constraints; ranges?: SearchRanges; hasOptimizer?: boolean }) => {
       const constraints = overrides?.constraints ?? optConstraints;
@@ -6261,12 +6228,30 @@ export default function App() {
 
               return (
                 <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-xl border border-slate-200 bg-white/70 p-3 shadow-sm text-[11px] text-slate-700">
+                    <div className="flex flex-col gap-1">
+                      <div className="uppercase tracking-wide text-slate-500">Baseline (deltas)</div>
+                      <div className="font-semibold text-slate-900">
+                        {baselineKPIs ? "Baseline before optimize" : "Baseline pending"}
+                      </div>
+                      <div className="text-slate-500">Reference for lifts</div>
+                    </div>
+                    <div className="flex flex-col gap-1 border-x border-slate-100 px-2">
+                      <div className="uppercase tracking-wide text-slate-500">Active view</div>
+                      <div className="font-semibold text-slate-900">{scorecardActiveBasis}</div>
+                      <div className="text-slate-500">Tiles show this basis</div>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="uppercase tracking-wide text-slate-500">Pinned for story</div>
+                      <div className="font-semibold text-slate-900">{scorecardPinnedBasis}</div>
+                      <div className="text-slate-500">Use in exports/narrative</div>
+                    </div>
+                  </div>
+
                   <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 shadow-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
-                      <span className="font-semibold text-slate-800">Quick read</span>
-                      <a className="text-sky-600 hover:underline" href="#callouts">
-                        Jump to Callouts for the narrative
-                      </a>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-slate-800 text-sm">Quick read</span>
+                      <span className="text-[11px] text-slate-500">Basis: {scorecardActiveBasis}</span>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       {summaryPills.length === 0 ? (
@@ -6288,9 +6273,9 @@ export default function App() {
                           )
                         )
                       )}
-                      <span className="rounded-full bg-white px-3 py-1 text-[11px] text-slate-600 border border-slate-200">
-                        Basis: {scorecardActiveBasis}
-                      </span>
+                      <a className="text-sky-600 text-xs hover:underline ml-auto" href="#callouts">
+                        Jump to Callouts
+                      </a>
                     </div>
                   </div>
 
@@ -6298,7 +6283,7 @@ export default function App() {
                     {metrics.map((card) => (
                       <div
                         key={card.key}
-                        className="rounded-xl border border-slate-200 bg-white/60 p-3 shadow-sm"
+                        className="rounded-xl border border-slate-200 bg-white/70 p-3 shadow-sm flex flex-col gap-1"
                       >
                         <div className="flex items-center justify-between text-[11px] text-slate-600">
                           <span className="flex items-center gap-1">
@@ -6312,19 +6297,23 @@ export default function App() {
                               />
                             )}
                           </span>
-                          {renderDeltaBadge(
-                            card.delta,
-                            card.formatter as (n: number) => string,
-                            "",
-                            card.deltaPct
-                          )}
                         </div>
-                        <div className="text-xl font-semibold text-slate-900">
-                          {card.value}
-                        </div>
-                        <div className="mt-1 text-[11px] text-slate-500">
-                          {card.baselineLabel}
-                        </div>
+                        <div className="text-xl font-semibold text-slate-900">{card.value}</div>
+                        <div className="text-[11px] text-slate-500">{card.baselineLabel}</div>
+                        {baselineKPIs && card.delta !== null && (
+                          <div
+                            className={`text-[11px] font-medium ${
+                              card.delta >= 0 ? "text-emerald-700" : "text-rose-700"
+                            }`}
+                          >
+                            {card.delta >= 0 ? "+" : "-"}
+                            {card.formatter(Math.abs(card.delta))}
+                            {card.deltaPct !== null
+                              ? ` (${card.deltaPct >= 0 ? "+" : "-"}${Math.abs(card.deltaPct).toFixed(1)}%)`
+                              : ""}
+                            {" vs baseline"}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
