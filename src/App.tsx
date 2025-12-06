@@ -1392,6 +1392,24 @@ export default function App() {
   const [optResult, setOptResult] = useState<OptRunResult | null>(null);
   const [lastOptAt, setLastOptAt] = useState<number | null>(null);
 
+  // Clear optimizer results when basis toggles change to avoid pocket/list mismatches.
+  const prevBasisRef = useRef<{ pocket: boolean | undefined; margins: boolean | undefined }>({
+    pocket: optConstraints.usePocketProfit,
+    margins: optConstraints.usePocketMargins,
+  });
+  useEffect(() => {
+    const prev = prevBasisRef.current;
+    if (prev.pocket !== optConstraints.usePocketProfit || prev.margins !== optConstraints.usePocketMargins) {
+      prevBasisRef.current = { pocket: optConstraints.usePocketProfit, margins: optConstraints.usePocketMargins };
+      if (optResult) {
+        setOptResult(null);
+        setLastOptAt(null);
+        setScorecardView("current");
+        toast("info", "Optimizer results cleared after basis change");
+      }
+    }
+  }, [optConstraints.usePocketProfit, optConstraints.usePocketMargins, optResult, setLastOptAt, setOptResult, setScorecardView, toast]);
+
   const computeScenarioProfit = useCallback(
     (
       ladder: Prices,
@@ -3600,6 +3618,40 @@ export default function App() {
     pinBaseline("Pinned now", undefined, { toastMessage: "Baseline pinned" });
   };
 
+  // Quick guardrail check to see if a ladder is feasible under given constraints
+  const checkFeasible = useCallback(
+    (ladder: Prices, constraints: Constraints, ctx?: { costs?: Prices; features?: Features; segments?: Segment[]; refPrices?: Prices; leak?: Leakages }) => {
+      const ctxCosts = ctx?.costs ?? costs;
+      const ctxFeatures = ctx?.features ?? features;
+      const ctxSegments = ctx?.segments ?? segments;
+      const ctxRefPrices = ctx?.refPrices ?? refPrices;
+      const ctxLeak = ctx?.leak ?? leak;
+      const probs = choiceShares(ladder, ctxFeatures, ctxSegments, ctxRefPrices);
+      const maxNone = constraints.maxNoneShare ?? 0.9;
+      const minTake = constraints.minTakeRate ?? 0.02;
+
+      const usePocketMargins = !!(constraints.usePocketMargins ?? constraints.usePocketProfit);
+      const effG = usePocketMargins && ctxLeak ? computePocketPrice(ladder.good, "good", ctxLeak).pocket : ladder.good;
+      const effB = usePocketMargins && ctxLeak ? computePocketPrice(ladder.better, "better", ctxLeak).pocket : ladder.better;
+      const effH = usePocketMargins && ctxLeak ? computePocketPrice(ladder.best, "best", ctxLeak).pocket : ladder.best;
+      const mG = (effG - ctxCosts.good) / Math.max(effG, 1e-6);
+      const mB = (effB - ctxCosts.better) / Math.max(effB, 1e-6);
+      const mH = (effH - ctxCosts.best) / Math.max(effH, 1e-6);
+
+      const reasons: string[] = [];
+      if (mG < constraints.marginFloor.good) reasons.push("Good margin below floor");
+      if (mB < constraints.marginFloor.better) reasons.push("Better margin below floor");
+      if (mH < constraints.marginFloor.best) reasons.push("Best margin below floor");
+      if (ladder.better < ladder.good + constraints.gapGB) reasons.push("Gap G/B below floor");
+      if (ladder.best < ladder.better + constraints.gapBB) reasons.push("Gap B/Best below floor");
+      if (probs.none > maxNone) reasons.push("None share above guardrail");
+      if (probs.good + probs.better + probs.best < minTake) reasons.push("Take rate below guardrail");
+
+      return { ok: reasons.length === 0, reasons };
+    },
+    [costs, features, segments, refPrices, leak]
+  );
+
   // Apply a scenario preset: replaces ladder, ref prices, leak, features, segments,
   // optimizer constraints/ranges, sensitivity knobs, cohort retention, and channel blend.
   const applyScenarioPreset = useCallback(
@@ -3617,7 +3669,7 @@ export default function App() {
       setChannelBlendApplied(useBlend);
       setLeak(p.leak);
 
-      const mergedConstraints = {
+      let mergedConstraints = {
         ...defaults.optConstraints,
         ...(p.optConstraints ?? {}),
         marginFloor: {
@@ -3625,6 +3677,31 @@ export default function App() {
           ...(p.optConstraints?.marginFloor ?? {}),
         },
       };
+
+      // If preset ladder is infeasible, relax guardrails so baseline is feasible.
+      const feas = checkFeasible(p.prices, mergedConstraints, {
+        costs: p.costs,
+        features: p.features ?? defaults.features,
+        segments: appliedSegments,
+        refPrices: p.refPrices,
+        leak: p.leak,
+      });
+      if (!feas.ok) {
+        mergedConstraints = {
+          ...mergedConstraints,
+          gapGB: Math.max(0, mergedConstraints.gapGB - 1),
+          gapBB: Math.max(0, mergedConstraints.gapBB - 2),
+          marginFloor: {
+            good: Math.min(mergedConstraints.marginFloor.good, 0.3),
+            better: Math.min(mergedConstraints.marginFloor.better, 0.35),
+            best: Math.min(mergedConstraints.marginFloor.best, 0.4),
+          },
+          maxNoneShare: Math.max(mergedConstraints.maxNoneShare ?? 0, 0.9),
+          minTakeRate: Math.min(mergedConstraints.minTakeRate ?? 1, 0.02),
+        };
+        toast("info", "Relaxed guardrails so the preset baseline is feasible.");
+      }
+
       setOptConstraints(mergedConstraints);
       setCoverageUsePocket(mergedConstraints.usePocketMargins ?? true);
       setOptRanges(p.optRanges ?? defaults.optRanges);
@@ -3689,8 +3766,15 @@ export default function App() {
       );
       pushJ(`Loaded preset: ${p.name}`);
     },
-    [KPI_FLOOR_ADJ_DEFAULT, RETENTION_DEFAULT, TORNADO_DEFAULTS.metric, TORNADO_DEFAULTS.priceBump, TORNADO_DEFAULTS.pctBump, TORNADO_DEFAULTS.rangeMode, TORNADO_DEFAULTS.usePocket, TORNADO_DEFAULTS.valueMode, defaults, fallbackToSyntheticRanges, normalizeChannelMix, pinBaseline, pushJ, setChannelBlendApplied, setChannelMix, setCosts, setCoverageUsePocket, setFeatures, setKpiFloorAdj, setLeak, setLastOptAt, setOptConstraints, setOptError, setOptRanges, setOptResult, setPresetSel, setPriceRangeFromData, setPrices, setRefPrices, setRetentionPct, setScenarioPresetId, setScorecardView, setSegments, setTornadoMetric, setTornadoPctBump, setTornadoPocket, setTornadoPriceBump, setTornadoRangeMode, setTornadoValueMode, setTornadoView]
+    [KPI_FLOOR_ADJ_DEFAULT, RETENTION_DEFAULT, TORNADO_DEFAULTS.metric, TORNADO_DEFAULTS.priceBump, TORNADO_DEFAULTS.pctBump, TORNADO_DEFAULTS.rangeMode, TORNADO_DEFAULTS.usePocket, TORNADO_DEFAULTS.valueMode, checkFeasible, defaults, fallbackToSyntheticRanges, normalizeChannelMix, pinBaseline, pushJ, setChannelBlendApplied, setChannelMix, setCosts, setCoverageUsePocket, setFeatures, setKpiFloorAdj, setLeak, setLastOptAt, setOptConstraints, setOptError, setOptRanges, setOptResult, setPresetSel, setPriceRangeFromData, setPrices, setRefPrices, setRetentionPct, setScenarioPresetId, setScorecardView, setSegments, setTornadoMetric, setTornadoPctBump, setTornadoPocket, setTornadoPriceBump, setTornadoRangeMode, setTornadoValueMode, setTornadoView, toast]
   );
+
+  const resetActivePreset = useCallback(() => {
+    if (!scenarioPresetId) return;
+    const p = PRESETS.find((x) => x.id === scenarioPresetId);
+    if (!p) return;
+    applyScenarioPreset(p);
+  }, [applyScenarioPreset, scenarioPresetId]);
 
 
   return (
@@ -3972,6 +4056,7 @@ export default function App() {
                           presets={PRESETS}
                           activeId={scenarioPresetId}
                           onApply={applyScenarioPreset}
+                          onResetActive={resetActivePreset}
                           infoId="presets.scenario"
                         className="mt-1"
                       />

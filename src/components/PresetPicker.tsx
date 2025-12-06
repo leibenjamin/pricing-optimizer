@@ -68,12 +68,14 @@ export default function PresetPicker({
   presets,
   activeId,
   onApply,
+  onResetActive,
   className = "",
   infoId,
 }: {
   presets: Preset[];
   activeId?: string | null;
   onApply: (p: Preset) => void;
+  onResetActive?: (p: Preset) => void;
   className?: string;
   infoId?: string; // from explain("presets.scenario")
 }) {
@@ -116,6 +118,15 @@ export default function PresetPicker({
                 >
                   {isActive ? "Active" : "Apply"}
                 </button>
+                {isActive && onResetActive ? (
+                  <button
+                    className="text-[11px] text-slate-600 underline"
+                    type="button"
+                    onClick={() => onResetActive(p)}
+                  >
+                    Reset preset
+                  </button>
+                ) : null}
               </div>
 
               {/* mini credibility row */}
