@@ -56,9 +56,9 @@ export const PRESETS: Preset[] = [
       featB: { good: 0, better: 1, best: 1 },
     },
     segments: [
-      { name: "Budget self-serve", weight: 0.45, betaPrice: -0.45, betaFeatA: 0.45, betaFeatB: 0.30, betaNone: 0.55, alphaAnchor: 0.35, lambdaLoss: 1.9 },
-      { name: "Growth teams", weight: 0.35, betaPrice: -0.32, betaFeatA: 0.65, betaFeatB: 0.65, betaNone: 0.15, alphaAnchor: 0.32, lambdaLoss: 1.65 },
-      { name: "Proof-of-concept", weight: 0.20, betaPrice: -0.24, betaFeatA: 0.85, betaFeatB: 0.90, betaNone: -0.05, alphaAnchor: 0.30, lambdaLoss: 1.45 },
+      { name: "Budget self-serve", weight: 0.45, betaPrice: -0.38, betaFeatA: 0.45, betaFeatB: 0.30, betaNone: 0.55, alphaAnchor: 0.32, lambdaLoss: 1.8 },
+      { name: "Growth teams", weight: 0.35, betaPrice: -0.28, betaFeatA: 0.65, betaFeatB: 0.65, betaNone: 0.15, alphaAnchor: 0.30, lambdaLoss: 1.6 },
+      { name: "Proof-of-concept", weight: 0.20, betaPrice: -0.22, betaFeatA: 0.85, betaFeatB: 0.90, betaNone: -0.05, alphaAnchor: 0.28, lambdaLoss: 1.4 },
     ],
     leak: {
       promo: { good: 0.08, better: 0.05, best: 0.03 },
@@ -101,9 +101,9 @@ export const PRESETS: Preset[] = [
       featB: { good: 0, better: 1, best: 1 },
     },
     segments: [
-      { name: "Casual users", weight: 0.50, betaPrice: -0.55, betaFeatA: 0.25, betaFeatB: 0.15, betaNone: 0.70, alphaAnchor: 0.25, lambdaLoss: 2.0 },
-      { name: "Hobbyist", weight: 0.30, betaPrice: -0.40, betaFeatA: 0.55, betaFeatB: 0.55, betaNone: 0.20, alphaAnchor: 0.30, lambdaLoss: 1.8 },
-      { name: "Prosumer", weight: 0.20, betaPrice: -0.32, betaFeatA: 0.85, betaFeatB: 0.75, betaNone: -0.10, alphaAnchor: 0.35, lambdaLoss: 1.6 },
+      { name: "Casual users", weight: 0.50, betaPrice: -0.48, betaFeatA: 0.25, betaFeatB: 0.15, betaNone: 0.70, alphaAnchor: 0.22, lambdaLoss: 1.8 },
+      { name: "Hobbyist", weight: 0.30, betaPrice: -0.36, betaFeatA: 0.55, betaFeatB: 0.55, betaNone: 0.20, alphaAnchor: 0.26, lambdaLoss: 1.6 },
+      { name: "Prosumer", weight: 0.20, betaPrice: -0.30, betaFeatA: 0.85, betaFeatB: 0.75, betaNone: -0.10, alphaAnchor: 0.30, lambdaLoss: 1.55 },
     ],
     channelMix: [
       { preset: "App Store (est.)", w: 65 },
@@ -127,7 +127,7 @@ export const PRESETS: Preset[] = [
       best: { min: 11.99, max: 21.99 },
     },
     priceRangeSource: "shared",
-    optRanges: { good: [2.49, 6.49], better: [5.49, 11.99], best: [10.99, 21.99], step: 0.5 },
+    optRanges: { good: [2.49, 7.49], better: [5.49, 13.49], best: [10.99, 23.99], step: 0.5 },
     optConstraints: {
       gapGB: 1.5,
       gapBB: 3.5,
@@ -154,9 +154,9 @@ export const PRESETS: Preset[] = [
       featB: { good: 0, better: 1, best: 1 },
     },
     segments: [
-      { name: "Bargain hunters", weight: 0.40, betaPrice: -0.48, betaFeatA: 0.35, betaFeatB: 0.18, betaNone: 0.55, alphaAnchor: 0.32, lambdaLoss: 1.9 },
-      { name: "Omni shopper", weight: 0.35, betaPrice: -0.34, betaFeatA: 0.55, betaFeatB: 0.50, betaNone: 0.10, alphaAnchor: 0.34, lambdaLoss: 1.7 },
-      { name: "Premium gifter", weight: 0.25, betaPrice: -0.24, betaFeatA: 0.85, betaFeatB: 0.75, betaNone: -0.15, alphaAnchor: 0.28, lambdaLoss: 1.5 },
+      { name: "Bargain hunters", weight: 0.40, betaPrice: -0.44, betaFeatA: 0.35, betaFeatB: 0.18, betaNone: 0.55, alphaAnchor: 0.30, lambdaLoss: 1.75 },
+      { name: "Omni shopper", weight: 0.35, betaPrice: -0.30, betaFeatA: 0.55, betaFeatB: 0.50, betaNone: 0.10, alphaAnchor: 0.30, lambdaLoss: 1.6 },
+      { name: "Premium gifter", weight: 0.25, betaPrice: -0.22, betaFeatA: 0.85, betaFeatB: 0.75, betaNone: -0.15, alphaAnchor: 0.26, lambdaLoss: 1.45 },
     ],
     channelMix: [
       { preset: "Shopify (Basic+Stripe)", w: 60 },
@@ -181,7 +181,7 @@ export const PRESETS: Preset[] = [
       best: { min: 90, max: 150 },
     },
     priceRangeSource: "shared",
-    optRanges: { good: [22, 44], better: [44, 84], best: [84, 150], step: 2 },
+    optRanges: { good: [20, 46], better: [42, 88], best: [82, 155], step: 2 },
     optConstraints: {
       gapGB: 6,
       gapBB: 14,
@@ -208,9 +208,9 @@ export const PRESETS: Preset[] = [
       featB: { good: 0, better: 1, best: 1 },
     },
     segments: [
-      { name: "Procurement guardrail", weight: 0.45, betaPrice: -0.0015, betaFeatA: 0.60, betaFeatB: 0.50, betaNone: 0.65, alphaAnchor: 0.0006, lambdaLoss: 1.4 },
-      { name: "Ops lead", weight: 0.35, betaPrice: -0.0011, betaFeatA: 0.85, betaFeatB: 0.65, betaNone: 0.25, alphaAnchor: 0.00055, lambdaLoss: 1.35 },
-      { name: "Exec sponsor", weight: 0.20, betaPrice: -0.0009, betaFeatA: 1.05, betaFeatB: 0.95, betaNone: 0.00, alphaAnchor: 0.0005, lambdaLoss: 1.25 },
+      { name: "Procurement guardrail", weight: 0.45, betaPrice: -0.0013, betaFeatA: 0.60, betaFeatB: 0.50, betaNone: 0.65, alphaAnchor: 0.00055, lambdaLoss: 1.35 },
+      { name: "Ops lead", weight: 0.35, betaPrice: -0.001, betaFeatA: 0.85, betaFeatB: 0.65, betaNone: 0.25, alphaAnchor: 0.0005, lambdaLoss: 1.28 },
+      { name: "Exec sponsor", weight: 0.20, betaPrice: -0.0008, betaFeatA: 1.05, betaFeatB: 0.95, betaNone: 0.00, alphaAnchor: 0.00045, lambdaLoss: 1.2 },
     ],
     leak: {
       promo: { good: 0.02, better: 0.08, best: 0.12 },
@@ -234,12 +234,65 @@ export const PRESETS: Preset[] = [
       charm: false,
       usePocketMargins: false,
       usePocketProfit: false,
-      maxNoneShare: 0.55,
-      minTakeRate: 0.12,
+      maxNoneShare: 0.5,
+      minTakeRate: 0.15,
     },
     tornado: { usePocket: true, priceBump: 10, pctBump: 2.5, rangeMode: "data" },
     retentionPct: 95,
     kpiFloorAdj: 0,
     note: "Enterprise annual deals with structured volume rebates; optimizer runs on list profit with wide ranges and large tier gaps. Price sensitivity and anchoring are scaled for $1k-$7k ladders so frontier/tornado stay meaningful.",
+  },
+  {
+    id: "freemium-app",
+    name: "Freemium app (Good = free)",
+    prices: { good: 0, better: 6.99, best: 12.99 },
+    costs: { good: 0.25, better: 0.8, best: 1.2 },
+    refPrices: { good: 0, better: 7.99, best: 13.99 },
+    features: {
+      featA: { good: 1, better: 1, best: 1 },
+      featB: { good: 0, better: 1, best: 1 },
+    },
+    segments: [
+      { name: "Free-first", weight: 0.55, betaPrice: -0.6, betaFeatA: 0.25, betaFeatB: 0.2, betaNone: 0.8, alphaAnchor: 0.2, lambdaLoss: 1.9 },
+      { name: "Upgrade curious", weight: 0.30, betaPrice: -0.4, betaFeatA: 0.65, betaFeatB: 0.55, betaNone: 0.2, alphaAnchor: 0.3, lambdaLoss: 1.7 },
+      { name: "Power user", weight: 0.15, betaPrice: -0.25, betaFeatA: 0.9, betaFeatB: 0.8, betaNone: -0.05, alphaAnchor: 0.35, lambdaLoss: 1.5 },
+    ],
+    channelMix: [
+      { preset: "App Store (est.)", w: 70 },
+      { preset: "Stripe (cards)", w: 30 },
+    ],
+    leak: (() => {
+      const blended = blendLeakPresets([
+        { preset: "App Store (est.)", w: 70 },
+        { preset: "Stripe (cards)", w: 30 },
+      ]);
+      return {
+        ...blended,
+        promo: { good: 0.0, better: 0.02, best: 0.04 },
+        volume: sameTier(0.0),
+        refundsPct: 0.02,
+      };
+    })(),
+    priceRange: {
+      good: { min: 0, max: 0 },
+      better: { min: 4.99, max: 10.99 },
+      best: { min: 8.99, max: 16.99 },
+    },
+    priceRangeSource: "shared",
+    optRanges: { good: [0, 0], better: [4.49, 11.99], best: [8.49, 18.99], step: 0.5 },
+    optConstraints: {
+      gapGB: 2,
+      gapBB: 4,
+      marginFloor: { good: 0.05, better: 0.35, best: 0.4 },
+      charm: true,
+      usePocketMargins: true,
+      usePocketProfit: true,
+      maxNoneShare: 0.75,
+      minTakeRate: 0.06,
+    },
+    tornado: { usePocket: true, priceBump: 15, pctBump: 2, rangeMode: "data" },
+    retentionPct: 95,
+    kpiFloorAdj: -1,
+    note: "Freemium with Good locked at $0; optimizer only tunes Better/Best within guardrails to show upgrade economics.",
   },
 ];
