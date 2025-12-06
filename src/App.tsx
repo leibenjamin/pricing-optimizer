@@ -1703,6 +1703,31 @@ export default function App() {
     segments,
   ]);
 
+  // Optional frontier slice anchored on the optimizer ladder (holds other tiers at optimized values)
+  const frontierOptimizedSlice = useMemo(() => {
+    if (!optResult) return null;
+    const ctx = optResult.context;
+    const sweep = deriveFrontierSweep({
+      tier: frontierTier,
+      prices: optResult.prices,
+      priceRange: priceRangeState?.map?.[frontierTier] ?? null,
+      optRange: ctx.ranges ? ctx.ranges[frontierTier] : null,
+    });
+    return buildFrontier({
+      tier: frontierTier,
+      prices: optResult.prices,
+      costs: ctx.costs,
+      features: ctx.features,
+      segments: ctx.segments,
+      refPrices: ctx.refPrices,
+      leak: ctx.leak,
+      constraints: ctx.constraints,
+      sweep,
+      N: ctx.N,
+      charm: !!ctx.constraints.charm,
+    });
+  }, [frontierTier, optResult, priceRangeState?.map]);
+
 
   // Expected profit (current slider scenario)
   const take = {
@@ -6460,6 +6485,8 @@ export default function App() {
                   comparison={
                     frontier.alt
                       ? { label: optConstraints.charm ? "No charm" : "Charm .99", points: frontier.alt.points }
+                      : frontierOptimizedSlice
+                      ? { label: "Optimized ladder slice", points: frontierOptimizedSlice.points }
                       : undefined
                   }
                   markers={frontierMarkers}
