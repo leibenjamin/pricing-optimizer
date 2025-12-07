@@ -53,7 +53,8 @@ export function choiceShares(
       const adj = (p: number, r: number) => {
         const d = p - r
         // Price increases (d>=0) are penalized by lambda > 1 (losses loom larger)
-        return s.alphaAnchor! * (d >= 0 ? lambda * d : d)
+        // and decreases (d<0) get a smaller uplift toward the anchor.
+        return -s.alphaAnchor! * (d >= 0 ? lambda * d : d)
       }
       U_good += adj(prices.good, refPrices.good)
       U_better += adj(prices.better, refPrices.better)

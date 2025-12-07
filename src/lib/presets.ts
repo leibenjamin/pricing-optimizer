@@ -57,12 +57,12 @@ export const PRESETS: Preset[] = [
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
     },
-    priceScale: 0.3, // softer sensitivity to keep share and allow modest adjustments
+    priceScale: 1.0, // sharper price pull so anchor cannot reward price hikes
     uncertainty: { priceScaleDelta: 0.12, leakDeltaPct: 0.02 },
     segments: [
-      { name: "Budget self-serve", weight: 0.45, betaPrice: -0.38, betaFeatA: 0.45, betaFeatB: 0.30, betaNone: 0.55, alphaAnchor: 0.32, lambdaLoss: 1.8 },
-      { name: "Growth teams", weight: 0.35, betaPrice: -0.28, betaFeatA: 0.65, betaFeatB: 0.65, betaNone: 0.15, alphaAnchor: 0.30, lambdaLoss: 1.6 },
-      { name: "Proof-of-concept", weight: 0.20, betaPrice: -0.22, betaFeatA: 0.85, betaFeatB: 0.90, betaNone: -0.05, alphaAnchor: 0.28, lambdaLoss: 1.4 },
+      { name: "Budget self-serve", weight: 0.45, betaPrice: -0.38, betaFeatA: 0.45, betaFeatB: 0.30, betaNone: 0.18, alphaAnchor: 0.20, lambdaLoss: 1.6 },
+      { name: "Growth teams", weight: 0.35, betaPrice: -0.28, betaFeatA: 0.65, betaFeatB: 0.65, betaNone: 0.05, alphaAnchor: 0.20, lambdaLoss: 1.5 },
+      { name: "Proof-of-concept", weight: 0.20, betaPrice: -0.22, betaFeatA: 0.85, betaFeatB: 0.90, betaNone: -0.20, alphaAnchor: 0.18, lambdaLoss: 1.4 },
     ],
     leak: {
       promo: { good: 0.08, better: 0.05, best: 0.03 },
@@ -73,12 +73,12 @@ export const PRESETS: Preset[] = [
       refundsPct: 0.03,
     },
     priceRange: {
-      good: { min: 11, max: 14 },
-      better: { min: 22, max: 30 },
-      best: { min: 50, max: 64 },
+      good: { min: 11, max: 13 },
+      better: { min: 21, max: 28 },
+      best: { min: 50, max: 60 },
     },
     priceRangeSource: "shared",
-    optRanges: { good: [11, 13], better: [22, 30], best: [50, 64], step: 1 },
+    optRanges: { good: [11.5, 12.5], better: [23, 25], best: [50, 54], step: 0.5 },
     optConstraints: {
       gapGB: 3,
       gapBB: 10,
@@ -153,17 +153,17 @@ export const PRESETS: Preset[] = [
     name: "Shopify DTC (Discount & FX)",
     prices: { good: 28, better: 52, best: 98 },
     costs: { good: 12, better: 22, best: 40 },
-    refPrices: { good: 30, better: 56, best: 105 },
+    refPrices: { good: 28, better: 52, best: 98 },
     features: {
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
     },
-    priceScale: 0.35,
-    uncertainty: { priceScaleDelta: 0.15, leakDeltaPct: 0.03 },
+    priceScale: 0.75,
+    uncertainty: { priceScaleDelta: 0.12, leakDeltaPct: 0.03 },
     segments: [
-      { name: "Bargain hunters", weight: 0.40, betaPrice: -0.44, betaFeatA: 0.35, betaFeatB: 0.18, betaNone: 0.55, alphaAnchor: 0.30, lambdaLoss: 1.75 },
-      { name: "Omni shopper", weight: 0.35, betaPrice: -0.30, betaFeatA: 0.55, betaFeatB: 0.50, betaNone: 0.10, alphaAnchor: 0.30, lambdaLoss: 1.6 },
-      { name: "Premium gifter", weight: 0.25, betaPrice: -0.22, betaFeatA: 0.85, betaFeatB: 0.75, betaNone: -0.15, alphaAnchor: 0.26, lambdaLoss: 1.45 },
+      { name: "Bargain hunters", weight: 0.40, betaPrice: -0.44, betaFeatA: 0.35, betaFeatB: 0.18, betaNone: 0.05, alphaAnchor: 0.16, lambdaLoss: 1.55 },
+      { name: "Omni shopper", weight: 0.35, betaPrice: -0.30, betaFeatA: 0.55, betaFeatB: 0.50, betaNone: -0.05, alphaAnchor: 0.16, lambdaLoss: 1.5 },
+      { name: "Premium gifter", weight: 0.25, betaPrice: -0.22, betaFeatA: 0.85, betaFeatB: 0.75, betaNone: -0.32, alphaAnchor: 0.14, lambdaLoss: 1.4 },
     ],
     channelMix: [
       { preset: "Shopify (Basic+Stripe)", w: 60 },
@@ -184,11 +184,11 @@ export const PRESETS: Preset[] = [
     })(),
     priceRange: {
       good: { min: 26, max: 34 },
-      better: { min: 48, max: 72 },
-      best: { min: 92, max: 120 },
+      better: { min: 48, max: 68 },
+      best: { min: 95, max: 112 },
     },
     priceRangeSource: "shared",
-    optRanges: { good: [26, 32], better: [48, 68], best: [95, 115], step: 2 },
+    optRanges: { good: [27, 29], better: [50, 56], best: [96, 104], step: 1 },
     optConstraints: {
       gapGB: 5,
       gapBB: 11,
