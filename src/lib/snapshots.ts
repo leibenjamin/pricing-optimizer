@@ -46,6 +46,8 @@ export function makeSnapshot(args: {
 
   const shares = choiceShares(prices, feats, segments, refPrices);
 
+  const usePocket = usePocketProfit || usePocketMargins;
+
   // Quantities (rounded like optimizer)
   const q = {
     good:   N * shares.good,
@@ -54,9 +56,9 @@ export function makeSnapshot(args: {
   };
 
   // Effective price for profit/margins
-  const effG = usePocketProfit ? computePocketPrice(prices.good,   "good",   leak).pocket : prices.good;
-  const effB = usePocketProfit ? computePocketPrice(prices.better, "better", leak).pocket : prices.better;
-  const effH = usePocketProfit ? computePocketPrice(prices.best,   "best",   leak).pocket : prices.best;
+  const effG = usePocket ? computePocketPrice(prices.good,   "good",   leak).pocket : prices.good;
+  const effB = usePocket ? computePocketPrice(prices.better, "better", leak).pocket : prices.better;
+  const effH = usePocket ? computePocketPrice(prices.best,   "best",   leak).pocket : prices.best;
 
   const revenue = round2(q.good * effG + q.better * effB + q.best * effH);
   const profit  = round2(q.good * (effG - costs.good) + q.better * (effB - costs.better) + q.best * (effH - costs.best));
@@ -66,19 +68,8 @@ export function makeSnapshot(args: {
   const arpuActive = round2(revenue / active);
 
   // GM uses pocket/list consistent with usePocketMargins flag
-  const mgG = usePocketMargins
-    ? (computePocketPrice(prices.good, "good", leak).pocket - costs.good) / Math.max(1e-6, computePocketPrice(prices.good, "good", leak).pocket)
-    : (prices.good - costs.good) / Math.max(1e-6, prices.good);
-  const mgB = usePocketMargins
-    ? (computePocketPrice(prices.better, "better", leak).pocket - costs.better) / Math.max(1e-6, computePocketPrice(prices.better, "better", leak).pocket)
-    : (prices.better - costs.better) / Math.max(1e-6, prices.better);
-  const mgH = usePocketMargins
-    ? (computePocketPrice(prices.best, "best", leak).pocket - costs.best) / Math.max(1e-6, computePocketPrice(prices.best, "best", leak).pocket)
-    : (prices.best - costs.best) / Math.max(1e-6, prices.best);
-  // crude blend weighted by unit mix (use the same q as above)
-  const grossMarginPct = (q.good + q.better + q.best) > 0
-    ? pct((q.good*mgG + q.better*mgB + q.best*mgH) / (q.good + q.better + q.best))
-    : 0;
+  // Gross margin as profit / revenue, respecting pocket vs list basis
+  const grossMarginPct = revenue > 0 ? pct(profit / revenue) : 0;
 
   const segShares = segments.slice(0, 3).map(s => s.weight);
 
@@ -146,15 +137,17 @@ export function kpisFromSnapshot(
 
   const shares = choiceShares(prices, features, segments, refPrices);
 
+  const usePocket = usePocketProfit || usePocketMargins;
+
   const q = {
     good: N * shares.good,
     better: N * shares.better,
     best: N * shares.best,
   };
 
-  const effG = usePocketProfit ? computePocketPrice(prices.good, "good", leak).pocket : prices.good;
-  const effB = usePocketProfit ? computePocketPrice(prices.better, "better", leak).pocket : prices.better;
-  const effH = usePocketProfit ? computePocketPrice(prices.best, "best", leak).pocket : prices.best;
+  const effG = usePocket ? computePocketPrice(prices.good, "good", leak).pocket : prices.good;
+  const effB = usePocket ? computePocketPrice(prices.better, "better", leak).pocket : prices.better;
+  const effH = usePocket ? computePocketPrice(prices.best, "best", leak).pocket : prices.best;
 
   const revenue = Math.round((q.good * effG + q.better * effB + q.best * effH) * 100) / 100;
   const profit  = Math.round((q.good * (effG - costs.good) + q.better * (effB - costs.better) + q.best * (effH - costs.best)) * 100) / 100;
@@ -162,20 +155,10 @@ export function kpisFromSnapshot(
   const active = Math.max(1, q.good + q.better + q.best);
   const arpuActive = Math.round((revenue / active) * 100) / 100;
 
-  const mgG = usePocketMargins
-    ? (computePocketPrice(prices.good, "good", leak).pocket - costs.good) / Math.max(1e-6, computePocketPrice(prices.good, "good", leak).pocket)
-    : (prices.good - costs.good) / Math.max(1e-6, prices.good);
-  const mgB = usePocketMargins
-    ? (computePocketPrice(prices.better, "better", leak).pocket - costs.better) / Math.max(1e-6, computePocketPrice(prices.better, "better", leak).pocket)
-    : (prices.better - costs.better) / Math.max(1e-6, prices.better);
-  const mgH = usePocketMargins
-    ? (computePocketPrice(prices.best, "best", leak).pocket - costs.best) / Math.max(1e-6, computePocketPrice(prices.best, "best", leak).pocket)
-    : (prices.best - costs.best) / Math.max(1e-6, prices.best);
-
-  const gmBlend = (q.good + q.better + q.best) > 0
-    ? (q.good*mgG + q.better*mgB + q.best*mgH) / (q.good + q.better + q.best)
+  // Gross margin as profit / revenue, respecting pocket vs list basis
+  const grossMarginPct = revenue > 0
+    ? Math.round((profit / revenue) * 10000) / 100
     : 0;
-  const grossMarginPct = Math.round(gmBlend * 10000) / 100; // 2dp %
 
   const segShares = segments.slice(0, 3).map(s => s.weight);
 
