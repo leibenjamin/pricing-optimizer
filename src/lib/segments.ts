@@ -28,3 +28,9 @@ export function normalizeWeights(segs: Segment[]): Segment[] {
   const total = clamped.reduce((a, s) => a + s.weight, 0) || 1
   return clamped.map(s => ({ ...s, weight: s.weight / total }))
 }
+
+// Scale price sensitivity by a factor (e.g., <1 to soften demand for high-price ladders).
+export function scaleSegmentsPrice(segments: Segment[], factor: number): Segment[] {
+  if (!Number.isFinite(factor) || factor === 1) return segments
+  return segments.map((s) => ({ ...s, betaPrice: s.betaPrice * factor }))
+}

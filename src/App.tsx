@@ -20,6 +20,7 @@ import {
 import {
   defaultSegments,
   normalizeWeights,
+  scaleSegmentsPrice,
   type Segment,
   type Prices,
   type Features,
@@ -3623,7 +3624,8 @@ export default function App() {
   // optimizer constraints/ranges, sensitivity knobs, cohort retention, and channel blend.
   const applyScenarioPreset = useCallback(
     (p: Preset) => {
-      const appliedSegments = normalizeWeights(p.segments ?? defaultSegments);
+      const baseSegments = normalizeWeights(p.segments ?? defaultSegments);
+      const appliedSegments = p.priceScale ? scaleSegmentsPrice(baseSegments, p.priceScale) : baseSegments;
       setPrices(p.prices);
       setCosts(p.costs);
       setRefPrices(p.refPrices);

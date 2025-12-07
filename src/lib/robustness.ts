@@ -1,6 +1,7 @@
 // src/lib/robustness.ts
 import { gridSearch, type Constraints, type SearchRanges } from "./optimize";
 import type { Features, Prices, Segment } from "./segments";
+import { scaleSegmentsPrice } from "./segments";
 import type { Leakages } from "./waterfall";
 import { choiceShares } from "./choice";
 import { computePocketPrice } from "./waterfall";
@@ -10,13 +11,6 @@ export type UncertaintyScenario = {
   segmentScalePrice: number; // e.g., 1.2 = more price sensitive
   leakDeltaPct?: number; // e.g., 0.1 to worsen fees/refunds by +10%
 };
-
-function scaleSegmentsPrice(segments: Segment[], factor: number): Segment[] {
-  return segments.map((s) => ({
-    ...s,
-    betaPrice: s.betaPrice * factor,
-  }));
-}
 
 function adjustLeak(leak: Leakages, deltaPct = 0): Leakages {
   const bump = (v: number) => Math.max(0, Math.min(1, v * (1 + deltaPct)));

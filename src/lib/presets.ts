@@ -17,6 +17,7 @@ export type Preset = {
   channelMix?: Array<{ preset: string; w: number }>;
   priceRange?: TierRangeMap;
   priceRangeSource?: PriceRangeSource;
+  priceScale?: number; // optional scale applied to segment price sensitivity (betaPrice)
   optRanges?: SearchRanges;
   optConstraints?: {
     gapGB: number;
@@ -55,6 +56,7 @@ export const PRESETS: Preset[] = [
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
     },
+    priceScale: 0.35,
     segments: [
       { name: "Budget self-serve", weight: 0.45, betaPrice: -0.38, betaFeatA: 0.45, betaFeatB: 0.30, betaNone: 0.55, alphaAnchor: 0.32, lambdaLoss: 1.8 },
       { name: "Growth teams", weight: 0.35, betaPrice: -0.28, betaFeatA: 0.65, betaFeatB: 0.65, betaNone: 0.15, alphaAnchor: 0.30, lambdaLoss: 1.6 },
@@ -74,7 +76,7 @@ export const PRESETS: Preset[] = [
       best: { min: 42, max: 86 },
     },
     priceRangeSource: "shared",
-    optRanges: { good: [10, 22], better: [20, 42], best: [40, 88], step: 1 },
+    optRanges: { good: [10, 22], better: [20, 42], best: [40, 72], step: 1 },
     optConstraints: {
       gapGB: 4,
       gapBB: 12,
@@ -100,6 +102,7 @@ export const PRESETS: Preset[] = [
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
     },
+    priceScale: 0.8,
     segments: [
       { name: "Casual users", weight: 0.50, betaPrice: -0.48, betaFeatA: 0.25, betaFeatB: 0.15, betaNone: 0.70, alphaAnchor: 0.22, lambdaLoss: 1.8 },
       { name: "Hobbyist", weight: 0.30, betaPrice: -0.36, betaFeatA: 0.55, betaFeatB: 0.55, betaNone: 0.20, alphaAnchor: 0.26, lambdaLoss: 1.6 },
@@ -153,6 +156,7 @@ export const PRESETS: Preset[] = [
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
     },
+    priceScale: 0.2,
     segments: [
       { name: "Bargain hunters", weight: 0.40, betaPrice: -0.44, betaFeatA: 0.35, betaFeatB: 0.18, betaNone: 0.55, alphaAnchor: 0.30, lambdaLoss: 1.75 },
       { name: "Omni shopper", weight: 0.35, betaPrice: -0.30, betaFeatA: 0.55, betaFeatB: 0.50, betaNone: 0.10, alphaAnchor: 0.30, lambdaLoss: 1.6 },
@@ -181,11 +185,11 @@ export const PRESETS: Preset[] = [
       best: { min: 90, max: 150 },
     },
     priceRangeSource: "shared",
-    optRanges: { good: [20, 46], better: [42, 88], best: [82, 155], step: 2 },
+    optRanges: { good: [20, 46], better: [42, 80], best: [90, 115], step: 2 },
     optConstraints: {
-      gapGB: 6,
-      gapBB: 14,
-      marginFloor: { good: 0.32, better: 0.38, best: 0.45 },
+      gapGB: 5,
+      gapBB: 12,
+      marginFloor: { good: 0.3, better: 0.35, best: 0.4 },
       charm: false,
       usePocketMargins: true,
       usePocketProfit: true,
@@ -252,6 +256,7 @@ export const PRESETS: Preset[] = [
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
     },
+    priceScale: 0.35,
     segments: [
       { name: "Free-first", weight: 0.55, betaPrice: -0.6, betaFeatA: 0.25, betaFeatB: 0.2, betaNone: 0.8, alphaAnchor: 0.2, lambdaLoss: 1.9 },
       { name: "Upgrade curious", weight: 0.30, betaPrice: -0.4, betaFeatA: 0.65, betaFeatB: 0.55, betaNone: 0.2, alphaAnchor: 0.3, lambdaLoss: 1.7 },
