@@ -4224,6 +4224,7 @@ export default function App() {
           {leftColumnTab === "adjust" && (
             <div role="tabpanel" id="tab-adjust-scenario" aria-labelledby="tab-btn-adjust" className="space-y-3 md:space-y-4 min-w-0">
               {adjustSubTab === "sliders" && (
+          <>
           <Section id="scenario" title="Scenario Panel" className="left-rail-scroll overflow-x-auto order-1">
                       <div className="shrink-0 space-y-4">
                       </div>
@@ -4372,6 +4373,59 @@ export default function App() {
                         </span>
                       </div>
                     </Section>
+                    <Section id="reference-prices" title="Reference prices for optimizer">
+                      <Explanation slot="refs.howUsed" className="text-[11px]">
+                        <div className="font-semibold text-slate-700">How these are used</div>
+                        <ul className="list-disc pl-4 space-y-1">
+                          <li>We treat these as customers&apos; remembered “fair” prices; prices above the ref get a loss penalty, prices below get a small gain.</li>
+                          <li>Impact is scaled by each segment&apos;s anchoring strength (`alphaAnchor`) and loss aversion (`lambdaLoss`) in the demand model that feeds the optimizer and charts.</li>
+                          <li>Keep refs near today&apos;s street/list prices or survey anchors; presets and imports set them automatically but you can tune before running the optimizer.</li>
+                        </ul>
+                      </Explanation>
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2 items-center">
+                        <label className="text-sm">Good</label>
+                        <input
+                          type="number"
+                          className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                          value={refPrices.good}
+                          onChange={(e) =>
+                            setRefPrices((p) => ({ ...p, good: Number(e.target.value) }))
+                          }
+                        />
+                        <label className="text-sm">Better</label>
+                        <input
+                          type="number"
+                          className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                          value={refPrices.better}
+                          onChange={(e) =>
+                            setRefPrices((p) => ({
+                              ...p,
+                              better: Number(e.target.value),
+                            }))
+                          }
+                        />
+                        <label className="text-sm">Best</label>
+                        <input
+                          type="number"
+                          className="col-span-2 border rounded px-2 py-1 h-9 w-full"
+                          value={refPrices.best}
+                          onChange={(e) =>
+                            setRefPrices((p) => ({ ...p, best: Number(e.target.value) }))
+                          }
+                        />
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          className="border rounded-md px-3 py-1.5 text-xs bg-white hover:bg-gray-50"
+                          onClick={setRefsFromCurrent}
+                        >
+                          Set from current prices
+                        </button>
+                        <span className="text-[11px] text-slate-600">Best paired with your current ladder or imported street prices.</span>
+                      </div>
+                    </Section>
+                    </>
               )}
               {adjustSubTab === "segments" && (
           <Section
@@ -5651,49 +5705,6 @@ export default function App() {
                     </div>
                   </div>
                 </details>
-              </div>
-            </Section>
-            <Section id="reference-prices" title="Reference prices for Optimizer">
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2 items-center">
-                <label className="text-sm">Good</label>
-                <input
-                  type="number"
-                  className="col-span-2 border rounded px-2 py-1 h-9 w-full"
-                  value={refPrices.good}
-                  onChange={(e) =>
-                    setRefPrices((p) => ({ ...p, good: Number(e.target.value) }))
-                  }
-                />
-                <label className="text-sm">Better</label>
-                <input
-                  type="number"
-                  className="col-span-2 border rounded px-2 py-1 h-9 w-full"
-                  value={refPrices.better}
-                  onChange={(e) =>
-                    setRefPrices((p) => ({
-                      ...p,
-                      better: Number(e.target.value),
-                    }))
-                  }
-                />
-                <label className="text-sm">Best</label>
-                <input
-                  type="number"
-                  className="col-span-2 border rounded px-2 py-1 h-9 w-full"
-                  value={refPrices.best}
-                  onChange={(e) =>
-                    setRefPrices((p) => ({ ...p, best: Number(e.target.value) }))
-                  }
-                />
-              </div>
-
-              <div className="mt-3">
-                <button
-                  className="border rounded-md px-3 py-1.5 text-xs bg-white hover:bg-gray-50"
-                  onClick={setRefsFromCurrent}
-                >
-                  Set from current prices
-                </button>
               </div>
             </Section>
             <Section
