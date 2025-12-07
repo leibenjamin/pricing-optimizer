@@ -18,6 +18,7 @@ export type Preset = {
   priceRange?: TierRangeMap;
   priceRangeSource?: PriceRangeSource;
   priceScale?: number; // optional scale applied to segment price sensitivity (betaPrice)
+  uncertainty?: { priceScaleDelta?: number; leakDeltaPct?: number };
   optRanges?: SearchRanges;
   optConstraints?: {
     gapGB: number;
@@ -56,7 +57,8 @@ export const PRESETS: Preset[] = [
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
     },
-    priceScale: 0.35,
+    priceScale: 0.6,
+    uncertainty: { priceScaleDelta: 0.15, leakDeltaPct: 0.02 },
     segments: [
       { name: "Budget self-serve", weight: 0.45, betaPrice: -0.38, betaFeatA: 0.45, betaFeatB: 0.30, betaNone: 0.55, alphaAnchor: 0.32, lambdaLoss: 1.8 },
       { name: "Growth teams", weight: 0.35, betaPrice: -0.28, betaFeatA: 0.65, betaFeatB: 0.65, betaNone: 0.15, alphaAnchor: 0.30, lambdaLoss: 1.6 },
@@ -76,7 +78,7 @@ export const PRESETS: Preset[] = [
       best: { min: 42, max: 86 },
     },
     priceRangeSource: "shared",
-    optRanges: { good: [10, 22], better: [20, 42], best: [40, 72], step: 1 },
+    optRanges: { good: [10, 22], better: [20, 42], best: [40, 70], step: 1 },
     optConstraints: {
       gapGB: 4,
       gapBB: 12,
@@ -156,7 +158,8 @@ export const PRESETS: Preset[] = [
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
     },
-    priceScale: 0.2,
+    priceScale: 0.8,
+    uncertainty: { priceScaleDelta: 0.2, leakDeltaPct: 0.03 },
     segments: [
       { name: "Bargain hunters", weight: 0.40, betaPrice: -0.44, betaFeatA: 0.35, betaFeatB: 0.18, betaNone: 0.55, alphaAnchor: 0.30, lambdaLoss: 1.75 },
       { name: "Omni shopper", weight: 0.35, betaPrice: -0.30, betaFeatA: 0.55, betaFeatB: 0.50, betaNone: 0.10, alphaAnchor: 0.30, lambdaLoss: 1.6 },
@@ -185,11 +188,11 @@ export const PRESETS: Preset[] = [
       best: { min: 90, max: 150 },
     },
     priceRangeSource: "shared",
-    optRanges: { good: [20, 46], better: [42, 80], best: [90, 115], step: 2 },
+    optRanges: { good: [22, 42], better: [44, 78], best: [90, 110], step: 2 },
     optConstraints: {
-      gapGB: 5,
+      gapGB: 6,
       gapBB: 12,
-      marginFloor: { good: 0.3, better: 0.35, best: 0.4 },
+      marginFloor: { good: 0.32, better: 0.38, best: 0.45 },
       charm: false,
       usePocketMargins: true,
       usePocketProfit: true,

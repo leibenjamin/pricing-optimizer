@@ -426,6 +426,7 @@ export default function App() {
   // Baseline KPIs for the "Tell me what changed" panel (derived from scenarioBaseline for backward compatibility)
   const [baselineKPIs, setBaselineKPIs] = useState<SnapshotKPIs | null>(null);
   const [baselineMeta, setBaselineMeta] = useState<BaselineMeta | null>(null);
+  const [scenarioUncertainty, setScenarioUncertainty] = useState<{ priceScaleDelta?: number; leakDeltaPct?: number } | null>(null);
   const [scorecardView, setScorecardView] = useState<"current" | "optimized">("current");
   const [takeRateMode, setTakeRateMode] = useState<"mix" | "delta">("mix");
   const [takeRateSegmentKey, setTakeRateSegmentKey] = useState<"all" | string>("all");
@@ -3505,6 +3506,73 @@ export default function App() {
     ? "Pocket profit (after leakages)"
     : "List profit (before leakages)";
 
+  const scorecardBand = useMemo(() => {
+    if (!scenarioUncertainty) return null;
+    const priceDelta = scenarioUncertainty.priceScaleDelta ?? 0;
+    const leakDelta = scenarioUncertainty.leakDeltaPct ?? 0;
+
+    const baseIsOptimized = scorecardView === "optimized" && optResult;
+    const ctx = baseIsOptimized && optResult
+      ? {
+          prices: optResult.prices,
+          costs: optResult.context.costs,
+          features: optResult.context.features,
+          segments: optResult.context.segments,
+          refPrices: optResult.context.refPrices,
+          leak: optResult.context.leak,
+          usePocketProfit: !!optResult.context.usePocketProfit,
+          usePocketMargins: !!(optResult.context.usePocketMargins ?? optResult.context.usePocketProfit),
+        }
+      : {
+          prices,
+          costs,
+          features,
+          segments,
+          refPrices,
+          leak,
+          usePocketProfit: !!optConstraints.usePocketProfit,
+          usePocketMargins: !!(optConstraints.usePocketMargins ?? optConstraints.usePocketProfit),
+        };
+
+    const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+    const adjustLeak = (base: Leakages, sign: 1 | -1) => ({
+      ...base,
+      paymentPct: clamp01(base.paymentPct * (1 + sign * leakDelta)),
+      paymentFixed: Math.max(0, base.paymentFixed),
+      fxPct: clamp01(base.fxPct * (1 + sign * leakDelta)),
+      refundsPct: clamp01(base.refundsPct * (1 + sign * leakDelta)),
+    });
+
+    const scaleFor = (sign: 1 | -1) => Math.max(0, 1 + sign * priceDelta);
+    const calc = (sign: 1 | -1) => {
+      const segs = scaleSegmentsPrice(normalizeWeights(ctx.segments), scaleFor(sign));
+      const L = adjustLeak(ctx.leak, sign);
+      return kpisFromSnapshot(
+        { prices: ctx.prices, costs: ctx.costs, features: ctx.features, segments: segs, refPrices: ctx.refPrices, leak: L },
+        N,
+        ctx.usePocketProfit,
+        ctx.usePocketMargins
+      );
+    };
+
+    const low = calc(1);  // more sensitive (higher |betaPrice|)
+    const high = calc(-1); // less sensitive (lower |betaPrice|)
+    return { low, high, priceDelta, leakDelta };
+  }, [
+    N,
+    leak,
+    optConstraints.usePocketMargins,
+    optConstraints.usePocketProfit,
+    optResult,
+    prices,
+    costs,
+    features,
+    refPrices,
+    segments,
+    scorecardView,
+    scenarioUncertainty,
+  ]);
+
   type SnapshotInput = Parameters<typeof buildScenarioSnapshot>[0];
 
   const pinBaseline = useCallback(
@@ -3631,6 +3699,7 @@ export default function App() {
       setRefPrices(p.refPrices);
       setFeatures(p.features ?? defaults.features);
       setSegments(appliedSegments);
+      setScenarioUncertainty(p.uncertainty ?? null);
 
       const mix = p.channelMix && p.channelMix.length ? normalizeChannelMix(p.channelMix) : normalizeChannelMix(defaults.channelMix);
       const useBlend = Boolean(p.channelMix && p.channelMix.length);
@@ -6279,6 +6348,21 @@ export default function App() {
                         Jump to Callouts
                       </a>
                     </div>
+                    {scorecardBand && (
+                      <div className="mt-2 rounded border border-slate-200 bg-white/70 px-3 py-2 text-[11px] text-slate-700">
+                        <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-800">
+                          Uncertainty band
+                          <InfoTip id="scorecard.uncertainty" ariaLabel="Revenue/profit band from sensitivity variance" />
+                        </div>
+                        <div className="text-[11px] text-slate-600">
+                          Sensitivity ±{Math.round((scorecardBand.priceDelta ?? 0) * 1000) / 10}% | Leak ±{Math.round((scorecardBand.leakDelta ?? 0) * 1000) / 10}pp
+                        </div>
+                        <div className="text-[11px] text-slate-700 mt-1 flex flex-wrap gap-3">
+                          <span>Revenue {fmtUSD(scorecardBand.low.revenue)} – {fmtUSD(scorecardBand.high.revenue)}</span>
+                          <span>Profit {fmtUSD(scorecardBand.low.profit)} – {fmtUSD(scorecardBand.high.profit)}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
