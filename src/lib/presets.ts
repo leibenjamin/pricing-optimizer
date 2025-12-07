@@ -57,7 +57,7 @@ export const PRESETS: Preset[] = [
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
     },
-    priceScale: 1.0, // sharper sensitivity to prevent across-the-board price hikes
+    priceScale: 0.3, // softer sensitivity to keep share and allow modest adjustments
     uncertainty: { priceScaleDelta: 0.12, leakDeltaPct: 0.02 },
     segments: [
       { name: "Budget self-serve", weight: 0.45, betaPrice: -0.38, betaFeatA: 0.45, betaFeatB: 0.30, betaNone: 0.55, alphaAnchor: 0.32, lambdaLoss: 1.8 },
@@ -73,12 +73,12 @@ export const PRESETS: Preset[] = [
       refundsPct: 0.03,
     },
     priceRange: {
-      good: { min: 10, max: 15 },
-      better: { min: 18, max: 32 },
-      best: { min: 48, max: 70 },
+      good: { min: 11, max: 14 },
+      better: { min: 22, max: 30 },
+      best: { min: 50, max: 64 },
     },
     priceRangeSource: "shared",
-    optRanges: { good: [10, 14], better: [18, 30], best: [48, 62], step: 1 },
+    optRanges: { good: [11, 13], better: [22, 30], best: [50, 64], step: 1 },
     optConstraints: {
       gapGB: 3,
       gapBB: 10,
@@ -153,12 +153,12 @@ export const PRESETS: Preset[] = [
     name: "Shopify DTC (Discount & FX)",
     prices: { good: 28, better: 52, best: 98 },
     costs: { good: 12, better: 22, best: 40 },
-    refPrices: { good: 30, better: 55, best: 105 },
+    refPrices: { good: 30, better: 56, best: 105 },
     features: {
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
     },
-    priceScale: 0.6,
+    priceScale: 0.35,
     uncertainty: { priceScaleDelta: 0.15, leakDeltaPct: 0.03 },
     segments: [
       { name: "Bargain hunters", weight: 0.40, betaPrice: -0.44, betaFeatA: 0.35, betaFeatB: 0.18, betaNone: 0.55, alphaAnchor: 0.30, lambdaLoss: 1.75 },
@@ -183,16 +183,16 @@ export const PRESETS: Preset[] = [
       };
     })(),
     priceRange: {
-      good: { min: 24, max: 38 },
-      better: { min: 46, max: 78 },
-      best: { min: 92, max: 130 },
+      good: { min: 26, max: 34 },
+      better: { min: 48, max: 72 },
+      best: { min: 92, max: 120 },
     },
     priceRangeSource: "shared",
-    optRanges: { good: [26, 34], better: [50, 70], best: [95, 115], step: 2 },
+    optRanges: { good: [26, 32], better: [48, 68], best: [95, 115], step: 2 },
     optConstraints: {
-      gapGB: 6,
-      gapBB: 12,
-      marginFloor: { good: 0.32, better: 0.38, best: 0.45 },
+      gapGB: 5,
+      gapBB: 11,
+      marginFloor: { good: 0.30, better: 0.36, best: 0.44 },
       charm: false,
       usePocketMargins: true,
       usePocketProfit: true,
@@ -209,7 +209,7 @@ export const PRESETS: Preset[] = [
     name: "B2B (Annual, procurement)",
     prices: { good: 1100, better: 2600, best: 5200 },
     costs: { good: 260, better: 720, best: 1400 },
-    refPrices: { good: 1200, better: 2750, best: 5400 },
+    refPrices: { good: 1150, better: 2700, best: 5400 },
     features: {
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
@@ -228,12 +228,12 @@ export const PRESETS: Preset[] = [
       refundsPct: 0.01,
     },
     priceRange: {
-      good: { min: 1000, max: 1400 },
-      better: { min: 2300, max: 3500 },
-      best: { min: 4800, max: 6600 },
+      good: { min: 1050, max: 1300 },
+      better: { min: 2400, max: 3300 },
+      best: { min: 5000, max: 6400 },
     },
     priceRangeSource: "shared",
-    optRanges: { good: [1000, 1300], better: [2300, 3400], best: [4800, 6400], step: 100 },
+    optRanges: { good: [1100, 1250], better: [2450, 3200], best: [5200, 6200], step: 100 },
     optConstraints: {
       gapGB: 500,
       gapBB: 1300,

@@ -1529,8 +1529,8 @@ export default function App() {
           constraintsAtRun.usePocketMargins ?? !!constraintsAtRun.usePocketProfit
         );
         setOptResult({
-          prices: out.prices,
-          profit: out.profit,
+          prices: out.profit <= baseProfitAtRun ? runContext.pricesAtRun : out.prices,
+          profit: out.profit <= baseProfitAtRun ? baseProfitAtRun : out.profit,
           kpis: resultKPIs,
           diagnostics: out.diagnostics,
           context: runContext,
@@ -1541,8 +1541,12 @@ export default function App() {
           `[${now()}] Optimizer best ladder $${out.prices.good}/$${out.prices.better}/$${out.prices.best} (profit $${Math.round(out.profit)})`
         );
         setScorecardView("optimized");
-        toast("success", "Optimizer finished");
-        toast("info", "Optimizer done. Deltas compare to the saved pre-run baseline.");
+        toast("success", out.profit <= baseProfitAtRun ? "Optimizer finished (no better than baseline; kept baseline)" : "Optimizer finished");
+        if (out.profit <= baseProfitAtRun) {
+          toast("info", "Optimizer result was not better than baseline; baseline retained.");
+        } else {
+          toast("info", "Optimizer done. Deltas compare to the saved pre-run baseline.");
+        }
       })
       .catch((e) => {
         if (runIdRef.current !== runId) return;
