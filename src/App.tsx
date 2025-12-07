@@ -1522,15 +1522,18 @@ export default function App() {
         // ignore if a newer run started
         if (runIdRef.current !== runId) return;
         setLastOptAt(Date.now());
+        const keepBaseline = out.profit <= baseProfitAtRun;
+        const keptPrices = keepBaseline ? runContext.pricesAtRun : out.prices;
+        const keptProfit = keepBaseline ? baseProfitAtRun : out.profit;
         const resultKPIs = kpisFromSnapshot(
-          { prices: out.prices, costs: runContext.costs, features: runContext.features, segments: runContext.segments, refPrices: runContext.refPrices, leak: runContext.leak },
+          { prices: keptPrices, costs: runContext.costs, features: runContext.features, segments: runContext.segments, refPrices: runContext.refPrices, leak: runContext.leak },
           runContext.N,
           !!constraintsAtRun.usePocketProfit,
           constraintsAtRun.usePocketMargins ?? !!constraintsAtRun.usePocketProfit
         );
         setOptResult({
-          prices: out.profit <= baseProfitAtRun ? runContext.pricesAtRun : out.prices,
-          profit: out.profit <= baseProfitAtRun ? baseProfitAtRun : out.profit,
+          prices: keptPrices,
+          profit: keptProfit,
           kpis: resultKPIs,
           diagnostics: out.diagnostics,
           context: runContext,

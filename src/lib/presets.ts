@@ -52,7 +52,7 @@ export const PRESETS: Preset[] = [
     name: "SaaS Team Seats (Stripe + trials)",
     prices: { good: 12, better: 24, best: 52 },
     costs: { good: 4, better: 7, best: 12 },
-    refPrices: { good: 12, better: 24, best: 52 }, // anchor near current ladder
+    refPrices: { good: 13, better: 26, best: 55 }, // anchor near current ladder but not identical
     features: {
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
@@ -104,7 +104,7 @@ export const PRESETS: Preset[] = [
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
     },
-    priceScale: 0.9,
+    priceScale: 0.5,
     segments: [
       { name: "Casual users", weight: 0.50, betaPrice: -0.48, betaFeatA: 0.25, betaFeatB: 0.15, betaNone: 0.70, alphaAnchor: 0.22, lambdaLoss: 1.8 },
       { name: "Hobbyist", weight: 0.30, betaPrice: -0.36, betaFeatA: 0.55, betaFeatB: 0.55, betaNone: 0.20, alphaAnchor: 0.26, lambdaLoss: 1.6 },
@@ -153,12 +153,12 @@ export const PRESETS: Preset[] = [
     name: "Shopify DTC (Discount & FX)",
     prices: { good: 28, better: 52, best: 98 },
     costs: { good: 12, better: 22, best: 40 },
-    refPrices: { good: 28, better: 52, best: 98 },
+    refPrices: { good: 30, better: 56, best: 105 },
     features: {
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
     },
-    priceScale: 0.75,
+    priceScale: 0.9,
     uncertainty: { priceScaleDelta: 0.12, leakDeltaPct: 0.03 },
     segments: [
       { name: "Bargain hunters", weight: 0.40, betaPrice: -0.44, betaFeatA: 0.35, betaFeatB: 0.18, betaNone: 0.05, alphaAnchor: 0.16, lambdaLoss: 1.55 },
@@ -183,12 +183,12 @@ export const PRESETS: Preset[] = [
       };
     })(),
     priceRange: {
-      good: { min: 26, max: 34 },
-      better: { min: 48, max: 68 },
-      best: { min: 95, max: 112 },
+      good: { min: 26, max: 36 },
+      better: { min: 48, max: 74 },
+      best: { min: 95, max: 126 },
     },
     priceRangeSource: "shared",
-    optRanges: { good: [27, 29], better: [50, 56], best: [96, 104], step: 1 },
+    optRanges: { good: [28, 34], better: [54, 70], best: [104, 122], step: 2 },
     optConstraints: {
       gapGB: 5,
       gapBB: 11,
@@ -215,9 +215,9 @@ export const PRESETS: Preset[] = [
       featB: { good: 0, better: 1, best: 1 },
     },
     segments: [
-      { name: "Procurement guardrail", weight: 0.45, betaPrice: -0.0013, betaFeatA: 0.60, betaFeatB: 0.50, betaNone: 0.65, alphaAnchor: 0.00055, lambdaLoss: 1.35 },
-      { name: "Ops lead", weight: 0.35, betaPrice: -0.001, betaFeatA: 0.85, betaFeatB: 0.65, betaNone: 0.25, alphaAnchor: 0.0005, lambdaLoss: 1.28 },
-      { name: "Exec sponsor", weight: 0.20, betaPrice: -0.0008, betaFeatA: 1.05, betaFeatB: 0.95, betaNone: 0.00, alphaAnchor: 0.00045, lambdaLoss: 1.2 },
+      { name: "Procurement guardrail", weight: 0.45, betaPrice: -0.0016, betaFeatA: 0.60, betaFeatB: 0.50, betaNone: 0.65, alphaAnchor: 0.00055, lambdaLoss: 1.35 },
+      { name: "Ops lead", weight: 0.35, betaPrice: -0.0013, betaFeatA: 0.85, betaFeatB: 0.65, betaNone: 0.25, alphaAnchor: 0.0005, lambdaLoss: 1.28 },
+      { name: "Exec sponsor", weight: 0.20, betaPrice: -0.001, betaFeatA: 1.05, betaFeatB: 0.95, betaNone: 0.00, alphaAnchor: 0.00045, lambdaLoss: 1.2 },
     ],
     leak: {
       promo: { good: 0.02, better: 0.08, best: 0.12 },
@@ -228,12 +228,12 @@ export const PRESETS: Preset[] = [
       refundsPct: 0.01,
     },
     priceRange: {
-      good: { min: 1050, max: 1300 },
-      better: { min: 2400, max: 3300 },
-      best: { min: 5000, max: 6400 },
+      good: { min: 1050, max: 1250 },
+      better: { min: 2400, max: 3000 },
+      best: { min: 5200, max: 6600 },
     },
     priceRangeSource: "shared",
-    optRanges: { good: [1100, 1250], better: [2450, 3200], best: [5200, 6200], step: 100 },
+    optRanges: { good: [1100, 1200], better: [2400, 2600], best: [5400, 6500], step: 100 },
     optConstraints: {
       gapGB: 500,
       gapBB: 1300,
