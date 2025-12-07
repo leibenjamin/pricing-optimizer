@@ -43,9 +43,9 @@ function profitForLadder(
   const { costs, features, segments, refPrices, leak, N, usePocketProfit } = opts;
   const probs = choiceShares(ladder, features, segments, refPrices);
   const q = {
-    good: Math.round(N * probs.good),
-    better: Math.round(N * probs.better),
-    best: Math.round(N * probs.best),
+    good: N * probs.good,
+    better: N * probs.better,
+    best: N * probs.best,
   };
   const price = (tier: keyof Prices) =>
     usePocketProfit ? computePocketPrice(ladder[tier], tier, leak).pocket : ladder[tier];

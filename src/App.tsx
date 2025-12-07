@@ -1424,9 +1424,9 @@ export default function App() {
       const ctxN = ctx?.N ?? N;
       const probs = choiceShares(ladder, ctxFeatures, ctxSegments, ctxRefPrices);
       const qty = {
-        good: Math.round(ctxN * probs.good),
-        better: Math.round(ctxN * probs.better),
-        best: Math.round(ctxN * probs.best),
+        good: ctxN * probs.good,
+        better: ctxN * probs.better,
+        best: ctxN * probs.best,
       };
 
       if (!usePocket) {
@@ -1749,10 +1749,10 @@ export default function App() {
 
   // Expected profit (current slider scenario)
   const take = {
-    none: Math.round(N * probs.none),
-    good: Math.round(N * probs.good),
-    better: Math.round(N * probs.better),
-    best: Math.round(N * probs.best),
+    none: N * probs.none,
+    good: N * probs.good,
+    better: N * probs.better,
+    best: N * probs.best,
   };
   const revenue =
     take.good * prices.good +

@@ -72,9 +72,9 @@ function evalLadder(prices: Prices, opts: EvalOpts): number | null {
   if (takeRate < minTake) return null;
 
   const q = {
-    good: Math.round(N * probs.good),
-    better: Math.round(N * probs.better),
-    best: Math.round(N * probs.best),
+    good: N * probs.good,
+    better: N * probs.better,
+    best: N * probs.best,
   };
 
   const priceGood = C.usePocketProfit && leak ? computePocketPrice(prices.good, "good", leak).pocket : prices.good;

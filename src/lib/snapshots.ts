@@ -48,9 +48,9 @@ export function makeSnapshot(args: {
 
   // Quantities (rounded like optimizer)
   const q = {
-    good:   Math.round(N * shares.good),
-    better: Math.round(N * shares.better),
-    best:   Math.round(N * shares.best),
+    good:   N * shares.good,
+    better: N * shares.better,
+    best:   N * shares.best,
   };
 
   // Effective price for profit/margins
@@ -147,9 +147,9 @@ export function kpisFromSnapshot(
   const shares = choiceShares(prices, features, segments, refPrices);
 
   const q = {
-    good: Math.round(N * shares.good),
-    better: Math.round(N * shares.better),
-    best: Math.round(N * shares.best),
+    good: N * shares.good,
+    better: N * shares.better,
+    best: N * shares.best,
   };
 
   const effG = usePocketProfit ? computePocketPrice(prices.good, "good", leak).pocket : prices.good;

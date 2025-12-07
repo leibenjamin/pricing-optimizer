@@ -18,9 +18,9 @@ export type Scenario = {
 export function evalProfitList(s: Scenario): number {
   const probs = choiceShares(s.prices, s.features, s.segments, s.refPrices);
   const take = {
-    good: Math.round(s.N * probs.good),
-    better: Math.round(s.N * probs.better),
-    best: Math.round(s.N * probs.best),
+    good: s.N * probs.good,
+    better: s.N * probs.better,
+    best: s.N * probs.best,
   };
   return (
     take.good * (s.prices.good - s.costs.good) +
@@ -32,9 +32,9 @@ export function evalProfitList(s: Scenario): number {
 export function evalProfitPocket(s: Scenario): number {
   const probs = choiceShares(s.prices, s.features, s.segments, s.refPrices);
   const take = {
-    good: Math.round(s.N * probs.good),
-    better: Math.round(s.N * probs.better),
-    best: Math.round(s.N * probs.best),
+    good: s.N * probs.good,
+    better: s.N * probs.better,
+    best: s.N * probs.best,
   };
   const pG = computePocketPrice(s.prices.good,   "good",   s.leak).pocket;
   const pB = computePocketPrice(s.prices.better, "better", s.leak).pocket;
@@ -74,9 +74,9 @@ export type TornadoMetric = "profit" | "revenue";
 function evalRevenueList(s: Scenario): number {
   const probs = choiceShares(s.prices, s.features, s.segments, s.refPrices);
   const take = {
-    good: Math.round(s.N * probs.good),
-    better: Math.round(s.N * probs.better),
-    best: Math.round(s.N * probs.best),
+    good: s.N * probs.good,
+    better: s.N * probs.better,
+    best: s.N * probs.best,
   };
   return (
     take.good * s.prices.good +
@@ -88,9 +88,9 @@ function evalRevenueList(s: Scenario): number {
 function evalRevenuePocket(s: Scenario): number {
   const probs = choiceShares(s.prices, s.features, s.segments, s.refPrices);
   const take = {
-    good: Math.round(s.N * probs.good),
-    better: Math.round(s.N * probs.better),
-    best: Math.round(s.N * probs.best),
+    good: s.N * probs.good,
+    better: s.N * probs.better,
+    best: s.N * probs.best,
   };
   const pG = computePocketPrice(s.prices.good,   "good",   s.leak).pocket;
   const pB = computePocketPrice(s.prices.better, "better", s.leak).pocket;

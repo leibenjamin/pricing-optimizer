@@ -59,9 +59,9 @@ export function buildFrontier(args: {
     const ladder = { ...prices, [tier]: snapped } as Prices;
     const probs = choiceShares(ladder, features, segments, refPrices);
     const take = {
-      good: Math.round(N * probs.good),
-      better: Math.round(N * probs.better),
-      best: Math.round(N * probs.best),
+      good: N * probs.good,
+      better: N * probs.better,
+      best: N * probs.best,
     };
 
     const effGoodProfit = usePocketProfit && leak ? computePocketPrice(ladder.good, "good", leak).pocket : ladder.good;
