@@ -1,4 +1,4 @@
-type ScorecardView = "current" | "optimized";
+export type ScorecardView = "current" | "optimized";
 
 type ScorecardToolbarProps = {
   baselineText: string;

@@ -72,11 +72,13 @@ import { csvTemplate } from "./lib/csv";
 import { preflight, fetchWithRetry, apiUrl } from "./lib/net";
 
 import CompareBoard from "./components/CompareBoard";
-import ScorecardToolbar from "./components/ScorecardToolbar";
+import Scorecard from "./components/Scorecard";
+import CalloutsSnapshot from "./components/CalloutsSnapshot";
 import { kpisFromSnapshot, type SnapshotKPIs } from "./lib/snapshots";
 import { runRobustnessScenarios, type UncertaintyScenario } from "./lib/robustness";
 import { buildTornadoRows, tornadoSignalThreshold, type TornadoValueMode } from "./lib/tornadoView";
 import type { TornadoMetric, Scenario as TornadoScenario } from "./lib/sensitivity";
+import { type ScorecardBand, type ScorecardDelta } from "./lib/scorecard";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -264,15 +266,7 @@ type SegmentFlat = {
 };
 type SegmentNormalized = SegmentNested;
 
-type ExplainDelta = {
-  deltaProfit: number;
-  deltaRevenue: number;
-  deltaARPU: number;
-  deltaActive: number;
-  mainDriver: string;
-  segmentLine: string;
-  suggestion: string;
-};
+type ExplainDelta = ScorecardDelta;
 
 function toFinite(n: unknown): number | null {
   const v = typeof n === "number" ? n : Number(n);
@@ -3514,7 +3508,7 @@ export default function App() {
     ? "Pocket profit (after leakages)"
     : "List profit (before leakages)";
 
-  const scorecardBand = useMemo(() => {
+  const scorecardBand = useMemo<ScorecardBand | null>(() => {
     if (!scenarioUncertainty) return null;
     const priceDelta = scenarioUncertainty.priceScaleDelta ?? 0;
     const leakDelta = scenarioUncertainty.leakDeltaPct ?? 0;
@@ -3565,7 +3559,12 @@ export default function App() {
 
     const low = calc(1);  // more sensitive (higher |betaPrice|)
     const high = calc(-1); // less sensitive (lower |betaPrice|)
-    return { low, high, priceDelta, leakDelta };
+    return {
+      low: { revenue: low.revenue, profit: low.profit },
+      high: { revenue: high.revenue, profit: high.profit },
+      priceDelta,
+      leakDelta,
+    };
   }, [
     N,
     leak,
@@ -6170,432 +6169,54 @@ export default function App() {
 
       {/* Right: Charts */}
       <div className="col-span-12 lg:col-span-6 space-y-4 min-w-0">
-          <Section
-            id="scorecard"
-            title="Scorecard"
-            actions={
-              <ScorecardToolbar
-                baselineText={scorecardBaselineText}
-                pinnedBasisText={scorecardPinnedBasis}
-                activeBasisText={scorecardActiveBasis}
-                onPinBaseline={pinBaselineNow}
-                view={scorecardView}
-                onChangeView={setScorecardView}
-                hasOptimized={!!optimizedKPIs}
-              />
-            }
-          >
-            {(() => {
-              const baselineFallback = "Baseline auto-saves when you apply a preset or run Optimize.";
-              const metrics = [
-                {
-                  key: "revenue",
-                  label: "Revenue (N=1000)",
-                  infoId: "kpi.revenue",
-                  aria: "Why is Revenue computed this way?",
-                  value: fmtUSD(scorecardKPIs.revenue),
-                  baselineLabel: baselineKPIs
-                    ? `Baseline ${fmtUSD(baselineKPIs.revenue)}`
-                    : baselineFallback,
-                  delta: baselineKPIs
-                    ? scorecardKPIs.revenue - baselineKPIs.revenue
-                    : null,
-                  deltaPct:
-                    baselineKPIs && baselineKPIs.revenue
-                      ? ((scorecardKPIs.revenue - baselineKPIs.revenue) /
-                          Math.max(baselineKPIs.revenue, 1e-9)) * 100
-                      : null,
-                  formatter: (v: number) => fmtUSD(v),
-                },
-                {
-                  key: "profit",
-                  label: "Profit (N=1000)",
-                  infoId: "kpi.profit",
-                  aria: "How is Profit calculated here?",
-                  value: fmtUSD(scorecardKPIs.profit),
-                  baselineLabel: baselineKPIs
-                    ? `Baseline ${fmtUSD(baselineKPIs.profit)}`
-                    : baselineFallback,
-                  delta: baselineKPIs
-                    ? scorecardKPIs.profit - baselineKPIs.profit
-                    : null,
-                  deltaPct:
-                    baselineKPIs && baselineKPIs.profit
-                      ? ((scorecardKPIs.profit - baselineKPIs.profit) /
-                          Math.max(baselineKPIs.profit, 1e-9)) * 100
-                      : null,
-                  formatter: (v: number) => fmtUSD(v),
-                },
-                {
-                  key: "active",
-                  label: "Active customers",
-                  infoId: "kpi.active",
-                  aria: "What does Active customers mean?",
-                  value: scorecardActiveFromShares.toLocaleString(),
-                  baselineLabel:
-                    baselineActiveCustomers !== null
-                      ? `Baseline ${baselineActiveCustomers.toLocaleString()}`
-                      : baselineFallback,
-                  delta:
-                    baselineActiveCustomers !== null
-                      ? scorecardActiveFromShares - baselineActiveCustomers
-                      : null,
-                  deltaPct:
-                    baselineActiveCustomers && baselineActiveCustomers > 0
-                      ? ((scorecardActiveFromShares - baselineActiveCustomers) /
-                          baselineActiveCustomers) * 100
-                      : null,
-                  formatter: (v: number) => Math.round(v).toLocaleString(),
-                },
-                {
-                  key: "arpu",
-                  label: "ARPU (active)",
-                  infoId: "kpi.arpu",
-                  aria: "What is ARPU (active)?",
-                  value: `$${scorecardKPIs.arpuActive.toFixed(2)}`,
-                  baselineLabel: baselineKPIs
-                    ? `Baseline $${baselineKPIs.arpuActive.toFixed(2)}`
-                    : baselineFallback,
-                  delta: baselineKPIs
-                    ? scorecardKPIs.arpuActive - baselineKPIs.arpuActive
-                    : null,
-                  deltaPct:
-                    baselineKPIs && baselineKPIs.arpuActive
-                      ? ((scorecardKPIs.arpuActive - baselineKPIs.arpuActive) /
-                          Math.max(baselineKPIs.arpuActive, 1e-9)) * 100
-                      : null,
-                  formatter: (v: number) => `$${v.toFixed(2)}`,
-                },
-                {
-                  key: "margin",
-                  label: "Gross margin",
-                  infoId: "kpi.gm",
-                  aria: "How is Gross margin computed?",
-                  value: fmtPct(scorecardMarginRatio),
-                  baselineLabel:
-                    baselineMarginRatio !== null
-                      ? `Baseline ${fmtPct(baselineMarginRatio)}`
-                      : baselineFallback,
-                  delta: marginDeltaPP,
-                  deltaPct: null,
-                  formatter: (v: number) => `${v.toFixed(1)} pp`,
-                },
-              ];
-
-              const summaryPills = baselineKPIs
-                ? [
-                    {
-                      label: "Profit vs baseline",
-                      value: scorecardKPIs.profit - baselineKPIs.profit,
-                      format: fmtUSD,
-                    },
-                    {
-                      label: "Active vs baseline",
-                      value:
-                        baselineActiveCustomers !== null
-                          ? scorecardActiveFromShares - baselineActiveCustomers
-                          : null,
-                      format: (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v).toLocaleString()}`,
-                    },
-                    {
-                      label: "Gross margin delta",
-                      value: marginDeltaPP,
-                      format: (v: number) => `${v.toFixed(1)} pp`,
-                    },
-                  ]
-                : [];
-
-              const guardrails =
+          <Section id="scorecard" title="Scorecard">
+            <Scorecard
+              view={scorecardView}
+              hasOptimized={!!optimizedKPIs}
+              onChangeView={setScorecardView}
+              onPinBaseline={pinBaselineNow}
+              basis={{
+                baseline: scorecardBaselineText,
+                active: scorecardActiveBasis,
+                pinned: scorecardPinnedBasis,
+              }}
+              kpis={scorecardKPIs}
+              baselineKPIs={baselineKPIs}
+              activeCustomers={scorecardActiveFromShares}
+              baselineActiveCustomers={baselineActiveCustomers}
+              marginDeltaPP={marginDeltaPP}
+              guardrails={
                 scorecardView === "optimized" && optResult
                   ? guardrailsForOptimized
-                  : guardrailsForCurrent;
-
-              const tierColors: Record<"good" | "better" | "best", string> = {
-                good: "bg-sky-500",
-                better: "bg-indigo-500",
-                best: "bg-fuchsia-500",
-              };
-
-              return (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-xl border border-slate-200 bg-white/70 p-3 shadow-sm text-[11px] text-slate-700">
-                    <div className="flex flex-col gap-1">
-                      <div className="uppercase tracking-wide text-slate-500">Baseline (deltas)</div>
-                      <div className="font-semibold text-slate-900">
-                        {baselineKPIs ? "Baseline before optimize" : "Baseline pending"}
-                      </div>
-                      <div className="text-slate-500">Reference for lifts</div>
-                    </div>
-                    <div className="flex flex-col gap-1 border-x border-slate-100 px-2">
-                      <div className="uppercase tracking-wide text-slate-500">Active view</div>
-                      <div className="font-semibold text-slate-900">{scorecardActiveBasis}</div>
-                      <div className="text-slate-500">Tiles show this basis</div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <div className="uppercase tracking-wide text-slate-500">Pinned for story</div>
-                      <div className="font-semibold text-slate-900">{scorecardPinnedBasis}</div>
-                      <div className="text-slate-500">Use in exports/narrative</div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 shadow-sm">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-slate-800 text-sm">Quick read</span>
-                      <span className="text-[11px] text-slate-500">Basis: {scorecardActiveBasis}</span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {summaryPills.length === 0 ? (
-                        <span className="text-[11px] text-slate-500">Baseline auto-saves on preset or Optimize; re-pin anytime.</span>
-                      ) : (
-                        summaryPills.map((pill) =>
-                          pill.value === null ? null : (
-                            <div
-                              key={pill.label}
-                              className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                                pill.value >= 0
-                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                  : "border-rose-200 bg-rose-50 text-rose-700"
-                              }`}
-                            >
-                              {pill.label}: {pill.value >= 0 ? "+" : "-"}
-                              {pill.format(Math.abs(pill.value))}
-                            </div>
-                          )
-                        )
-                      )}
-                      <a className="text-sky-600 text-xs hover:underline ml-auto" href="#callouts">
-                        Jump to Callouts
-                      </a>
-                    </div>
-                    {scorecardBand && (
-                      <div className="mt-2 rounded border border-slate-200 bg-white/70 px-3 py-2 text-[11px] text-slate-700">
-                        <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-800">
-                          Uncertainty band
-                          <InfoTip id="scorecard.uncertainty" ariaLabel="Revenue/profit band from sensitivity variance" />
-                        </div>
-                        <div className="text-[11px] text-slate-600">
-                          Sensitivity ±{Math.round((scorecardBand.priceDelta ?? 0) * 1000) / 10}% | Leak ±{Math.round((scorecardBand.leakDelta ?? 0) * 1000) / 10}pp
-                        </div>
-                        <div className="text-[11px] text-slate-700 mt-1 flex flex-wrap gap-3">
-                          <span>Revenue {fmtUSD(scorecardBand.low.revenue)} – {fmtUSD(scorecardBand.high.revenue)}</span>
-                          <span>Profit {fmtUSD(scorecardBand.low.profit)} – {fmtUSD(scorecardBand.high.profit)}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {metrics.map((card) => (
-                      <div
-                        key={card.key}
-                        className="rounded-xl border border-slate-200 bg-white/70 p-3 shadow-sm flex flex-col gap-1"
-                      >
-                        <div className="flex items-center justify-between text-[11px] text-slate-600">
-                          <span className="flex items-center gap-1">
-                            {card.label}
-                            {card.infoId && (
-                              <InfoTip
-                                className="ml-1"
-                                align="right"
-                                id={card.infoId}
-                                ariaLabel={card.aria}
-                              />
-                            )}
-                          </span>
-                        </div>
-                        <div className="text-xl font-semibold text-slate-900">{card.value}</div>
-                        <div className="text-[11px] text-slate-500">{card.baselineLabel}</div>
-                        {baselineKPIs && card.delta !== null && (
-                          <div
-                            className={`text-[11px] font-medium ${
-                              card.delta >= 0 ? "text-emerald-700" : "text-rose-700"
-                            }`}
-                          >
-                            {card.delta >= 0 ? "+" : "-"}
-                            {card.formatter(Math.abs(card.delta))}
-                            {card.deltaPct !== null
-                              ? ` (${card.deltaPct >= 0 ? "+" : "-"}${Math.abs(card.deltaPct).toFixed(1)}%)`
-                              : ""}
-                            {" vs baseline"}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/80 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
-                      <span>Choice mix at this ladder</span>
-                      <span className="text-slate-500">
-                        Pair with Callouts to narrate who is buying and why.
-                      </span>
-                    </div>
-                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {["good", "better", "best"].map((tier) => {
-                        const share = Math.max(
-                          0,
-                          Math.round(scorecardKPIs.shares[tier as "good" | "better" | "best"] * 1000) / 10
-                        );
-                        const baselineShare = baselineKPIs
-                          ? Math.round(baselineKPIs.shares[tier as "good" | "better" | "best"] * 1000) / 10
-                          : null;
-                        const delta =
-                          baselineShare !== null ? share - baselineShare : null;
-                        const barWidth = Math.min(100, Math.max(4, share));
-                        const tone =
-                          delta === null
-                            ? "text-slate-500"
-                            : delta >= 0
-                            ? "text-emerald-700"
-                            : "text-rose-700";
-                        return (
-                          <div
-                            key={tier}
-                            className="rounded-lg border border-slate-200 bg-white/70 p-3"
-                          >
-                            <div className="flex items-center justify-between text-[11px] text-slate-600">
-                              <span className="capitalize">{tier}</span>
-                              <span className="font-semibold text-slate-900">
-                                {share}%
-                              </span>
-                            </div>
-                            <div className="mt-1 h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
-                              <div
-                                className={`h-full rounded-full ${tierColors[tier as "good" | "better" | "best"]}`}
-                                style={{ width: `${barWidth}%` }}
-                              />
-                            </div>
-                            <div className={`mt-1 text-[11px] ${tone}`}>
-                              {delta === null
-                                ? "Baseline to see mix deltas."
-                                : `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}pp vs baseline`}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-lg border border-slate-200 bg-white/80 p-3">
-                      <div className="text-[11px] uppercase tracking-wide text-slate-600">
-                        Driver snapshot
-                      </div>
-                      <div className="mt-1 text-sm font-semibold text-slate-900">
-                        {scorecardExplainDelta?.mainDriver || "Driver story appears once a baseline exists."}
-                      </div>
-                      <p className="text-[11px] text-slate-600 mt-1">
-                        {scorecardExplainDelta?.segmentLine || "Narrate which segment is winning or losing once deltas are available."}
-                      </p>
-                      {scorecardExplainDelta?.suggestion && (
-                        <p className="text-[11px] text-slate-600 mt-1">
-                          {scorecardExplainDelta.suggestion}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="rounded-lg border border-slate-200 bg-linear-to-br from-slate-50 to-white p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-slate-600">
-                        <span>Guardrails & optimizer</span>
-                      </div>
-                      <div className="mt-1 text-sm font-semibold text-slate-900">
-                        {guardrails.gapLine}
-                      </div>
-                      <p className="text-[11px] text-slate-600 mt-1">{guardrails.floorLine}</p>
-                      <p className="text-[11px] text-slate-600 mt-1">{guardrails.optimizerLine}</p>
-                    </div>
-                  </div>
-                </>
-              );
-            })()}
+                  : guardrailsForCurrent
+              }
+              explain={scorecardExplainDelta}
+              band={scorecardBand}
+            />
           </Section>
 
           <Section id="callouts" title="Callouts snapshot">
-            {optResult ? (
-              <>
-                <div className="text-[11px] text-slate-600 flex flex-wrap items-center gap-2">
-                  <span>Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}.</span>
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
-                    Ladder {optResult.prices.good}/${optResult.prices.better}/${optResult.prices.best}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-3 shadow-sm">
-                    <div className="text-[11px] uppercase text-slate-600">Lift vs baseline</div>
-                    <div className="text-2xl font-semibold text-slate-900">
-                      {explainDeltaOptimized
-                        ? `${explainDeltaOptimized.deltaProfit >= 0 ? "+" : "-"}$${Math.abs(
-                            explainDeltaOptimized.deltaProfit
-                          ).toLocaleString()}`
-                        : "Baseline pending"}
-                    </div>
-                    <ul className="mt-2 space-y-1 text-[11px] text-slate-700">
-                      {explainDeltaOptimized ? (
-                        <>
-                          <li>Revenue {explainDeltaOptimized.deltaRevenue >= 0 ? "+" : "-"}${Math.abs(explainDeltaOptimized.deltaRevenue).toLocaleString()}</li>
-                          <li>Active {explainDeltaOptimized.deltaActive >= 0 ? "+" : "-"}{Math.abs(explainDeltaOptimized.deltaActive).toFixed(0)}</li>
-                          <li>ARPU {explainDeltaOptimized.deltaARPU >= 0 ? "+" : "-"}${Math.abs(explainDeltaOptimized.deltaARPU).toFixed(2)}</li>
-                        </>
-                      ) : (
-                        <li>Use "Set baseline to now" so deltas have context.</li>
-                      )}
-                    </ul>
-                  </div>
-
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-3 shadow-sm">
-                    <div className="text-[11px] uppercase text-slate-600">Main driver</div>
-                    <div className="text-sm font-semibold text-slate-900">
-                      {explainDeltaOptimized?.mainDriver || scorecardExplainDelta?.mainDriver || "Drivers appear here once a baseline is set."}
-                    </div>
-                    <p className="text-[11px] text-slate-600 mt-1 leading-snug">
-                      {explainDeltaOptimized?.segmentLine || scorecardExplainDelta?.segmentLine || "Narrate which segment is winning or losing once deltas are available."}
-                    </p>
-                    {scorecardExplainDelta?.suggestion && (
-                      <p className="text-[11px] text-slate-600 mt-1">{scorecardExplainDelta.suggestion}</p>
-                    )}
-                  </div>
-
-                  <div className="rounded-xl border border-purple-100 bg-purple-50/50 px-3 py-3 shadow-sm">
-                    <div className="text-[11px] uppercase text-slate-600">Guardrails & outlook</div>
-                    <div className="text-sm font-semibold text-slate-900 leading-snug">
-                      {guardrailsForOptimized.gapLine}
-                    </div>
-                    <p className="text-[11px] text-slate-600 mt-1">{guardrailsForOptimized.floorLine}</p>
-                    <p className="text-[11px] text-slate-600 mt-1">
-                      {optimizerWhyLines.length > 0
-                        ? optimizerWhyLines[0]
-                        : "Optimizer ready - rerun if you change ranges, floors, or basis."}
-                    </p>
-                    {optimizerWhyLines.length > 1 && (
-                      <p className="text-[11px] text-slate-600 mt-1">{optimizerWhyLines[1]}</p>
-                    )}
-                  </div>
-
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3 shadow-sm">
-                    <div className="text-[11px] uppercase text-slate-600">Next steps</div>
-                    <ul className="mt-1 list-disc space-y-1 pl-4 text-[11px] text-slate-700 leading-snug">
-                      <li>Validate guardrails in <a className="text-sky-600 hover:underline" href="#kpi-pocket-coverage">Pocket floor coverage</a>.</li>
-                      <li>Review leakages in <a className="text-sky-600 hover:underline" href="#pocket-price-waterfall">Pocket waterfall</a>.</li>
-                      <li>Rerun optimizer after ladder or basis tweaks, then export/print the summary.</li>
-                      <li>Baseline auto-saved before this run; re-pin after manual tweaks to compare future changes.</li>
-                    </ul>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-3 py-2 text-sm text-slate-600">
-                Run the optimizer to populate these callouts with lift, drivers, and guardrail notes.
-              </div>
-            )}
+            <CalloutsSnapshot
+              hasResult={!!optResult}
+              basisLabel={optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}
+              ladderLabel={
+                optResult
+                  ? `Ladder ${optResult.prices.good}/${optResult.prices.better}/${optResult.prices.best}`
+                  : ""
+              }
+              delta={explainDeltaOptimized}
+              fallbackNarrative={scorecardExplainDelta}
+              guardrails={guardrailsForOptimized}
+              optimizerWhyLines={optimizerWhyLines}
+            />
           </Section>
-          
 
           <Section
             id="profit-frontier"
-          title="Profit Frontier"
-          className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
-          actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
-        >
+            title="Profit Frontier"
+            className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
+            actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
+          >
             <Explanation slot="chart.profitFrontier">
               Frontier sweeps the selected tier across its scenario/optimizer range and holds the other tiers fixed. Markers show Baseline/Current/Optimized prices; infeasible points flag where gaps/margins fail. Use this to sanity-check before or after running the optimizer.
             </Explanation>
