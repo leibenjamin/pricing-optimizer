@@ -458,18 +458,23 @@ export default function App() {
               : t.kind === "success"
               ? "border-green-300 bg-green-50 text-green-800"
               : "border-slate-300 bg-white text-slate-800";
+          const iconTone =
+            t.kind === "error"
+              ? "bg-red-500"
+              : t.kind === "success"
+              ? "bg-green-500"
+              : "bg-slate-500";
           return (
             <div
               key={t.id}
               className={`w-72 max-w-[90vw] rounded-md border shadow px-3 py-2 text-sm ${tone}`}
             >
               <div className="flex items-start gap-2">
-                <div className="mt-0.5">
-                  {t.kind === "error"
-                    ? "??"
-                    : t.kind === "success"
-                    ? "?"
-                    : "??"}
+                <div className="mt-1.5">
+                  <span
+                    className={`inline-block h-2.5 w-2.5 rounded-full ${iconTone}`}
+                    aria-hidden="true"
+                  />
                 </div>
                 <div className="flex-1">{t.msg}</div>
                 <button
@@ -479,7 +484,7 @@ export default function App() {
                     setToasts((ts) => ts.filter((x) => x.id !== t.id))
                   }
                 >
-                  ?
+                  <span aria-hidden="true">X</span>
                 </button>
               </div>
             </div>
@@ -5508,7 +5513,7 @@ export default function App() {
                     const coarsenNote = diag.coarsened ? "Grid auto-coarsened for performance. " : "";
                     return (
                       <div className="text-[11px] text-slate-600 mt-2">
-                        Tested {diag.tested.toLocaleString()} ladders; coarse step ${diag.coarseStep.toFixed(2)} ?
+                        Tested {diag.tested.toLocaleString()} ladders; coarse step ${diag.coarseStep.toFixed(2)} -&gt;
                         refine ${diag.refinementStep.toFixed(2)}. {coarsenNote}
                         {guardrailNote}
                       </div>
@@ -5524,7 +5529,7 @@ export default function App() {
                   {optResult ? (
                     <span>
                       Best ladder ${optResult.prices.good}/$
-                      {optResult.prices.better}/${optResult.prices.best} ? Profit
+                      {optResult.prices.better}/${optResult.prices.best} -&gt; Profit
                       delta ${Math.round(optResult.profit)}
                     </span>
                   ) : (

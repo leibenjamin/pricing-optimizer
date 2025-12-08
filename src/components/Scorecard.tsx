@@ -209,7 +209,7 @@ export default function Scorecard({
           {
             label: "Active vs baseline",
             value: activeCustomers - baselineActiveCustomers,
-            formatter: (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v).toLocaleString()}`,
+            formatter: (v: number) => Math.round(v).toLocaleString(),
           },
           {
             label: "Gross margin delta",
