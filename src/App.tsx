@@ -1902,13 +1902,14 @@ export default function App() {
   const scorecardActiveFromShares = Math.round(
     N * (1 - scorecardKPIs.shares.none)
   );
-  const marginDeltaPP =
-    baselineKPIs != null
-      ? scorecardKPIs.grossMarginPct - baselineKPIs.grossMarginPct
-      : null;
-  const scorecardMarginRatio = scorecardKPIs.grossMarginPct / 100;
+  const scorecardMarginRatio =
+    scorecardKPIs.revenue > 0 ? scorecardKPIs.profit / scorecardKPIs.revenue : 0;
   const baselineMarginRatio =
-    baselineKPIs != null ? baselineKPIs.grossMarginPct / 100 : null;
+    baselineKPIs && baselineKPIs.revenue > 0 ? baselineKPIs.profit / baselineKPIs.revenue : null;
+  const marginDeltaPP =
+    baselineMarginRatio !== null
+      ? (scorecardMarginRatio - baselineMarginRatio) * 100
+      : null;
 
   useEffect(() => {
     if (scorecardView === "optimized" && !optimizedKPIs) {
