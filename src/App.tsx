@@ -39,7 +39,6 @@ import MiniLine from "./components/MiniLine";
 import { describeSegment } from "./lib/segmentNarrative";
 
 import { pocketCoverage } from "./lib/coverage";
-import { TAKE_RATE_COLORS } from "./lib/colors";
 
 import HeatmapMini from "./components/HeatmapMini";
 import { feasibilitySliceGB } from "./lib/coverage";
@@ -59,7 +58,6 @@ import { explainGaps, topDriver, explainOptimizerResult } from "./lib/explain";
 import InfoTip from "./components/InfoTip";
 
 import ActionCluster from "./components/ActionCluster";
-import SharesMini from "./components/SharesMini";
 import { TakeRateDeltaTable } from "./components/TakeRateDeltaTable";
 import DataImport from "./components/DataImport";
 import SalesImport from "./components/SalesImport";
@@ -2200,15 +2198,6 @@ export default function App() {
       };
     });
   }, [segmentBreakdownScenarioKey, showSegmentBreakdown, takeRateContexts]);
-  const takeRateColors = useMemo(
-    () => [
-      TAKE_RATE_COLORS.none,
-      TAKE_RATE_COLORS.good,
-      TAKE_RATE_COLORS.better,
-      TAKE_RATE_COLORS.best,
-    ],
-    []
-  );
 
   useEffect(() => {
     if (!takeRateBaselineKey && takeRateMode === "delta") {
@@ -2448,55 +2437,6 @@ export default function App() {
       feasibility: { feasibleCount, infeasibleCount },
     };
   }, [frontier.base.optimum, frontier.base.feasiblePoints?.length, frontier.base.infeasiblePoints?.length, frontier.base.sweep, frontierMarkers, frontierTier]);
-
-  const [showSegmentMix, setShowSegmentMix] = useState(false);
-  const segmentMixes = useMemo(() => {
-    if (!segments.length) return [];
-    const ranked = normalizeWeights(segments)
-      .map((seg, idx) => ({ seg, idx }))
-      .sort((a, b) => b.seg.weight - a.seg.weight)
-      .slice(0, 3);
-    const baselineSnap = scenarioBaseline?.snapshot;
-    const baselineSegs = coerceSegmentsForCalc(baselineSnap?.segments, segments);
-    const optCtx = optResult?.context;
-    const optSegs = coerceSegmentsForCalc(optCtx?.segments, segments);
-
-    const pickSeg = (list: Segment[] | undefined, name: string | undefined, idx: number) => {
-      if (!list || !list.length) return null;
-      const normalized = normalizeWeights(list);
-      const nameLower = (name ?? "").toLowerCase();
-      const byNameIdx = normalized.findIndex(
-        (s) => (s.name?.trim().toLowerCase() ?? "") === nameLower
-      );
-      const targetIdx = byNameIdx >= 0 ? byNameIdx : idx;
-      return normalized[targetIdx] ?? normalized[0];
-    };
-
-    return ranked.map(({ seg, idx }) => {
-      const label = seg.name?.trim() || `Segment ${idx + 1}`;
-      const currentSeg = seg;
-      const baseSeg = pickSeg(baselineSegs, seg.name, idx) ?? currentSeg;
-      const optSeg = pickSeg(optSegs, seg.name, idx) ?? currentSeg;
-
-      const sharesCurrent = choiceShares(prices, features, [currentSeg], refPrices);
-      const sharesOptim =
-        optResult && optCtx
-          ? choiceShares(optResult.prices, optCtx.features, [optSeg], optCtx.refPrices)
-          : optResult
-          ? choiceShares(optResult.prices, features, [currentSeg], refPrices)
-          : null;
-      const sharesBaseline =
-        baselineKPIs && (baselineSnap?.prices ?? baselineKPIs.prices)
-          ? choiceShares(
-              baselineSnap?.prices ?? baselineKPIs.prices,
-              baselineSnap?.features ?? features,
-              [baseSeg],
-              baselineSnap?.refPrices ?? refPrices
-            )
-          : null;
-      return { label, sharesCurrent, sharesOptim, sharesBaseline };
-    });
-  }, [baselineKPIs, features, optResult, prices, refPrices, scenarioBaseline?.snapshot, segments]);
 
   // ---- Tornado sensitivity data ----
   // ---- Tornado sensitivity data ----
@@ -6465,68 +6405,6 @@ export default function App() {
             {takeRateBaselineKey && takeRateScenarios.length > 1 && (
               <div className="mt-2">
                 <TakeRateDeltaTable scenarios={takeRateScenarios} baselineKey={takeRateBaselineKey} />
-              </div>
-            )}
-            <div className="flex flex-wrap items-center gap-3 text-xs">
-              <label className="flex items-center gap-2 font-medium text-slate-700">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4"
-                  checked={showSegmentMix}
-                  onChange={(e) => setShowSegmentMix(e.target.checked)}
-                />
-                Segment mix (top 3)
-              </label>
-              <span className="text-[11px] text-slate-500">Baseline / Current / Optimized per segment; use table above for exact deltas.</span>
-            </div>
-            {showSegmentMix && segmentMixes.length > 0 && (
-              <div className="flex flex-col gap-3">
-                {segmentMixes.map((seg, idx) => {
-                  const entries: Array<{ label: string; shares: typeof seg.sharesCurrent }> = [
-                    { label: "Current", shares: seg.sharesCurrent },
-                    ...(seg.sharesOptim ? [{ label: "Optimized", shares: seg.sharesOptim }] : []),
-                    ...(seg.sharesBaseline ? [{ label: "Baseline", shares: seg.sharesBaseline }] : []),
-                  ];
-                  const sig = (s: typeof seg.sharesCurrent) =>
-                    [s.none, s.good, s.better, s.best].map((v) => v.toFixed(6)).join("|");
-                  const grouped = new Map<string, { labels: string[]; shares: typeof seg.sharesCurrent }>();
-                    entries.forEach((e) => {
-                      const key = sig(e.shares);
-                      const g = grouped.get(key);
-                      if (g) g.labels.push(e.label);
-                      else grouped.set(key, { labels: [e.label], shares: e.shares });
-                    });
-                    const charts = Array.from(grouped.values()).map((g) => {
-                      const labels = g.labels;
-                      const has = (s: string) => labels.includes(s);
-                      let title = labels.join(" / ");
-                      if (labels.length === 2 && has("Current") && has("Baseline")) {
-                        title = "Current & Baseline";
-                      } else if (labels.length === 2 && has("Baseline") && has("Optimized")) {
-                        title = "Baseline & Optimized";
-                      } else if (labels.length === 2 && has("Current") && has("Optimized")) {
-                        title = "Current & Optimized";
-                      }
-                      return { title, shares: g.shares };
-                    });
-                  return (
-                    <div key={idx} className="rounded border border-slate-200 bg-white px-3 py-3 shadow-sm">
-                      <div className="text-[11px] uppercase text-slate-500 mb-2">{seg.label}</div>
-                      <div className="flex flex-col gap-2">
-                        {charts.map((c, i) => (
-                          <SharesMini
-                            key={i}
-                            title={c.title}
-                            labels={["None", "Good", "Better", "Best"]}
-                            values={[c.shares.none, c.shares.good, c.shares.better, c.shares.best]}
-                            height={110}
-                            colors={takeRateColors}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             )}
           </Section>
