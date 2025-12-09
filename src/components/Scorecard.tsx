@@ -27,7 +27,6 @@ type ScorecardProps = {
   onPinBaseline: () => void;
   basis: BasisLabels;
   kpis: SnapshotKPIs;
-  baselineKPIs: SnapshotKPIs | null;
   run?: ScenarioRun | null;
   baselineRun?: ScenarioRun | null;
   activeCustomers: number;
@@ -191,7 +190,6 @@ export default function Scorecard({
   onPinBaseline,
   basis,
   kpis,
-  baselineKPIs,
   run,
   baselineRun,
   activeCustomers,
@@ -202,7 +200,7 @@ export default function Scorecard({
   band,
 }: ScorecardProps) {
   const activeKpis = run?.kpis ?? kpis;
-  const baselineKpis = baselineRun?.kpis ?? baselineKPIs ?? null;
+  const baselineKpis = baselineRun?.kpis ?? null;
   const baselineFallback = "Baseline auto-saves when you apply a preset or run Optimize.";
 
   const summaryPills =

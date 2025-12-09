@@ -418,7 +418,6 @@ export default function App() {
   >("po:scenario-baseline-v2", null);
 
   // Baseline KPIs for the "Tell me what changed" panel (derived from scenarioBaseline for backward compatibility)
-  const [baselineKPIs, setBaselineKPIs] = useState<SnapshotKPIs | null>(null);
   const [baselineMeta, setBaselineMeta] = useState<BaselineMeta | null>(null);
   const [baselineRun, setBaselineRun] = useState<ScenarioRun | null>(null);
   const [optimizedRun, setOptimizedRun] = useState<ScenarioRun | null>(null);
@@ -1811,7 +1810,7 @@ export default function App() {
     () => optResult?.kpis ?? null,
     [optResult?.kpis]
   );
-  const baselineKpis = baselineRun?.kpis ?? baselineKPIs;
+  const baselineKpis = baselineRun?.kpis ?? scenarioBaseline?.kpis ?? null;
   const optimizedKpis = optimizedRun?.kpis ?? optimizedKPIs;
 
   const buildExplainDelta = useCallback(
@@ -3028,8 +3027,7 @@ export default function App() {
 
   // Initialize baseline once on first render (after helpers are defined)
   useEffect(() => {
-    if (scenarioBaseline && scenarioBaseline.kpis && !baselineKPIs) {
-      setBaselineKPIs(scenarioBaseline.kpis);
+    if (scenarioBaseline && scenarioBaseline.kpis && !baselineRun) {
       setBaselineMeta(scenarioBaseline.meta);
       const snap = scenarioBaseline.snapshot;
       const snapSegments = snap.segments ? mapNormalizedToUI(snap.segments as SegmentNested[]) : segments;
@@ -3053,7 +3051,7 @@ export default function App() {
       setBaselineRun(run);
       return;
     }
-    if (!baselineKPIs && currentKPIs) {
+    if (!baselineRun && currentKPIs) {
       const meta = { label: "Pinned on load", savedAt: Date.now() };
       const snap = buildScenarioSnapshot({
         prices,
@@ -3081,7 +3079,6 @@ export default function App() {
         usePocketProfit: !!optConstraints.usePocketProfit,
         usePocketMargins: !!optConstraints.usePocketMargins,
       };
-      setBaselineKPIs(currentKPIs);
       setBaselineMeta(meta);
       setScenarioBaseline({
         snapshot: snap,
@@ -3105,7 +3102,7 @@ export default function App() {
         })
       );
     }
-  }, [baselineKPIs, currentKPIs, scenarioBaseline, buildScenarioSnapshot, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, setScenarioBaseline, optimizerKind, scenarioPresetId, scenarioUncertainty, baselineRun, mapNormalizedToUI]);
+  }, [baselineRun, currentKPIs, scenarioBaseline, buildScenarioSnapshot, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, setScenarioBaseline, optimizerKind, scenarioPresetId, scenarioUncertainty, mapNormalizedToUI]);
 
 
   async function handleImportJson(e: ChangeEvent<HTMLInputElement>) {
@@ -3750,7 +3747,6 @@ export default function App() {
         merged.optConstraints.usePocketMargins ?? !!merged.optConstraints.usePocketProfit
       );
       const meta = { label, savedAt: Date.now() };
-      setBaselineKPIs(kpis);
       setBaselineMeta(meta);
       setScenarioBaseline({
         snapshot: buildScenarioSnapshot(merged),
@@ -5162,6 +5158,22 @@ export default function App() {
                       const meta = { label: "Pinned now", savedAt: Date.now() };
                       const kpis = currentKPIs;
                       if (kpis) {
+                        const run = makeScenarioRun({
+                          scenarioId: scenarioPresetId ?? "custom",
+                          ladder: snapshot.prices,
+                          costs: snapshot.costs ?? costs,
+                          leak: snapshot.leak ?? leak,
+                          refPrices: snapshot.refPrices ?? refPrices,
+                          features: snapshot.features ?? features,
+                          segments: snapshot.segments ? coerceSegmentsForCalc(snapshot.segments, segments) : segments,
+                          basis: {
+                            usePocketProfit: !!optConstraints.usePocketProfit,
+                            usePocketMargins: !!optConstraints.usePocketMargins,
+                          },
+                          kpis,
+                          uncertainty: scenarioUncertainty ?? undefined,
+                          meta: { label: meta.label, savedAt: meta.savedAt, source: "baseline" },
+                        });
                         setScenarioBaseline({
                           snapshot,
                           kpis,
@@ -5171,8 +5183,8 @@ export default function App() {
                           },
                           meta,
                         });
-                        setBaselineKPIs(kpis);
                         setBaselineMeta(meta);
+                        setBaselineRun(run);
                         toast("success", "Saved scenario baseline");
                       } else {
                         toast("error", "Baseline not saved: KPIs unavailable");
@@ -6154,38 +6166,56 @@ export default function App() {
                               onClick={() => {
                                 if (!optResult?.kpis) return;
                                 const meta = { label: "Pinned from optimizer", savedAt: Date.now() };
-                                setBaselineKPIs(optResult.kpis);
+                                const ctx = optResult.context;
+                                const snapshot = buildScenarioSnapshot({
+                                  prices: optResult.prices,
+                                  costs: ctx.costs,
+                                  features: ctx.features,
+                                  refPrices: ctx.refPrices,
+                                  leak: ctx.leak,
+                                  segments: ctx.segments,
+                                  tornadoPocket,
+                                  tornadoPriceBump,
+                                  tornadoPctBump,
+                                  tornadoRangeMode,
+                                  tornadoMetric,
+                                  tornadoValueMode,
+                                  retentionPct,
+                                  retentionMonths,
+                                  kpiFloorAdj,
+                                  priceRange: priceRangeState,
+                                  optRanges: ctx.ranges ?? optRanges,
+                                  optConstraints: ctx.constraints ?? optConstraints,
+                                  channelMix,
+                                  optimizerKind,
+                                });
+                                const run = makeScenarioRun({
+                                  scenarioId: scenarioPresetId ?? "custom",
+                                  ladder: optResult.prices,
+                                  costs: ctx.costs,
+                                  leak: ctx.leak,
+                                  refPrices: ctx.refPrices,
+                                  features: ctx.features,
+                                  segments: ctx.segments,
+                                  basis: {
+                                    usePocketProfit: !!ctx.usePocketProfit,
+                                    usePocketMargins: !!ctx.usePocketMargins,
+                                  },
+                                  kpis: optResult.kpis,
+                                  uncertainty: scenarioUncertainty ?? undefined,
+                                  meta: { label: meta.label, savedAt: meta.savedAt, source: "baseline" },
+                                });
                                 setBaselineMeta(meta);
                                 setScenarioBaseline({
-                                  snapshot: buildScenarioSnapshot({
-                                    prices,
-                                    costs,
-                                    features,
-                                    refPrices,
-                                    leak,
-                                    segments,
-                                    tornadoPocket,
-                                    tornadoPriceBump,
-                                    tornadoPctBump,
-                                    tornadoRangeMode,
-                                    tornadoMetric,
-                                    tornadoValueMode,
-                                    retentionPct,
-                                    retentionMonths,
-                                    kpiFloorAdj,
-                                    priceRange: priceRangeState,
-                                    optRanges,
-                                    optConstraints,
-                                    channelMix,
-                                    optimizerKind,
-                                  }),
+                                  snapshot,
                                   kpis: optResult.kpis,
                                   basis: {
-                                    usePocketProfit: !!optConstraints.usePocketProfit,
-                                    usePocketMargins: !!optConstraints.usePocketMargins,
+                                    usePocketProfit: !!ctx.usePocketProfit,
+                                    usePocketMargins: !!ctx.usePocketMargins,
                                   },
                                   meta,
                                 });
+                                setBaselineRun(run);
                                 toast("success", "Baseline pinned from optimizer");
                               }}
                             >
@@ -6312,7 +6342,6 @@ export default function App() {
                 pinned: scorecardPinnedBasis,
               }}
               kpis={scorecardKPIs}
-              baselineKPIs={baselineKpis}
               run={scorecardView === "optimized" ? optimizedRun : null}
               baselineRun={baselineRun}
               activeCustomers={scorecardActiveFromShares}
