@@ -1,5 +1,5 @@
-// src/components/Tornado.tsx
-import { useEffect, useRef, useState } from "react";
+﻿// src/components/Tornado.tsx
+import { useEffect, useRef, useState, useMemo } from "react";
 import * as echarts from "echarts/core";
 import { BarChart, type BarSeriesOption } from "echarts/charts";
 import {
@@ -12,6 +12,7 @@ import {
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { ComposeOption } from "echarts/core";
+import type { ScenarioRun } from "../lib/domain";
 
 echarts.use([
   BarChart,
@@ -40,13 +41,30 @@ export default function Tornado({
   chartId,
   valueMode = "absolute",
   metric = "profit",
+  viewModel,
 }: {
   title?: string;
-  rows: TornadoDatum[];
+  rows?: TornadoDatum[];
   chartId?: string;
   valueMode?: "absolute" | "percent";
   metric?: "profit" | "revenue";
+  viewModel?: {
+    title?: string;
+    rows: TornadoDatum[];
+    valueMode: "absolute" | "percent";
+    metric: "profit" | "revenue";
+    run?: ScenarioRun | null;
+  };
 }) {
+  const { resolvedTitle, resolvedRows, resolvedValueMode, resolvedMetric } = useMemo(() => {
+    return {
+      resolvedTitle: viewModel?.title ?? title,
+      resolvedRows: viewModel?.rows ?? rows ?? [],
+      resolvedValueMode: viewModel?.valueMode ?? valueMode,
+      resolvedMetric: viewModel?.metric ?? metric,
+    };
+  }, [metric, rows, title, valueMode, viewModel]);
+
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const [vw, setVw] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1280);
@@ -61,20 +79,20 @@ export default function Tornado({
     if (!ref.current) return;
     if (!chartRef.current) chartRef.current = echarts.init(ref.current);
 
-    const isPct = valueMode === "percent";
-    const metricLabel = metric === "revenue" ? "revenue" : "profit";
+    const isPct = resolvedValueMode === "percent";
+    const metricLabel = resolvedMetric === "revenue" ? "revenue" : "profit";
     const digits = isPct ? 1 : 0;
 
     // Prepare series: left bars show the worst (most-negative) delta; right bars show the best (most-positive) delta.
-    const cats = rows.map((r) => r.name);
-    const left = rows.map((r) => Math.min(0, r.deltaLow, r.deltaHigh));
-    const right = rows.map((r) => Math.max(0, r.deltaLow, r.deltaHigh));
+    const cats = resolvedRows.map((r) => r.name);
+    const left = resolvedRows.map((r) => Math.min(0, r.deltaLow, r.deltaHigh));
+    const right = resolvedRows.map((r) => Math.max(0, r.deltaLow, r.deltaHigh));
     const isNarrow = vw < 900;
     const axisFont = isNarrow ? 10 : 12;
     const labelWidth = isNarrow ? 150 : 190;
     const labelGap = isNarrow ? 40 : 50; // larger separation between y-labels and bars
     const maxAbsDelta = Math.max(
-      ...rows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh))),
+      ...resolvedRows.map((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh))),
       0
     );
     // Ensure tiny values (cents) still render a sliver
@@ -91,7 +109,7 @@ export default function Tornado({
     const gridBottom = isNarrow ? 56 : 76;
 
     const option: ECOption = {
-      title: { text: title, left: "center", top: 4, textStyle: { fontWeight: 700, fontSize: 14 } },
+      title: { text: resolvedTitle, left: "center", top: 4, textStyle: { fontWeight: 700, fontSize: 14 } },
       grid: { left: gridLeft, right: padRight, top: 36, bottom: gridBottom, containLabel: true },
       tooltip: {
         trigger: "axis",
@@ -99,7 +117,7 @@ export default function Tornado({
         formatter: (p) => {
           const items = Array.isArray(p) ? p : [p];
           const name = items[0]?.name ?? "";
-          const row = rows.find((r) => r.name === name);
+          const row = resolvedRows.find((r) => r.name === name);
           const lines = items.map((it) => {
             const v = Number(it.value);
             const side = it.seriesName;
@@ -209,7 +227,7 @@ export default function Tornado({
       chartRef.current?.dispose();
       chartRef.current = null;
     };
-  }, [rows, title, vw, valueMode, metric]);
+  }, [resolvedRows, resolvedTitle, vw, resolvedValueMode, resolvedMetric]);
 
   type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
 
@@ -233,15 +251,15 @@ export default function Tornado({
       } else if (e.detail.type === "csv") {
         const rowsCsv = [
           ["name", "base_usd", "delta_low_display", "delta_high_display", "delta_low_abs", "delta_high_abs", "unit", "metric"],
-          ...rows.map((r) => [
+          ...resolvedRows.map((r) => [
             r.name,
             r.base,
             r.deltaLow,
             r.deltaHigh,
             r.absLow,
             r.absHigh,
-            valueMode,
-            metric,
+            resolvedValueMode,
+            resolvedMetric,
           ]),
         ];
         const csv = rowsCsv.map((r) => r.join(",")).join("\n");
@@ -257,9 +275,9 @@ export default function Tornado({
 
     window.addEventListener("export:tornado", onExport as EventListener);
     return () => window.removeEventListener("export:tornado", onExport as EventListener);
-  }, [chartId, rows, valueMode, metric]);
+  }, [chartId, resolvedRows, resolvedValueMode, resolvedMetric]);
 
-  if (!rows.length) {
+  if (!resolvedRows.length) {
     return (
       <div className="w-full h-64 rounded border border-dashed border-slate-200 flex items-center justify-center text-sm text-slate-500">
         Run an optimization or adjust ranges to populate tornado sensitivity.
@@ -269,3 +287,4 @@ export default function Tornado({
 
   return <div ref={ref} className="w-full min-h-[420px] lg:min-h-[520px]" />;
 }
+

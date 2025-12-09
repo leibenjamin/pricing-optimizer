@@ -2487,6 +2487,39 @@ export default function App() {
     };
   }, [frontier.base.optimum, frontier.base.feasiblePoints?.length, frontier.base.infeasiblePoints?.length, frontier.base.sweep, frontierMarkers, frontierTier]);
 
+  const frontierViewModel = useMemo(
+    () => ({
+      base: {
+        points: frontier.base.points,
+        feasiblePoints: frontier.base.feasiblePoints,
+        infeasiblePoints: frontier.base.infeasiblePoints,
+        optimum: frontier.base.optimum,
+      },
+      alt: frontier.alt
+        ? { label: optConstraints.charm ? "No charm" : "Charm .99", points: frontier.alt.points }
+        : frontierOptimizedSlice
+        ? { label: "Optimized ladder slice", points: frontierOptimizedSlice.points }
+        : undefined,
+      markers: frontierMarkers,
+      xLabel: `${frontierTier[0].toUpperCase()}${frontierTier.slice(1)} price`,
+      scenarioRun: scorecardView === "optimized" ? optimizedRun : baselineRun,
+    }),
+    [
+      baselineRun,
+      frontier.alt,
+      frontier.base.feasiblePoints,
+      frontier.base.infeasiblePoints,
+      frontier.base.optimum,
+      frontier.base.points,
+      frontierOptimizedSlice,
+      frontierMarkers,
+      frontierTier,
+      optConstraints.charm,
+      optimizedRun,
+      scorecardView,
+    ]
+  );
+
   // ---- Tornado sensitivity data ----
   // ---- Tornado sensitivity data ----
   const [tornadoPocket, setTornadoPocket] = useState(TORNADO_DEFAULTS.usePocket);
@@ -2803,12 +2836,23 @@ export default function App() {
   const tornadoViewLabel =
     tornadoView === "optimized" && hasOptimizedTornado ? "Optimized" : "Current";
   const tornadoHasSignal = useMemo(() => {
-    const minSignal = tornadoValueMode === "percent" ? 0.5 : 1;
+    const minSignal = tornadoSignalThreshold(tornadoValueMode);
     return activeTornadoRows.some((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh)) >= minSignal);
   }, [activeTornadoRows, tornadoValueMode]);
+
   const tornadoMetricLabel = tornadoMetric === "revenue" ? "Revenue" : "Profit";
   const tornadoUnitLabel = tornadoValueMode === "percent" ? "% delta" : "$ delta";
   const tornadoChartTitle = `Tornado: ${tornadoViewLabel} ${tornadoMetricLabel.toLowerCase()} sensitivity (${tornadoUnitLabel})`;
+  const tornadoViewModel = useMemo(
+    () => ({
+      title: tornadoChartTitle,
+      rows: activeTornadoRows,
+      valueMode: tornadoValueMode,
+      metric: tornadoMetric,
+      run: tornadoView === "optimized" ? optimizedRun : baselineRun,
+    }),
+    [activeTornadoRows, baselineRun, optimizedRun, tornadoChartTitle, tornadoMetric, tornadoValueMode, tornadoView]
+  );
 
   const normalizeChannelMix = useCallback(
     (rows: Array<{ w: number; preset: string }>) => {
@@ -6331,6 +6375,7 @@ export default function App() {
                 </div>
                 <FrontierChartReal
                   chartId="frontier-main"
+                  viewModel={frontierViewModel}
                   points={frontier.base.points}
                   overlay={{
                     feasiblePoints: frontier.base.feasiblePoints,
@@ -6800,6 +6845,7 @@ export default function App() {
                   rows={activeTornadoRows}
                   valueMode={tornadoValueMode}
                   metric={tornadoMetric}
+                  viewModel={tornadoViewModel}
                 />
               </ErrorBoundary>
             </Suspense>

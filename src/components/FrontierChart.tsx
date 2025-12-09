@@ -1,6 +1,6 @@
 ﻿// src/components/FrontierChart.tsx
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import {
   init,
   use as echartsUse,
@@ -25,6 +25,7 @@ import { CanvasRenderer } from "echarts/renderers";
 import type { CallbackDataParams, TopLevelFormatterParams } from "echarts/types/dist/shared";
 import { downloadBlob, csvFromRows } from "../lib/download";
 import type { Shares } from "../lib/choice";
+import type { ScenarioRun } from "../lib/domain";
 
 type FrontierDatum = {
   value?: unknown;
@@ -72,6 +73,19 @@ export interface FrontierComparison {
   points: FrontierPoint[];
 }
 
+export interface FrontierViewModel {
+  base: {
+    points: FrontierPoint[];
+    feasiblePoints?: FrontierPoint[];
+    infeasiblePoints?: FrontierPoint[];
+    optimum: FrontierPoint | null;
+  };
+  alt?: FrontierComparison;
+  markers?: FrontierMarker[];
+  xLabel?: string;
+  scenarioRun?: ScenarioRun | null;
+}
+
 type ExportEvent = CustomEvent<{ id: string; type: "png" | "csv" }>;
 
 function getDatum(p: CallbackDataParams): FrontierDatum | null {
@@ -90,14 +104,16 @@ export default function FrontierChartReal({
   markers,
   xLabel = "Price",
   comparison,
+  viewModel,
 }: {
-  points: FrontierPoint[];
-  optimum: FrontierPoint | null;
+  points?: FrontierPoint[];
+  optimum?: FrontierPoint | null;
   chartId?: string;
   overlay?: FrontierOverlay;
   markers?: FrontierMarker[];
   xLabel?: string;
   comparison?: FrontierComparison;
+  viewModel?: FrontierViewModel;
 }) {
   const divRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ECharts | null>(null);
@@ -114,6 +130,34 @@ export default function FrontierChartReal({
     window.addEventListener("resize", on);
     return () => window.removeEventListener("resize", on);
   }, []);
+
+  // Prefer view-model inputs if provided (backward compatible)
+  const {
+    chartPoints,
+    chartOptimum,
+    chartOverlay,
+    comparisonView,
+    markersView,
+    xLabelView,
+  } = useMemo(() => {
+    const base = viewModel?.base;
+    const alt = viewModel?.alt ?? comparison;
+    const mks = viewModel?.markers ?? markers;
+    const xl = viewModel?.xLabel ?? xLabel;
+    const pts = base?.points ?? points ?? [];
+    const opt = base?.optimum ?? optimum ?? null;
+    const over: FrontierOverlay | undefined = base
+      ? { feasiblePoints: base.feasiblePoints, infeasiblePoints: base.infeasiblePoints }
+      : overlay;
+    return {
+      chartPoints: pts,
+      chartOptimum: opt,
+      chartOverlay: over,
+      comparisonView: alt,
+      markersView: mks,
+      xLabelView: xl,
+    };
+  }, [comparison, markers, overlay, optimum, points, viewModel, xLabel]);
 
   // Init once
   useEffect(() => {
@@ -154,14 +198,14 @@ export default function FrontierChartReal({
     const markerSymbolSize = isNarrow ? 18 : 24;
 
     const allPrices: number[] = [
-      ...points.map((p) => p.price),
+      ...chartPoints.map((p) => p.price),
       ...(overlay?.feasiblePoints?.map((p) => p.price) ?? []),
       ...(overlay?.infeasiblePoints?.map((p) => p.price) ?? []),
       ...(comparison?.points?.map((p) => p.price) ?? []),
       ...(markers?.map((m) => m.price) ?? []),
     ].filter((v) => Number.isFinite(v));
     const allProfits: number[] = [
-      ...points.map((p) => p.profit),
+      ...chartPoints.map((p) => p.profit),
       ...(overlay?.feasiblePoints?.map((p) => p.profit) ?? []),
       ...(overlay?.infeasiblePoints?.map((p) => p.profit) ?? []),
       ...(comparison?.points?.map((p) => p.profit) ?? []),
@@ -219,7 +263,7 @@ export default function FrontierChartReal({
       },
       xAxis: {
         type: "value",
-        name: xLabel,
+        name: xLabelView,
         nameTextStyle: { fontSize: axisFont },
         nameGap: isNarrow ? 28 : 36,
         axisLabel: {
@@ -253,7 +297,7 @@ export default function FrontierChartReal({
           type: "line",
           name: "Frontier",
           smooth: true,
-          data: points.map((p) => ({
+          data: chartPoints.map((p) => ({
             value: [p.price, p.profit],
             shares: p.shares,
             reason: p.reason,
@@ -287,15 +331,15 @@ export default function FrontierChartReal({
               }
             : undefined,
         } as LineSeriesOption,
-        ...(comparison
+        ...(comparisonView
           ? [
               {
                 type: "line",
                 smooth: true,
-                name: comparison.label,
+                name: comparisonView.label,
                 lineStyle: { type: "dashed" },
                 itemStyle: { color: "#0f172a" },
-                data: comparison.points.map((p) => ({
+                data: comparisonView.points.map((p) => ({
                   value: [p.price, p.profit],
                   shares: p.shares,
                   reason: p.reason,
@@ -305,11 +349,11 @@ export default function FrontierChartReal({
               } as LineSeriesOption,
             ]
           : []),
-        ...(overlay?.feasiblePoints && overlay.feasiblePoints.length
+        ...(chartOverlay?.feasiblePoints && chartOverlay.feasiblePoints.length
           ? [
               {
                 type: "scatter",
-                data: overlay.feasiblePoints.map((p) => ({
+                data: chartOverlay.feasiblePoints.map((p) => ({
                   value: [p.price, p.profit],
                   shares: p.shares,
                   reason: p.reason,
@@ -320,11 +364,11 @@ export default function FrontierChartReal({
               } as ScatterSeriesOption,
             ]
           : []),
-        ...(overlay?.infeasiblePoints && overlay.infeasiblePoints.length
+        ...(chartOverlay?.infeasiblePoints && chartOverlay.infeasiblePoints.length
           ? [
               {
                 type: "scatter",
-                data: overlay.infeasiblePoints.map((p) => ({
+                data: chartOverlay.infeasiblePoints.map((p) => ({
                   value: [p.price, p.profit],
                   shares: p.shares,
                   reason: p.reason,
@@ -335,11 +379,11 @@ export default function FrontierChartReal({
               } as ScatterSeriesOption,
             ]
           : []),
-        ...(optimum
+        ...(chartOptimum
           ? [
               {
                 type: "scatter",
-                data: [[optimum.price, optimum.profit]],
+                data: [[chartOptimum.price, chartOptimum.profit]],
                 symbolSize: 10,
                 itemStyle: { borderWidth: 1 },
                 emphasis: { focus: "series" },
@@ -363,11 +407,11 @@ export default function FrontierChartReal({
               } as ScatterSeriesOption,
             ]
           : []),
-        ...(markers && markers.length
+        ...(markersView && markersView.length
           ? [
               {
                 type: "scatter",
-                data: markers.map((m) => [m.price, m.profit, shortLabel(m.label)]),
+                data: markersView.map((m) => [m.price, m.profit, shortLabel(m.label)]),
                 symbolSize: 8,
                 labelLayout: { hideOverlap: true, moveOverlap: "shiftY" },
                 itemStyle: {
@@ -430,7 +474,8 @@ export default function FrontierChartReal({
       chartRef.current?.off("mouseover", onHover);
       chartRef.current?.off("mouseout", onLeave);
     };
-  }, [points, optimum, vw, markers, overlay?.feasiblePoints, overlay?.infeasiblePoints, xLabel, comparison]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartPoints, chartOptimum, vw, markersView, chartOverlay, xLabelView, comparisonView]);
 
   useEffect(() => {
     if (!chartId) return;
@@ -457,7 +502,7 @@ export default function FrontierChartReal({
       } else if (e.detail.type === "csv") {
         const rows: (string | number)[][] = [
           ["best_price", "profit", "share.none", "share.good", "share.better", "share.best", "reason"],
-          ...points.map((p) => [
+          ...chartPoints.map((p) => [
             p.price,
             p.profit,
             p.shares?.none ?? "",
@@ -473,7 +518,7 @@ export default function FrontierChartReal({
     };
     window.addEventListener("export:frontier", onExport as EventListener);
     return () => window.removeEventListener("export:frontier", onExport as EventListener);
-  }, [chartId, points]);
+  }, [chartId, chartPoints]);
 
   return (
     <div className="w-full">
