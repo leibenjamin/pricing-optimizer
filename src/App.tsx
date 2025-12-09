@@ -5,8 +5,8 @@ import { Suspense, lazy, type ReactNode, type ChangeEvent } from "react";
 const FrontierChartReal = lazy(() => import("./components/FrontierChart"));
 const Tornado = lazy(() => import("./components/Tornado"));
 const Waterfall = lazy(() => import("./components/Waterfall"));
-const TakeRateChart = lazy(() => import("./components/TakeRateChart"));
 import type { TakeRateScenario } from "./components/TakeRateChart";
+import { Section } from "./components/Section";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { defaultSim } from "./lib/simulate";
@@ -34,7 +34,6 @@ import { LEAK_PRESETS, blendLeakPresets } from "./lib/waterfallPresets";
 
 import { gridOptimize } from "./lib/optQuick";
 
-import MiniLine from "./components/MiniLine";
 import { describeSegment } from "./lib/segmentNarrative";
 
 import { pocketCoverage } from "./lib/coverage";
@@ -58,7 +57,6 @@ import { explainGaps, topDriver, explainOptimizerResult } from "./lib/explain";
 import InfoTip from "./components/InfoTip";
 
 import ActionCluster from "./components/ActionCluster";
-import { TakeRateDeltaTable } from "./components/TakeRateDeltaTable";
 import DataImport from "./components/DataImport";
 import SalesImport from "./components/SalesImport";
 import Modal from "./components/Modal";
@@ -70,8 +68,10 @@ import { csvTemplate } from "./lib/csv";
 import { preflight, fetchWithRetry, apiUrl } from "./lib/net";
 
 import CompareBoard from "./components/CompareBoard";
-import Scorecard from "./components/Scorecard";
-import CalloutsSnapshot from "./components/CalloutsSnapshot";
+import { ScorecardCallouts } from "./components/ScorecardCallouts";
+import { TakeRateSection } from "./components/TakeRateSection";
+import { CohortSection } from "./components/CohortSection";
+import { FrontierSection } from "./components/FrontierSection";
 import { kpisFromSnapshot, type SnapshotKPIs } from "./lib/snapshots";
 import { runRobustnessScenarios, type UncertaintyScenario } from "./lib/robustness";
 import { buildTornadoRows, tornadoSignalThreshold, type TornadoValueMode } from "./lib/tornadoView";
@@ -185,38 +185,6 @@ type SaveError = {
 };
 function isSaveError(x: unknown): x is SaveError {
   return !!x && typeof x === "object";
-}
-
-function Section({
-  title,
-  id,
-  actions,
-  children,
-  className = "",
-}: {
-  title: ReactNode;
-  id?: string;
-  actions?: ReactNode;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section
-      id={id}
-      className={`scroll-mt-24 md:scroll-mt-32 rounded-2xl shadow p-3 md:p-4 border border-gray-200 bg-white print-avoid print-card print-pad ${className}`}
-    >
-      <div className="mb-3 print:mb-2 flex flex-wrap items-start gap-3 md:items-center md:justify-between">
-        <h2 className="font-semibold text-lg print:text-base print-tight">{title}</h2>
-        {/* Hide the action toolbar on print */}
-        {actions ? (
-          <div className="no-print flex-1 min-w-60 md:min-w-0 flex flex-wrap justify-end gap-2">
-            {actions}
-          </div>
-        ) : null}
-      </div>
-      <div className="space-y-3 print-space">{children}</div>
-    </section>
-  );
 }
 
 function Explanation({
@@ -413,7 +381,7 @@ export default function App() {
   const [takeRateMode, setTakeRateMode] = useState<"mix" | "delta">("mix");
   const [takeRateSegmentKey, setTakeRateSegmentKey] = useState<"all" | string>("all");
   const [showSegmentBreakdown, setShowSegmentBreakdown] = useState(false);
-  const [segmentBreakdownScenarioKey, setSegmentBreakdownScenarioKey] = useState<string | null>(null);
+  const [segmentBreakdownScenarioKey, setSegmentBreakdownScenarioKey] = useState<string | undefined>(undefined);
 
   // --- Toasts ---
   type Toast = {
@@ -2070,7 +2038,7 @@ export default function App() {
       takeRateContexts.find((c) => c.kind === "optimized")?.key ??
       takeRateContexts.find((c) => c.kind === "current")?.key ??
       takeRateContexts[0]?.key ??
-      null;
+      undefined;
     setSegmentBreakdownScenarioKey(fallback);
   }, [segmentBreakdownScenarioKey, takeRateContexts]);
 
@@ -6200,395 +6168,69 @@ export default function App() {
 
       {/* Right: Charts */}
       <div className="col-span-12 lg:col-span-6 space-y-4 min-w-0">
-          <Section id="scorecard" title="Scorecard">
-            <Scorecard
-              view={scorecardView}
-              hasOptimized={!!optimizedKpis}
-              onChangeView={setScorecardView}
-              onPinBaseline={pinBaselineNow}
-              basis={scorecardVM.basis}
-              kpis={scorecardVM.kpis}
-              run={scorecardVM.run}
-              baselineRun={scorecardVM.baselineRun}
-              activeCustomers={scorecardVM.activeCustomers}
-              baselineActiveCustomers={scorecardVM.baselineActiveCustomers}
-              marginDeltaPP={scorecardVM.marginDeltaPP}
-              guardrails={scorecardVM.guardrails}
-              explain={scorecardVM.explain}
-              band={scorecardBand}
-            />
-          </Section>
+          <ScorecardCallouts
+            scorecardView={scorecardView}
+            hasOptimized={!!optimizedKpis}
+            onChangeView={setScorecardView}
+            onPinBaseline={pinBaselineNow}
+            scorecardVM={scorecardVM}
+            scorecardBand={scorecardBand}
+            callouts={{
+              hasResult: !!optResult,
+              basisLabel: optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit",
+              ladderLabel: optResult
+                ? `Ladder ${optResult.prices.good}/${optResult.prices.better}/${optResult.prices.best}`
+                : "",
+              delta: explainDeltaOptimized,
+              fallbackNarrative: scorecardVM.explain,
+              guardrails: guardrailsForOptimized,
+              optimizerWhyLines,
+            }}
+          />
 
-          <Section id="callouts" title="Callouts snapshot">
-            <CalloutsSnapshot
-              hasResult={!!optResult}
-              basisLabel={optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}
-              ladderLabel={
-                optResult
-                  ? `Ladder ${optResult.prices.good}/${optResult.prices.better}/${optResult.prices.best}`
-                  : ""
-              }
-              delta={explainDeltaOptimized}
-              fallbackNarrative={scorecardVM.explain}
-              guardrails={guardrailsForOptimized}
-              optimizerWhyLines={optimizerWhyLines}
-            />
-          </Section>
-
-          <Section
-            id="profit-frontier"
-            title="Profit Frontier"
-            className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
+          <FrontierSection
+            frontierViewModel={frontierViewModel}
+            frontierSummary={frontierSummary}
+            frontierTier={frontierTier}
+            setFrontierTier={setFrontierTier}
+            frontierCompareCharm={frontierCompareCharm}
+            setFrontierCompareCharm={setFrontierCompareCharm}
+            usePocketProfit={!!optConstraints.usePocketProfit}
+            frontierSweep={frontierSweep}
             actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
-          >
-            <Explanation slot="chart.profitFrontier">
-              Frontier sweeps the selected tier across its scenario/optimizer range and holds the other tiers fixed. Markers show Baseline/Current/Optimized prices; infeasible points flag where gaps/margins fail. Use this to sanity-check before or after running the optimizer.
-            </Explanation>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700 mb-2">
-            <label className="flex items-center gap-1">
-              Sweep tier
-              <select
-                className="border rounded px-2 h-7 bg-white"
-                value={frontierTier}
-                onChange={(e) => setFrontierTier(e.target.value as Tier)}
-              >
-                <option value="good">Good</option>
-                <option value="better">Better</option>
-                <option value="best">Best</option>
-              </select>
-            </label>
-            <label className="flex items-center gap-1">
-              Charm comparison
-              <input
-                type="checkbox"
-                checked={frontierCompareCharm}
-                onChange={(e) => setFrontierCompareCharm(e.target.checked)}
-                className="h-4 w-4"
-              />
-              <span className="text-[11px] text-slate-600">
-                Compare {optConstraints.charm ? "with vs without .99" : "without vs with .99"}
-              </span>
-            </label>
-          </div>
-          {frontierSummary && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm text-slate-800">
-              {frontierSummary.headline}
-              <div className="mt-1 text-[11px] text-slate-600">
-                Feasible points: {frontierSummary.feasibility.feasibleCount.toLocaleString()}{" "}
-                {frontierSummary.feasibility.infeasibleCount
-                  ? `(infeasible flagged: ${frontierSummary.feasibility.infeasibleCount.toLocaleString()})`
-                  : ""}
-              </div>
-            </div>
-          )}
-          <div className="text-[11px] text-slate-600">
-            Basis: {optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}; sweep {frontierTier} from ${frontierSweep.min.toFixed(2)} to ${frontierSweep.max.toFixed(2)} (step {frontierSweep.step >= 1 ? frontierSweep.step.toFixed(0) : frontierSweep.step.toFixed(2)}).
-            Constraints (gaps/floors) are shown as feasible (green) vs infeasible (gray). If points are sparse, widen the scenario ranges or relax guardrails.
-            <InfoTip id="frontier.overlay" ariaLabel="About frontier feasibility overlay" />
-          </div>
-            <Suspense fallback={ <div className="text-xs text-gray-500 p-2"> Loading frontier... </div>} >
-              <ErrorBoundary title="Frontier chart failed">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-slate-700">Profit frontier</h3>
-                  <InfoTip
-                    className="ml-1"
-                    align="right"
-                    id="chart.frontier"
-                    ariaLabel="What does the Profit Frontier chart show?"
-                  />
-                </div>
-                <FrontierChartReal
-                  chartId="frontier-main"
-                  viewModel={frontierViewModel}
-                />
-              </ErrorBoundary>
-            </Suspense>
-          </Section>
+            FrontierChartComponent={FrontierChartReal}
+          />
 
-          <Section
-            id="take-rate"
-            title="Take-Rate Bars"
-            className="overflow-hidden print:bg-white print:shadow-none print:h-auto"
-            actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
-          >
-          <Explanation slot="chart.takeRate">
-            Take-rate bars show predicted mix across None/Good/Better/Best given current prices, features, segments, and reference prices. Baseline/current/optimized sit side by side so you can narrate how mix shifts; "None" is the outside option.
-          </Explanation>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-            <span>Demand-only view: leakages and guardrails do not apply here. Use delta view or the table for small differences.</span>
-              {takeRateSummary?.baselineLabel && (
-                <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
-                  Baseline: {takeRateSummary.baselineLabel}
-                </span>
-              )}
-                <div className="ml-auto flex items-center gap-2 text-xs">
-                  <span>View</span>
-                  <div className="inline-flex overflow-hidden rounded border">
-                    <button
-                      type="button"
-                    className={`px-2 h-7 ${takeRateMode === "mix" ? "bg-gray-900 text-white" : "bg-white"}`}
-                    onClick={() => setTakeRateMode("mix")}
-                  >
-                    Mix
-                  </button>
-                  <button
-                    type="button"
-                    className={`px-2 h-7 ${
-                      takeRateMode === "delta" ? "bg-gray-900 text-white" : "bg-white"
-                    } ${!takeRateBaselineKey ? "opacity-50 cursor-not-allowed" : ""}`}
-                    onClick={() => takeRateBaselineKey && setTakeRateMode("delta")}
-                    disabled={!takeRateBaselineKey}
-                    >
-                      Delta vs baseline
-                    </button>
-                  </div>
-                  <InfoTip id="takeRate.bars" ariaLabel="How take-rate bars are computed" />
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 text-xs">
-                <label className="flex items-center gap-2 font-medium text-slate-700">
-                  <span>Segment scope (top 3)</span>
-                  <select
-                    className="h-8 rounded border px-2 bg-white"
-                    value={takeRateSegmentKey}
-                    onChange={(e) => setTakeRateSegmentKey(e.target.value)}
-                    disabled={!takeRateSegmentOptions.length}
-                  >
-                    <option value="all">All segments</option>
-                    {takeRateSegmentOptions.map((opt) => (
-                      <option key={opt.key} value={opt.key}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <span className="text-[11px] text-slate-500">
-                  {selectedSegmentLabel
-                    ? `Filtering mix for ${selectedSegmentLabel}; active counts scale by that segment's weight.`
-                    : "Aggregated across all segments."}
-                </span>
-                <label className="flex items-center gap-2 font-medium text-slate-700">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={showSegmentBreakdown}
-                    onChange={(e) => setShowSegmentBreakdown(e.target.checked)}
-                  />
-                  Breakdown by segment (top 3)
-                </label>
-                {showSegmentBreakdown && (
-                  <label className="flex items-center gap-2 text-[11px]">
-                    <span>Scenario</span>
-                    <select
-                      className="h-8 rounded border px-2 bg-white"
-                      value={segmentBreakdownScenarioKey ?? ""}
-                      onChange={(e) => setSegmentBreakdownScenarioKey(e.target.value)}
-                    >
-                      {takeRateContexts.map((ctx) => (
-                        <option key={ctx.key} value={ctx.key}>
-                          {ctx.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-              </div>
 
-              {takeRateSummary ? (
-                <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm text-slate-800">
-                  <div className="font-semibold">{takeRateSummary.headline}</div>
-                  <div className="text-[11px] text-slate-600 mt-0.5">{takeRateSummary.detail}</div>
-                </div>
-              ) : (
-              <div className="rounded border border-dashed border-slate-300 bg-slate-50/60 px-3 py-2 text-sm text-slate-600">
-                Pin a baseline (preset or optimizer run) to see mix deltas.
-              </div>
-            )}
+          <TakeRateSection
+            scenarios={takeRateScenarios}
+            summary={takeRateSummary}
+            segmentOptions={takeRateSegmentOptions}
+            takeRateMode={takeRateMode}
+            setTakeRateMode={setTakeRateMode}
+            takeRateBaselineKey={takeRateBaselineKey}
+            takeRateSegmentKey={takeRateSegmentKey}
+            setTakeRateSegmentKey={setTakeRateSegmentKey}
+            segmentBreakdownEnabled={showSegmentBreakdown}
+            setSegmentBreakdownEnabled={setShowSegmentBreakdown}
+            segmentBreakdownScenarioKey={segmentBreakdownScenarioKey}
+            setSegmentBreakdownScenarioKey={setSegmentBreakdownScenarioKey}
+            segmentBreakdownScenarios={segmentBreakdownScenarios}
+            segmentScenarioOptions={takeRateContexts.map((c) => ({ key: c.key, label: c.label }))}
+            selectedSegmentLabel={selectedSegmentLabel}
+          />
 
-            <Suspense
-              fallback={
-                <div className="text-xs text-gray-500 p-2">Loading bars...</div>
-              }
-            >
-              <ErrorBoundary title="Take-Rate chart failed">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-slate-700">Take-rate mix</h3>
-                  <InfoTip
-                    className="ml-1"
-                    align="right"
-                    id="chart.takeRate"
-                    ariaLabel="How should I read take-rate bars?"
-                  />
-                </div>
-                  <TakeRateChart
-                    chartId="takerate-main"
-                    scenarios={takeRateScenarios}
-                    baselineKey={takeRateBaselineKey}
-                    mode={takeRateMode}
-                  />
-                </ErrorBoundary>
-              </Suspense>
-              {showSegmentBreakdown && (
-                <div className="rounded border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-semibold text-slate-700">
-                      Segment mix by tier (
-                      {segmentBreakdownScenarioKey
-                        ? takeRateContexts.find((c) => c.key === segmentBreakdownScenarioKey)?.label ?? "Scenario"
-                        : "Scenario"}
-                      )
-                    </div>
-                    <InfoTip
-                      id="takeRate.segmentBreakdown"
-                      ariaLabel="Segment-level take-rate mix for the selected scenario"
-                      align="right"
-                    />
-                  </div>
-                  {segmentBreakdownScenarios.length > 0 ? (
-                    <TakeRateChart
-                      chartId="takerate-segment-breakdown"
-                      scenarios={segmentBreakdownScenarios}
-                      mode="mix"
-                    />
-                  ) : (
-                    <div className="text-xs text-slate-500">No segment breakdown available.</div>
-                  )}
-                </div>
-              )}
-              {takeRateScenarios.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
-                  {takeRateScenarios.map((s) => (
-                    <div key={s.key} className="rounded border border-slate-200 bg-white px-2.5 py-2 shadow-sm">
-                      <div className="font-semibold text-slate-900">{s.label}</div>
-                      <div className="text-[11px] text-slate-600">
-                        Active: {s.active.toLocaleString()} (N={(s.population ?? N).toLocaleString()})
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            {takeRateBaselineKey && takeRateScenarios.length > 1 && (
-              <div className="mt-2">
-                <TakeRateDeltaTable scenarios={takeRateScenarios} baselineKey={takeRateBaselineKey} />
-              </div>
-            )}
-          </Section>
-
-          <Section
-            id="cohort-rehearsal"
-            title="Cohort rehearsal"
-          actions={<ActionCluster chart="cohort" id="cohort-curve" csv />}
-          >
-            <Explanation slot="chart.cohort">
-              Cohort rehearsal simulates pocket margin on a shrinking cohort. Overlay Baseline/Current/Optimized to see whether lift holds past month 1; adjust retention/horizon to stress churn vs contribution.
-            </Explanation>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs">
-                <label className="font-medium">Monthly retention</label>
-                <InfoTip id="cohort.retention" ariaLabel="What does monthly retention do?" />
-                <input
-                  type="range"
-                  min={70}
-                  max={99.9}
-                  step={0.1}
-                  value={retentionPct}
-                  onChange={(e) => setRetentionPct(Number(e.target.value))}
-                />
-                <input
-                  type="number"
-                  step={0.1}
-                  min={70}
-                  max={99.9}
-                  value={retentionPct}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    if (!Number.isFinite(v)) return;
-                    setRetentionPct(Math.min(99.9, Math.max(70, v)));
-                  }}
-                  className="w-16 h-7 border rounded px-2"
-                />
-                <span>%</span>
-                <span className="text-gray-500 ml-2">
-                  (churn ~ {(100 - retentionPct).toFixed(1)}%/mo)
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs">
-                <button
-                  type="button"
-                  className="underline text-slate-600"
-                  onClick={() => setShowCohortAdvanced((v) => !v)}
-                >
-                  {showCohortAdvanced ? "Hide advanced" : "Advanced"}
-                </button>
-                {showCohortAdvanced && (
-                  <label className="flex items-center gap-2">
-                    Horizon
-                    <select
-                      className="border rounded px-2 h-8 bg-white"
-                      value={retentionMonths}
-                      onChange={(e) =>
-                        setRetentionMonths(Math.min(24, Math.max(6, Number(e.target.value))))
-                      }
-                    >
-                      <option value={6}>6 months</option>
-                      <option value={12}>12 months</option>
-                      <option value={18}>18 months</option>
-                      <option value={24}>24 months</option>
-                    </select>
-                  </label>
-                )}
-              </div>
-            </div>
-
-            {cohortSummaryCards.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {cohortSummaryCards.map((c) => (
-                  <div
-                    key={c.key}
-                    className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm shadow-sm"
-                  >
-                    <div className="text-[11px] uppercase text-slate-600">{c.label}</div>
-                    <div className="text-lg font-semibold text-slate-900">
-                      ${Math.round(c.total).toLocaleString()}
-                    </div>
-                    <div className="text-[11px] text-slate-600">
-                      Month {retentionMonths}: ${Math.round(c.monthEnd).toLocaleString()}
-                    </div>
-                    {c.deltaTotal !== null && (
-                      <div
-                        className={`text-[11px] font-medium ${
-                          (c.deltaTotal ?? 0) >= 0 ? "text-emerald-700" : "text-rose-700"
-                        }`}
-                      >
-                        {(c.deltaTotal ?? 0) >= 0 ? "+" : "-"}$
-                        {Math.abs(Math.round(c.deltaTotal ?? 0)).toLocaleString()} vs baseline
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded border border-dashed border-slate-300 bg-slate-50/60 px-3 py-2 text-sm text-slate-600">
-                Pin a baseline or run the optimizer to compare cohort decay.
-              </div>
-            )}
-
-            {cohortScenarios.length > 0 && (
-              <div className="mt-2">
-                <MiniLine
-                  title={`Pocket margin by cohort month (retention ${retentionPct.toFixed(1)}%, horizon ${retentionMonths}m)`}
-                  series={cohortScenarios.map((c) => ({
-                    label: c.label,
-                    x: c.points.map((p) => p.month),
-                    y: c.points.map((p) => p.margin),
-                  }))}
-                  chartId="cohort-curve"
-                  exportKind="cohort"
-                />
-              </div>
-            )}
-          </Section>
+          <CohortSection
+            retentionPct={retentionPct}
+            setRetentionPct={setRetentionPct}
+            retentionMonths={retentionMonths}
+            setRetentionMonths={setRetentionMonths}
+            showAdvanced={showCohortAdvanced}
+            setShowAdvanced={setShowCohortAdvanced}
+            cohortSummaryCards={cohortSummaryCards}
+            cohortScenarios={cohortScenarios}
+            actions={<ActionCluster chart="cohort" id="cohort-curve" csv />}
+          />
 
           <Section
             id="tornado"
