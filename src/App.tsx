@@ -82,6 +82,8 @@ import {
   buildTornadoViewModel,
   buildScorecardViewModel,
   buildCohortViewModel,
+  formatBaselineLabel,
+  buildGuardrailSummary,
 } from "./lib/viewModels";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
@@ -117,16 +119,6 @@ type BaselineMeta = {
   label: string;
   savedAt: number;
 };
-function formatBaselineLabel(meta: BaselineMeta | null): string {
-  if (!meta) return "Pinned on load";
-  const formatted = new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(meta.savedAt));
-  return `${meta.label} - ${formatted}`;
-}
 const ROBUST_SCENARIOS: UncertaintyScenario[] = [
   { name: "Base", segmentScalePrice: 1 },
   { name: "More price sensitive", segmentScalePrice: 1.2, leakDeltaPct: 0.05 },
@@ -412,20 +404,11 @@ export default function App() {
   const [adjustSubTab, setAdjustSubTab] = useState<
     "sliders" | "segments" | "leakages"
   >("sliders");
-  const [scenarioBaseline, setScenarioBaseline] = useStickyState<
-    {
-      snapshot: ReturnType<typeof buildScenarioSnapshot>;
-      kpis: SnapshotKPIs;
-      basis: { usePocketProfit: boolean; usePocketMargins: boolean };
-      meta: BaselineMeta;
-    } | null
-  >("po:scenario-baseline-v2", null);
-
-  // Baseline KPIs for the "Tell me what changed" panel (derived from scenarioBaseline for backward compatibility)
-  const [baselineMeta, setBaselineMeta] = useState<BaselineMeta | null>(null);
-  const [baselineRun, setBaselineRun] = useState<ScenarioRun | null>(null);
+  // Persist baseline run directly; deprecated scenarioBaseline is migrated on first load.
+  const [baselineRun, setBaselineRun] = useStickyState<ScenarioRun | null>("po:baseline-run-v1", null);
   const [optimizedRun, setOptimizedRun] = useState<ScenarioRun | null>(null);
   const [scenarioUncertainty, setScenarioUncertainty] = useState<ScenarioUncertainty | null>(null);
+  const baselineMeta = baselineRun?.meta ?? null;
   const [scorecardView, setScorecardView] = useState<"current" | "optimized">("current");
   const [takeRateMode, setTakeRateMode] = useState<"mix" | "delta">("mix");
   const [takeRateSegmentKey, setTakeRateSegmentKey] = useState<"all" | string>("all");
@@ -1814,7 +1797,7 @@ export default function App() {
     () => optResult?.kpis ?? null,
     [optResult?.kpis]
   );
-  const baselineKpis = baselineRun?.kpis ?? scenarioBaseline?.kpis ?? null;
+  const baselineKpis = baselineRun?.kpis ?? null;
   const optimizedKpis = optimizedRun?.kpis ?? optimizedKPIs;
 
   const buildExplainDelta = useCallback(
@@ -1910,38 +1893,25 @@ export default function App() {
     [buildExplainDelta, optimizedKpis]
   );
 
-  const buildGuardrailSummary = useCallback(
-    (activePrices: Prices, overrides?: { constraints?: Constraints; ranges?: SearchRanges; hasOptimizer?: boolean }) => {
-      const constraints = overrides?.constraints ?? optConstraints;
-      const ranges = overrides?.ranges ?? optRanges;
-      const gapNotes = explainGaps(activePrices, {
-        gapGB: constraints.gapGB,
-        gapBB: constraints.gapBB,
-      });
-      const gapLine = gapNotes.length
-        ? gapNotes[0]
-        : `Gaps slack: ${(activePrices.better - activePrices.good - constraints.gapGB).toFixed(2)} / ${(activePrices.best - activePrices.better - constraints.gapBB).toFixed(2)} (G/B, B/Best)`;
-      const floorLine = `Floors: Good ${Math.round(constraints.marginFloor.good * 100)}% | Better ${Math.round(
-        constraints.marginFloor.better * 100
-      )}% | Best ${Math.round(constraints.marginFloor.best * 100)}%`;
-      const optimizerReady = overrides?.hasOptimizer ?? Boolean(optResult?.prices);
-      const optimizerLine = optimizerReady
-        ? `Optimizer ready - ranges ${ranges.good[0]}-${ranges.good[1]} / ${ranges.better[0]}-${ranges.better[1]} / ${ranges.best[0]}-${ranges.best[1]}`
-        : "Set ranges and floors, then run the optimizer";
-      return { gapLine, floorLine, optimizerLine };
-    },
-    [optConstraints, optRanges, optResult]
-  );
-
-  const guardrailsForCurrent = useMemo(() => buildGuardrailSummary(prices), [buildGuardrailSummary, prices]);
-  const guardrailsForOptimized = useMemo(
+  const guardrailsForCurrent = useMemo(
     () =>
-      buildGuardrailSummary(optResult?.prices ?? prices, {
-        constraints: optResult?.context?.constraints,
-        ranges: optResult?.context?.ranges,
+      buildGuardrailSummary({
+        activePrices: prices,
+        constraints: optConstraints,
+        ranges: optRanges,
         hasOptimizer: Boolean(optResult?.prices),
       }),
-    [buildGuardrailSummary, optResult, prices]
+    [optConstraints, optRanges, optResult?.prices, prices]
+  );
+  const guardrailsForOptimized = useMemo(
+    () =>
+      buildGuardrailSummary({
+        activePrices: optResult?.prices ?? prices,
+        constraints: optResult?.context?.constraints ?? optConstraints,
+        ranges: optResult?.context?.ranges ?? optRanges,
+        hasOptimizer: Boolean(optResult?.prices),
+      }),
+    [optConstraints, optRanges, optResult?.context?.constraints, optResult?.context?.ranges, optResult?.prices, prices]
   );
 
   const scorecardVM = useMemo(
@@ -1957,6 +1927,10 @@ export default function App() {
         N,
         guardrailsCurrent: guardrailsForCurrent,
         guardrailsOptimized: guardrailsForOptimized,
+        activeUsePocketProfit:
+          scorecardView === "optimized"
+            ? Boolean(optResult?.context?.usePocketProfit ?? optConstraints.usePocketProfit)
+            : Boolean(optConstraints.usePocketProfit),
       }),
     [
       baselineRun,
@@ -1969,6 +1943,8 @@ export default function App() {
       optimizedKpis,
       optimizedRun,
       scorecardView,
+      optConstraints.usePocketProfit,
+      optResult?.context?.usePocketProfit,
     ]
   );
 
@@ -2017,20 +1993,6 @@ export default function App() {
         segments: coerceSegmentsForCalc(baselineRun.segments, segments),
         N,
         kpis: baselineRun.kpis,
-      });
-    } else if (baselineKpis) {
-      const snap = scenarioBaseline?.snapshot;
-      const snapSegments = coerceSegmentsForCalc(snap?.segments, segments);
-      list.push({
-        key: "baseline",
-        label: baselineMeta ? formatBaselineLabel(baselineMeta) : "Baseline (pinned)",
-        kind: "baseline",
-        prices: snap?.prices ?? baselineKpis.prices,
-        features: snap?.features ?? features,
-        refPrices: snap?.refPrices ?? refPrices,
-        segments: snapSegments,
-        N,
-        kpis: baselineKpis,
       });
     }
 
@@ -2091,7 +2053,6 @@ export default function App() {
     optimizedRun,
     prices,
     refPrices,
-    scenarioBaseline?.snapshot,
     segments,
   ]);
 
@@ -2313,7 +2274,7 @@ export default function App() {
   // --- Cohort rehearsal scenarios (baseline/current/optimized) ---
   const { scenarios: cohortScenarios, summaries: cohortSummaryCards } = useMemo(() => {
     const baselineLabel =
-      baselineMeta && baselineRun?.meta
+      baselineRun?.meta
         ? formatBaselineLabel({ label: baselineRun.meta.label, savedAt: baselineRun.meta.savedAt })
         : baselineMeta
         ? formatBaselineLabel(baselineMeta)
@@ -2326,14 +2287,6 @@ export default function App() {
             prices: baselineRun.ladder,
             leak: baselineRun.leak,
             costs: baselineRun.costs,
-          }
-        : baselineKpis
-        ? {
-            label: baselineLabel,
-            kpis: baselineKpis,
-            prices: scenarioBaseline?.snapshot?.prices ?? prices,
-            leak: scenarioBaseline?.snapshot?.leak ?? leak,
-            costs: scenarioBaseline?.snapshot?.costs ?? costs,
           }
         : null;
 
@@ -2350,7 +2303,7 @@ export default function App() {
 
     const currentInfo = currentKPIs
       ? {
-          label: baselineKpis ? "Current" : "Current (unpinned)",
+          label: baselineRun ? "Current" : "Current (unpinned)",
           kpis: currentKPIs,
           prices,
           leak,
@@ -2378,9 +2331,6 @@ export default function App() {
     prices,
     retentionMonths,
     retentionPct,
-    scenarioBaseline?.snapshot?.costs,
-    scenarioBaseline?.snapshot?.leak,
-    scenarioBaseline?.snapshot?.prices,
   ]);
 
   // --- Frontier markers & summary ---
@@ -2969,6 +2919,54 @@ export default function App() {
     };
   }, []);
 
+  // Migrate legacy stored baseline snapshot to the new baselineRun store.
+  useEffect(() => {
+    if (baselineRun) return;
+    try {
+      const raw = localStorage.getItem("po:scenario-baseline-v2");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        snapshot?: ReturnType<typeof buildScenarioSnapshot>;
+        kpis?: SnapshotKPIs;
+        basis?: { usePocketProfit?: boolean; usePocketMargins?: boolean };
+        meta?: BaselineMeta;
+      };
+      if (!parsed?.snapshot || !parsed?.kpis || !parsed?.meta) return;
+      const snap = parsed.snapshot;
+      const basis = {
+        usePocketProfit: !!parsed.basis?.usePocketProfit,
+        usePocketMargins: !!parsed.basis?.usePocketMargins,
+      };
+      const run = makeScenarioRun({
+        scenarioId: scenarioPresetId ?? "custom",
+        ladder: snap.prices,
+        costs: snap.costs ?? costs,
+        leak: snap.leak ?? leak,
+        refPrices: snap.refPrices ?? refPrices,
+        features: snap.features ?? features,
+        segments: snap.segments ? mapNormalizedToUI(snap.segments as SegmentNested[]) : segments,
+        basis,
+        kpis: parsed.kpis,
+        uncertainty: scenarioUncertainty ?? undefined,
+        meta: { label: parsed.meta.label, savedAt: parsed.meta.savedAt, source: "baseline" },
+      });
+      setBaselineRun(run);
+    } catch {
+      // ignore malformed legacy data
+    }
+  }, [
+    baselineRun,
+    costs,
+    features,
+    leak,
+    mapNormalizedToUI,
+    refPrices,
+    scenarioPresetId,
+    segments,
+    scenarioUncertainty,
+    setBaselineRun,
+  ]);
+
   // --- Import guard for JSON ---
   type ScenarioImport = ReturnType<typeof buildScenarioSnapshot>;
   function isScenarioImport(x: unknown): x is ScenarioImport {
@@ -3025,140 +3023,54 @@ export default function App() {
 
   // Initialize baseline once on first render (after helpers are defined)
   useEffect(() => {
-    if (scenarioBaseline && scenarioBaseline.kpis && !baselineRun) {
-      setBaselineMeta(scenarioBaseline.meta);
-      const snap = scenarioBaseline.snapshot;
-      const snapSegments = snap.segments ? mapNormalizedToUI(snap.segments as SegmentNested[]) : segments;
-      const basis = {
-        usePocketProfit: !!scenarioBaseline.basis?.usePocketProfit,
-        usePocketMargins: !!scenarioBaseline.basis?.usePocketMargins,
-      };
-      const run = makeScenarioRun({
+    if (baselineRun || !currentKPIs) return;
+    const meta = { label: "Pinned on load", savedAt: Date.now() };
+    const basis = {
+      usePocketProfit: !!optConstraints.usePocketProfit,
+      usePocketMargins: !!optConstraints.usePocketMargins,
+    };
+    setBaselineRun(
+      makeScenarioRun({
         scenarioId: scenarioPresetId ?? "custom",
-        ladder: snap.prices,
-        costs: snap.costs ?? costs,
-        leak: snap.leak ?? leak,
-        refPrices: snap.refPrices ?? refPrices,
-        features: snap.features ?? features,
-        segments: snapSegments,
-        basis,
-        kpis: scenarioBaseline.kpis,
-        uncertainty: scenarioUncertainty ?? undefined,
-        meta: { label: scenarioBaseline.meta.label, savedAt: scenarioBaseline.meta.savedAt, source: "baseline" },
-      });
-      setBaselineRun(run);
-      return;
-    }
-    if (!baselineRun && currentKPIs) {
-      const meta = { label: "Pinned on load", savedAt: Date.now() };
-      const snap = buildScenarioSnapshot({
-        prices,
+        ladder: prices,
         costs,
-        features,
-        refPrices,
         leak,
+        refPrices,
+        features,
         segments,
-        tornadoPocket,
-        tornadoPriceBump,
-        tornadoPctBump,
-        tornadoRangeMode,
-        tornadoMetric,
-        tornadoValueMode,
-        retentionPct,
-        retentionMonths,
-        kpiFloorAdj,
-        priceRange: priceRangeState,
-        optRanges,
-        optConstraints,
-        channelMix,
-        optimizerKind,
-      });
-      const basis = {
-        usePocketProfit: !!optConstraints.usePocketProfit,
-        usePocketMargins: !!optConstraints.usePocketMargins,
-      };
-      setBaselineMeta(meta);
-      setScenarioBaseline({
-        snapshot: snap,
-        kpis: currentKPIs,
         basis,
-        meta,
-      });
-      setBaselineRun(
-        makeScenarioRun({
-          scenarioId: scenarioPresetId ?? "custom",
-          ladder: prices,
-          costs,
-          leak,
-          refPrices,
-          features,
-          segments,
-          basis,
-          kpis: currentKPIs,
-          uncertainty: scenarioUncertainty ?? undefined,
-          meta: { label: meta.label, savedAt: meta.savedAt, source: "baseline" },
-        })
-      );
-    }
-  }, [baselineRun, currentKPIs, scenarioBaseline, buildScenarioSnapshot, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, setScenarioBaseline, optimizerKind, scenarioPresetId, scenarioUncertainty, mapNormalizedToUI]);
-
-  // Derive scenarioBaseline from the run if we have one and the stored snapshot is missing or outdated.
-  useEffect(() => {
-    if (!baselineRun) return;
-    const existing = scenarioBaseline;
-    const needsUpdate = !existing || existing.meta.savedAt !== baselineRun.meta.savedAt;
-    if (!needsUpdate) return;
-    const snap = buildScenarioSnapshot({
-      prices: baselineRun.ladder,
-      costs: baselineRun.costs,
-      features: baselineRun.features,
-      refPrices: baselineRun.refPrices ?? refPrices,
-      leak: baselineRun.leak,
-      segments: baselineRun.segments,
-      tornadoPocket,
-      tornadoPriceBump,
-      tornadoPctBump,
-      tornadoRangeMode,
-      tornadoMetric,
-      tornadoValueMode,
-      retentionPct,
-      retentionMonths,
-      kpiFloorAdj,
-      priceRange: priceRangeState,
-      optRanges,
-      optConstraints,
-      channelMix,
-      optimizerKind,
-    });
-      setScenarioBaseline({
-        snapshot: snap,
-        kpis: baselineRun.kpis,
-        basis: {
-          usePocketProfit: !!baselineRun.basis?.usePocketProfit,
-          usePocketMargins: !!baselineRun.basis?.usePocketMargins,
-        },
-        meta: baselineRun.meta,
-      });
+        kpis: currentKPIs,
+        uncertainty: scenarioUncertainty ?? undefined,
+        meta: { label: meta.label, savedAt: meta.savedAt, source: "baseline" },
+      })
+    );
   }, [
     baselineRun,
+    buildScenarioSnapshot,
     channelMix,
+    costs,
+    currentKPIs,
+    features,
     kpiFloorAdj,
+    leak,
     optConstraints,
     optRanges,
     optimizerKind,
     priceRangeState,
+    prices,
     refPrices,
     retentionMonths,
     retentionPct,
-    scenarioBaseline,
-    setScenarioBaseline,
+    scenarioPresetId,
+    scenarioUncertainty,
+    segments,
+    setBaselineRun,
     tornadoMetric,
     tornadoPocket,
     tornadoPriceBump,
     tornadoPctBump,
     tornadoRangeMode,
     tornadoValueMode,
-    buildScenarioSnapshot,
   ]);
 
 
@@ -3627,16 +3539,6 @@ export default function App() {
     return () => observer.disconnect();
   }, [NAV_SECTIONS]);
 
-  const scorecardBaselineText = formatBaselineLabel(baselineMeta);
-  const scorecardPinnedBasis = scenarioBaseline?.basis
-    ? scenarioBaseline.basis.usePocketProfit
-      ? "Pocket (after leakages)"
-      : "List (before leakages)"
-    : "Not pinned yet";
-  const scorecardActiveBasis = optConstraints.usePocketProfit
-    ? "Pocket profit (after leakages)"
-    : "List profit (before leakages)";
-
   const scorecardBand = useMemo<ScorecardBand | null>(() => {
     if (!scenarioUncertainty) return null;
     const priceDelta = scenarioUncertainty.priceScaleDelta ?? 0;
@@ -3767,16 +3669,6 @@ export default function App() {
         merged.optConstraints.usePocketMargins ?? !!merged.optConstraints.usePocketProfit
       );
       const meta = { label, savedAt: Date.now() };
-      setBaselineMeta(meta);
-      setScenarioBaseline({
-        snapshot: buildScenarioSnapshot(merged),
-        kpis,
-        basis: {
-          usePocketProfit: !!merged.optConstraints.usePocketProfit,
-          usePocketMargins: !!merged.optConstraints.usePocketMargins,
-        },
-        meta,
-      });
       setBaselineRun(
         makeScenarioRun({
           scenarioId: scenarioPresetId ?? "custom",
@@ -3800,7 +3692,7 @@ export default function App() {
         toast(kind, opts?.toastMessage ?? "Baseline pinned");
       }
     },
-    [prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, setScenarioBaseline, buildScenarioSnapshot, toast, scenarioPresetId, scenarioUncertainty]
+    [prices, costs, features, refPrices, leak, setBaselineRun, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, toast, scenarioPresetId, scenarioUncertainty]
   );
 
   const pinBaselineNow = () => {
@@ -5194,16 +5086,6 @@ export default function App() {
                           uncertainty: scenarioUncertainty ?? undefined,
                           meta: { label: meta.label, savedAt: meta.savedAt, source: "baseline" },
                         });
-                        setScenarioBaseline({
-                          snapshot,
-                          kpis,
-                          basis: {
-                            usePocketProfit: !!optConstraints.usePocketProfit,
-                            usePocketMargins: !!optConstraints.usePocketMargins,
-                          },
-                          meta,
-                        });
-                        setBaselineMeta(meta);
                         setBaselineRun(run);
                         toast("success", "Saved scenario baseline");
                       } else {
@@ -5214,8 +5096,8 @@ export default function App() {
                     Re-pin baseline now
                   </button>
                   <div className="text-xs text-gray-600">
-                    {scenarioBaseline
-                      ? `Baseline saved ${new Date(scenarioBaseline.meta.savedAt).toLocaleString()}`
+                    {baselineRun
+                      ? `Baseline saved ${new Date(baselineRun.meta.savedAt).toLocaleString()}`
                       : "No scenario baseline saved yet."}
                   </div>
                   <p className="basis-full text-[11px] text-slate-600">
@@ -6187,28 +6069,6 @@ export default function App() {
                                 if (!optResult?.kpis) return;
                                 const meta = { label: "Pinned from optimizer", savedAt: Date.now() };
                                 const ctx = optResult.context;
-                                const snapshot = buildScenarioSnapshot({
-                                  prices: optResult.prices,
-                                  costs: ctx.costs,
-                                  features: ctx.features,
-                                  refPrices: ctx.refPrices,
-                                  leak: ctx.leak,
-                                  segments: ctx.segments,
-                                  tornadoPocket,
-                                  tornadoPriceBump,
-                                  tornadoPctBump,
-                                  tornadoRangeMode,
-                                  tornadoMetric,
-                                  tornadoValueMode,
-                                  retentionPct,
-                                  retentionMonths,
-                                  kpiFloorAdj,
-                                  priceRange: priceRangeState,
-                                  optRanges: ctx.ranges ?? optRanges,
-                                  optConstraints: ctx.constraints ?? optConstraints,
-                                  channelMix,
-                                  optimizerKind,
-                                });
                                 const run = makeScenarioRun({
                                   scenarioId: scenarioPresetId ?? "custom",
                                   ladder: optResult.prices,
@@ -6224,16 +6084,6 @@ export default function App() {
                                   kpis: optResult.kpis,
                                   uncertainty: scenarioUncertainty ?? undefined,
                                   meta: { label: meta.label, savedAt: meta.savedAt, source: "baseline" },
-                                });
-                                setBaselineMeta(meta);
-                                setScenarioBaseline({
-                                  snapshot,
-                                  kpis: optResult.kpis,
-                                  basis: {
-                                    usePocketProfit: !!ctx.usePocketProfit,
-                                    usePocketMargins: !!ctx.usePocketMargins,
-                                  },
-                                  meta,
                                 });
                                 setBaselineRun(run);
                                 toast("success", "Baseline pinned from optimizer");
@@ -6356,11 +6206,7 @@ export default function App() {
               hasOptimized={!!optimizedKpis}
               onChangeView={setScorecardView}
               onPinBaseline={pinBaselineNow}
-              basis={{
-                baseline: scorecardBaselineText,
-                active: scorecardActiveBasis,
-                pinned: scorecardPinnedBasis,
-              }}
+              basis={scorecardVM.basis}
               kpis={scorecardVM.kpis}
               run={scorecardVM.run}
               baselineRun={scorecardVM.baselineRun}

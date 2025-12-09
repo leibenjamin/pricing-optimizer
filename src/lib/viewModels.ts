@@ -7,6 +7,8 @@ import type { SnapshotKPIs } from "./snapshots";
 import type { ScorecardDelta } from "./scorecard";
 import type { Prices } from "./segments";
 import type { Leakages } from "./waterfall";
+import type { Constraints, SearchRanges } from "./optimize";
+import { explainGaps } from "./explain";
 import { simulateCohort } from "./simCohort";
 
 export function buildFrontierViewModel(args: {
@@ -52,6 +54,41 @@ export type ScorecardGuardrails = {
   optimizerLine: string;
 };
 
+export function buildGuardrailSummary(args: {
+  activePrices: Prices;
+  constraints?: Constraints;
+  ranges?: SearchRanges;
+  hasOptimizer?: boolean;
+}): ScorecardGuardrails {
+  const C: Constraints = args.constraints ?? {
+    gapGB: 0,
+    gapBB: 0,
+    marginFloor: { good: 0, better: 0, best: 0 },
+    charm: false,
+  };
+  const ranges: SearchRanges = args.ranges ?? {
+    good: [C.gapGB, C.gapGB],
+    better: [C.gapGB + C.gapBB, C.gapGB + C.gapBB],
+    best: [C.gapGB + C.gapBB, C.gapGB + C.gapBB],
+    step: 0,
+  };
+  const gapNotes = explainGaps(args.activePrices, {
+    gapGB: C.gapGB,
+    gapBB: C.gapBB,
+  });
+  const gapLine = gapNotes.length
+    ? gapNotes[0]
+    : `Gaps slack: ${(args.activePrices.better - args.activePrices.good - C.gapGB).toFixed(2)} / ${(args.activePrices.best - args.activePrices.better - C.gapBB).toFixed(2)} (G/B, B/Best)`;
+  const floorLine = `Floors: Good ${Math.round(C.marginFloor.good * 100)}% | Better ${Math.round(
+    C.marginFloor.better * 100
+  )}% | Best ${Math.round(C.marginFloor.best * 100)}%`;
+  const optimizerReady = args.hasOptimizer ?? false;
+  const optimizerLine = optimizerReady
+    ? `Optimizer ready - ranges ${ranges.good[0]}-${ranges.good[1]} / ${ranges.better[0]}-${ranges.better[1]} / ${ranges.best[0]}-${ranges.best[1]}`
+    : "Set ranges and floors, then run the optimizer";
+  return { gapLine, floorLine, optimizerLine };
+}
+
 export type ScorecardViewModel = {
   kpis: SnapshotKPIs;
   run: ScenarioRun | null;
@@ -61,6 +98,7 @@ export type ScorecardViewModel = {
   marginDeltaPP: number | null;
   explain: ScorecardDelta | null;
   guardrails: ScorecardGuardrails;
+  basis: { baseline: string; active: string; pinned: string };
 };
 
 export function buildScorecardViewModel(args: {
@@ -74,6 +112,7 @@ export function buildScorecardViewModel(args: {
   N: number;
   guardrailsCurrent: ScorecardGuardrails;
   guardrailsOptimized: ScorecardGuardrails;
+  activeUsePocketProfit: boolean;
 }): ScorecardViewModel {
   const baselineKpis = args.baselineRun?.kpis ?? null;
   const activeKpis =
@@ -91,6 +130,15 @@ export function buildScorecardViewModel(args: {
         100
       : null;
   const guardrails = args.view === "optimized" ? args.guardrailsOptimized : args.guardrailsCurrent;
+  const basis = {
+    baseline: formatBaselineLabel(args.baselineRun?.meta ?? null),
+    active: args.activeUsePocketProfit ? "Pocket profit (after leakages)" : "List profit (before leakages)",
+    pinned: args.baselineRun
+      ? args.baselineRun.basis?.usePocketProfit
+        ? "Pocket (after leakages)"
+        : "List (before leakages)"
+      : "Not pinned yet",
+  };
   return {
     kpis: activeKpis,
     run,
@@ -100,6 +148,7 @@ export function buildScorecardViewModel(args: {
     marginDeltaPP,
     explain,
     guardrails,
+    basis,
   };
 }
 
@@ -206,4 +255,15 @@ export function buildCohortViewModel(args: {
   }
 
   return { scenarios, summaries };
+}
+
+export function formatBaselineLabel(meta: { label: string; savedAt: number } | null): string {
+  if (!meta) return "Pinned on load";
+  const formatted = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(meta.savedAt));
+  return `${meta.label} - ${formatted}`;
 }
