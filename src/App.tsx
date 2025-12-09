@@ -78,6 +78,7 @@ import { runRobustnessScenarios, type UncertaintyScenario } from "./lib/robustne
 import { buildTornadoRows, tornadoSignalThreshold, type TornadoValueMode } from "./lib/tornadoView";
 import type { TornadoMetric, Scenario as TornadoScenario } from "./lib/sensitivity";
 import { type ScorecardBand, type ScorecardDelta } from "./lib/scorecard";
+import { buildFrontierViewModel } from "./lib/viewModels";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -1807,11 +1808,8 @@ export default function App() {
     [prices, costs, features, segments, refPrices, leak, N, optConstraints.usePocketProfit, optConstraints.usePocketMargins]
   );
   const optimizedKPIs = useMemo(
-    () => {
-      if (!optResult) return null;
-      return optResult.kpis;
-    },
-    [optResult]
+    () => optResult?.kpis ?? null,
+    [optResult?.kpis]
   );
 
   const buildExplainDelta = useCallback(
@@ -2488,22 +2486,23 @@ export default function App() {
   }, [frontier.base.optimum, frontier.base.feasiblePoints?.length, frontier.base.infeasiblePoints?.length, frontier.base.sweep, frontierMarkers, frontierTier]);
 
   const frontierViewModel = useMemo(
-    () => ({
-      base: {
-        points: frontier.base.points,
-        feasiblePoints: frontier.base.feasiblePoints,
-        infeasiblePoints: frontier.base.infeasiblePoints,
-        optimum: frontier.base.optimum,
-      },
-      alt: frontier.alt
-        ? { label: optConstraints.charm ? "No charm" : "Charm .99", points: frontier.alt.points }
-        : frontierOptimizedSlice
-        ? { label: "Optimized ladder slice", points: frontierOptimizedSlice.points }
-        : undefined,
-      markers: frontierMarkers,
-      xLabel: `${frontierTier[0].toUpperCase()}${frontierTier.slice(1)} price`,
-      scenarioRun: scorecardView === "optimized" ? optimizedRun : baselineRun,
-    }),
+    () =>
+      buildFrontierViewModel({
+        base: {
+          points: frontier.base.points,
+          feasiblePoints: frontier.base.feasiblePoints,
+          infeasiblePoints: frontier.base.infeasiblePoints,
+          optimum: frontier.base.optimum,
+        },
+        alt: frontier.alt
+          ? { label: optConstraints.charm ? "No charm" : "Charm .99", points: frontier.alt.points }
+          : frontierOptimizedSlice
+          ? { label: "Optimized ladder slice", points: frontierOptimizedSlice.points }
+          : undefined,
+        markers: frontierMarkers,
+        xLabel: `${frontierTier[0].toUpperCase()}${frontierTier.slice(1)} price`,
+        run: scorecardView === "optimized" ? optimizedRun : baselineRun,
+      }),
     [
       baselineRun,
       frontier.alt,
@@ -6376,21 +6375,6 @@ export default function App() {
                 <FrontierChartReal
                   chartId="frontier-main"
                   viewModel={frontierViewModel}
-                  points={frontier.base.points}
-                  overlay={{
-                    feasiblePoints: frontier.base.feasiblePoints,
-                    infeasiblePoints: frontier.base.infeasiblePoints,
-                  }}
-                  optimum={frontier.base.optimum}
-                  xLabel={`${frontierTier[0].toUpperCase()}${frontierTier.slice(1)} price`}
-                  comparison={
-                    frontier.alt
-                      ? { label: optConstraints.charm ? "No charm" : "Charm .99", points: frontier.alt.points }
-                      : frontierOptimizedSlice
-                      ? { label: "Optimized ladder slice", points: frontierOptimizedSlice.points }
-                      : undefined
-                  }
-                  markers={frontierMarkers}
                 />
               </ErrorBoundary>
             </Suspense>
@@ -6841,10 +6825,6 @@ export default function App() {
               <ErrorBoundary title="Tornado chart failed">
                 <Tornado
                   chartId="tornado-main"
-                  title={tornadoChartTitle}
-                  rows={activeTornadoRows}
-                  valueMode={tornadoValueMode}
-                  metric={tornadoMetric}
                   viewModel={tornadoViewModel}
                 />
               </ErrorBoundary>
