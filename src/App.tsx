@@ -52,6 +52,7 @@ import {
 import { buildFrontier, deriveFrontierSweep } from "./lib/frontier";
 
 import { PRESETS, type Preset } from "./lib/presets";
+import { makeScenarioRun, type ScenarioRun, type ScenarioUncertainty } from "./lib/domain";
 import PresetPicker from "./components/PresetPicker";
 
 import { explainGaps, topDriver, explainOptimizerResult } from "./lib/explain";
@@ -418,7 +419,9 @@ export default function App() {
   // Baseline KPIs for the "Tell me what changed" panel (derived from scenarioBaseline for backward compatibility)
   const [baselineKPIs, setBaselineKPIs] = useState<SnapshotKPIs | null>(null);
   const [baselineMeta, setBaselineMeta] = useState<BaselineMeta | null>(null);
-  const [scenarioUncertainty, setScenarioUncertainty] = useState<{ priceScaleDelta?: number; leakDeltaPct?: number } | null>(null);
+  const [baselineRun, setBaselineRun] = useState<ScenarioRun | null>(null);
+  const [optimizedRun, setOptimizedRun] = useState<ScenarioRun | null>(null);
+  const [scenarioUncertainty, setScenarioUncertainty] = useState<ScenarioUncertainty | null>(null);
   const [scorecardView, setScorecardView] = useState<"current" | "optimized">("current");
   const [takeRateMode, setTakeRateMode] = useState<"mix" | "delta">("mix");
   const [takeRateSegmentKey, setTakeRateSegmentKey] = useState<"all" | string>("all");
@@ -1402,6 +1405,7 @@ export default function App() {
       prevBasisRef.current = { pocket: optConstraints.usePocketProfit, margins: optConstraints.usePocketMargins };
       if (optResult) {
         setOptResult(null);
+        setOptimizedRun(null);
         setLastOptAt(null);
         setScorecardView("current");
         toast("info", "Optimizer results cleared after basis change");
@@ -1537,6 +1541,24 @@ export default function App() {
           baselineProfit: baseProfitAtRun,
           runId,
         });
+        setOptimizedRun(
+          makeScenarioRun({
+            scenarioId: scenarioPresetId ?? "custom",
+            ladder: keptPrices,
+            costs: runContext.costs,
+            leak: runContext.leak,
+            refPrices: runContext.refPrices,
+            features: runContext.features,
+            segments: runContext.segments,
+            basis: {
+              usePocketProfit: !!constraintsAtRun.usePocketProfit,
+              usePocketMargins: !!constraintsAtRun.usePocketMargins,
+            },
+            kpis: resultKPIs,
+            uncertainty: scenarioUncertainty ?? undefined,
+            meta: { label: "Optimized run", savedAt: Date.now(), source: "optimized" },
+          })
+        );
         pushJ(
           `[${now()}] Optimizer best ladder $${out.prices.good}/$${out.prices.better}/$${out.prices.best} (profit $${Math.round(out.profit)})`
         );
@@ -1947,7 +1969,20 @@ export default function App() {
 
   const takeRateContexts = useMemo<TakeRateContext[]>(() => {
     const list: TakeRateContext[] = [];
-    if (baselineKPIs) {
+
+    if (baselineRun) {
+      list.push({
+        key: "baseline",
+        label: baselineRun.meta?.label ?? (baselineMeta ? formatBaselineLabel(baselineMeta) : "Baseline (pinned)"),
+        kind: "baseline",
+        prices: baselineRun.ladder,
+        features: baselineRun.features,
+        refPrices: baselineRun.refPrices,
+        segments: coerceSegmentsForCalc(baselineRun.segments, segments),
+        N,
+        kpis: baselineRun.kpis,
+      });
+    } else if (baselineKPIs) {
       const snap = scenarioBaseline?.snapshot;
       const snapSegments = coerceSegmentsForCalc(snap?.segments, segments);
       list.push({
@@ -1966,7 +2001,7 @@ export default function App() {
     if (currentKPIs) {
       list.push({
         key: "current",
-        label: baselineKPIs ? "Current" : "Current (no baseline pinned yet)",
+        label: baselineKPIs || baselineRun ? "Current" : "Current (no baseline pinned yet)",
         kind: "current",
         prices,
         features,
@@ -1977,7 +2012,19 @@ export default function App() {
       });
     }
 
-    if (optimizedKPIs && optResult?.prices) {
+    if (optimizedRun) {
+      list.push({
+        key: "optimized",
+        label: "Optimized",
+        kind: "optimized",
+        prices: optimizedRun.ladder,
+        features: optimizedRun.features,
+        refPrices: optimizedRun.refPrices,
+        segments: coerceSegmentsForCalc(optimizedRun.segments, segments),
+        N: optResult?.context.N ?? N,
+        kpis: optimizedRun.kpis,
+      });
+    } else if (optimizedKPIs && optResult?.prices) {
       list.push({
         key: "optimized",
         label: "Optimized",
@@ -1996,6 +2043,7 @@ export default function App() {
     N,
     baselineKPIs,
     baselineMeta,
+    baselineRun,
     currentKPIs,
     features,
     optimizedKPIs,
@@ -2004,6 +2052,7 @@ export default function App() {
     optResult?.context.segments,
     optResult?.context.N,
     optResult?.prices,
+    optimizedRun,
     prices,
     refPrices,
     scenarioBaseline?.snapshot,
@@ -2729,7 +2778,7 @@ export default function App() {
     avgFromBumps,
   ]);
 
-  const hasOptimizedTornado = Boolean(optResult?.prices ?? quickOpt.best);
+  const hasOptimizedTornado = Boolean(optResult?.prices ?? optimizedRun?.ladder ?? quickOpt.best);
   const trimTornadoRows = useCallback(
     (rows: typeof tornadoRowsCurrent) => {
       // Keep rows with any visible signal; if everything is tiny, keep the top few anyway.
@@ -2779,19 +2828,17 @@ export default function App() {
     [defaults]
   );
 
-  function mapNormalizedToUI(norm: SegmentNested[]): typeof segments {
+  const mapNormalizedToUI = useCallback((norm: SegmentNested[]): typeof segments => {
     const ui = norm.map((s) => ({
       name: "" as string,
       weight: s.weight,
       betaPrice: s.beta.price,
       betaFeatA: s.beta.featA,
       betaFeatB: s.beta.featB,
-      ...(s.beta.refAnchor !== undefined
-        ? { betaRefAnchor: s.beta.refAnchor }
-        : {}),
+      ...(s.beta.refAnchor !== undefined ? { betaRefAnchor: s.beta.refAnchor } : {}),
     }));
     return ui as unknown as typeof segments;
-  }
+  }, []);
 
   // --- JSON snapshot (portable) ---
   const buildScenarioSnapshot = useCallback((args: {
@@ -2859,13 +2906,22 @@ export default function App() {
     );
   }
 
+  type SegmentImportNested = { weight: number; beta: { price: number; featA: number; featB: number; refAnchor?: number } };
+  const isSegmentImportNested = (segs: unknown): segs is SegmentImportNested[] => {
+    return (
+      Array.isArray(segs) &&
+      segs.length > 0 &&
+      typeof (segs[0] as Record<string, unknown>).beta === "object"
+    );
+  };
+
   // Apply a (partial) scenario object into state
   function applyScenarioPartial(obj: {
     prices?: typeof prices;
     costs?: typeof costs;
     refPrices?: typeof refPrices;
     leak?: typeof leak;
-    segments?: typeof segments | Array<{ weight:number; beta:{price:number; featA:number; featB:number; refAnchor?:number} }>;
+    segments?: Segment[] | SegmentImportNested[];
   }) {
     if (obj.prices) setPrices(obj.prices);
     if (obj.costs) setCosts(obj.costs);
@@ -2874,24 +2930,22 @@ export default function App() {
 
     // Accept both your UI-shape segments and the nested CSV shape
     if (obj.segments) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const anySegs = obj.segments as any[];
-      const looksNested = anySegs.length && anySegs[0]?.beta && typeof anySegs[0].beta === "object";
-      if (looksNested) {
-        const mapped = anySegs.map(s => ({
+      let nextSegs: Segment[];
+      if (isSegmentImportNested(obj.segments)) {
+        const mapped: Segment[] = obj.segments.map((s) => ({
           name: "",
           weight: Number(s.weight) || 0,
           betaPrice: Number(s.beta.price) || 0,
           betaFeatA: Number(s.beta.featA) || 0,
           betaFeatB: Number(s.beta.featB) || 0,
+          betaNone: 0,
           ...(s.beta.refAnchor !== undefined ? { betaRefAnchor: Number(s.beta.refAnchor) } : {}),
         }));
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setSegments(normalizeWeights(mapped as any));
+        nextSegs = normalizeWeights(mapped);
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setSegments(normalizeWeights(obj.segments as any));
+        nextSegs = normalizeWeights(obj.segments as Segment[]);
       }
+      setSegments(nextSegs);
     }
   }
 
@@ -2900,6 +2954,26 @@ export default function App() {
     if (scenarioBaseline && scenarioBaseline.kpis && !baselineKPIs) {
       setBaselineKPIs(scenarioBaseline.kpis);
       setBaselineMeta(scenarioBaseline.meta);
+      const snap = scenarioBaseline.snapshot;
+      const snapSegments = snap.segments ? mapNormalizedToUI(snap.segments as SegmentNested[]) : segments;
+      const basis = {
+        usePocketProfit: !!scenarioBaseline.basis?.usePocketProfit,
+        usePocketMargins: !!scenarioBaseline.basis?.usePocketMargins,
+      };
+      const run = makeScenarioRun({
+        scenarioId: scenarioPresetId ?? "custom",
+        ladder: snap.prices,
+        costs: snap.costs ?? costs,
+        leak: snap.leak ?? leak,
+        refPrices: snap.refPrices ?? refPrices,
+        features: snap.features ?? features,
+        segments: snapSegments,
+        basis,
+        kpis: scenarioBaseline.kpis,
+        uncertainty: scenarioUncertainty ?? undefined,
+        meta: { label: scenarioBaseline.meta.label, savedAt: scenarioBaseline.meta.savedAt, source: "baseline" },
+      });
+      setBaselineRun(run);
       return;
     }
     if (!baselineKPIs && currentKPIs) {
@@ -2926,19 +3000,35 @@ export default function App() {
         channelMix,
         optimizerKind,
       });
+      const basis = {
+        usePocketProfit: !!optConstraints.usePocketProfit,
+        usePocketMargins: !!optConstraints.usePocketMargins,
+      };
       setBaselineKPIs(currentKPIs);
       setBaselineMeta(meta);
       setScenarioBaseline({
         snapshot: snap,
         kpis: currentKPIs,
-        basis: {
-          usePocketProfit: !!optConstraints.usePocketProfit,
-          usePocketMargins: !!optConstraints.usePocketMargins,
-        },
+        basis,
         meta,
       });
+      setBaselineRun(
+        makeScenarioRun({
+          scenarioId: scenarioPresetId ?? "custom",
+          ladder: prices,
+          costs,
+          leak,
+          refPrices,
+          features,
+          segments,
+          basis,
+          kpis: currentKPIs,
+          uncertainty: scenarioUncertainty ?? undefined,
+          meta: { label: meta.label, savedAt: meta.savedAt, source: "baseline" },
+        })
+      );
     }
-  }, [baselineKPIs, currentKPIs, scenarioBaseline, buildScenarioSnapshot, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, setScenarioBaseline, optimizerKind]);
+  }, [baselineKPIs, currentKPIs, scenarioBaseline, buildScenarioSnapshot, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, setScenarioBaseline, optimizerKind, scenarioPresetId, scenarioUncertainty, baselineRun, mapNormalizedToUI]);
 
 
   async function handleImportJson(e: ChangeEvent<HTMLInputElement>) {
@@ -3594,12 +3684,30 @@ export default function App() {
         },
         meta,
       });
+      setBaselineRun(
+        makeScenarioRun({
+          scenarioId: scenarioPresetId ?? "custom",
+          ladder: merged.prices,
+          costs: merged.costs,
+          leak: merged.leak,
+          refPrices: merged.refPrices,
+          features: merged.features ?? features,
+          segments: merged.segments ?? segments,
+          basis: {
+            usePocketProfit: !!merged.optConstraints.usePocketProfit,
+            usePocketMargins: !!merged.optConstraints.usePocketMargins,
+          },
+          kpis,
+          uncertainty: scenarioUncertainty ?? undefined,
+          meta: { label, savedAt: meta.savedAt, source: "baseline" },
+        })
+      );
       if (!opts?.silent) {
         const kind = opts?.toastKind ?? "success";
         toast(kind, opts?.toastMessage ?? "Baseline pinned");
       }
     },
-    [prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, setScenarioBaseline, buildScenarioSnapshot, toast]
+    [prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, setScenarioBaseline, buildScenarioSnapshot, toast, scenarioPresetId, scenarioUncertainty]
   );
 
   const pinBaselineNow = () => {
@@ -3724,6 +3832,7 @@ export default function App() {
       setKpiFloorAdj(floorAdj);
 
       setOptResult(null);
+      setOptimizedRun(null);
       setOptError(null);
       setLastOptAt(null);
       setScorecardView("current");
@@ -6127,6 +6236,8 @@ export default function App() {
               }}
               kpis={scorecardKPIs}
               baselineKPIs={baselineKPIs}
+              run={scorecardView === "optimized" ? optimizedRun : null}
+              baselineRun={baselineRun}
               activeCustomers={scorecardActiveFromShares}
               baselineActiveCustomers={baselineActiveCustomers}
               marginDeltaPP={marginDeltaPP}

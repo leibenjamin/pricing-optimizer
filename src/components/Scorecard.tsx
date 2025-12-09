@@ -6,6 +6,7 @@ import {
   type ScorecardShareTile,
 } from "../lib/scorecard";
 import type { SnapshotKPIs } from "../lib/snapshots";
+import type { ScenarioRun } from "../lib/domain";
 
 type GuardrailSummary = {
   gapLine: string;
@@ -27,6 +28,8 @@ type ScorecardProps = {
   basis: BasisLabels;
   kpis: SnapshotKPIs;
   baselineKPIs: SnapshotKPIs | null;
+  run?: ScenarioRun | null;
+  baselineRun?: ScenarioRun | null;
   activeCustomers: number;
   baselineActiveCustomers: number | null;
   marginDeltaPP: number | null;
@@ -189,6 +192,8 @@ export default function Scorecard({
   basis,
   kpis,
   baselineKPIs,
+  run,
+  baselineRun,
   activeCustomers,
   baselineActiveCustomers,
   marginDeltaPP,
@@ -196,14 +201,16 @@ export default function Scorecard({
   explain,
   band,
 }: ScorecardProps) {
+  const activeKpis = run?.kpis ?? kpis;
+  const baselineKpis = baselineRun?.kpis ?? baselineKPIs ?? null;
   const baselineFallback = "Baseline auto-saves when you apply a preset or run Optimize.";
 
   const summaryPills =
-    baselineKPIs && baselineActiveCustomers !== null
+    baselineKpis && baselineActiveCustomers !== null
       ? [
           {
             label: "Profit vs baseline",
-            value: kpis.profit - baselineKPIs.profit,
+            value: activeKpis.profit - baselineKpis.profit,
             formatter: fmtUSD,
           },
           {
@@ -219,9 +226,9 @@ export default function Scorecard({
         ]
       : [];
 
-  const marginPct = kpis.revenue > 0 ? (kpis.profit / kpis.revenue) * 100 : 0;
+  const marginPct = activeKpis.revenue > 0 ? (activeKpis.profit / activeKpis.revenue) * 100 : 0;
   const baselineMarginPct =
-    baselineKPIs && baselineKPIs.revenue > 0 ? (baselineKPIs.profit / baselineKPIs.revenue) * 100 : null;
+    baselineKpis && baselineKpis.revenue > 0 ? (baselineKpis.profit / baselineKpis.revenue) * 100 : null;
 
   const metrics = [
     {
@@ -229,12 +236,12 @@ export default function Scorecard({
       label: "Revenue (N=1000)",
       infoId: "kpi.revenue",
       aria: "Why is Revenue computed this way?",
-      value: fmtUSD(kpis.revenue),
-      baselineLabel: baselineKPIs ? `Baseline ${fmtUSD(baselineKPIs.revenue)}` : baselineFallback,
-      delta: baselineKPIs ? kpis.revenue - baselineKPIs.revenue : null,
+      value: fmtUSD(activeKpis.revenue),
+      baselineLabel: baselineKpis ? `Baseline ${fmtUSD(baselineKpis.revenue)}` : baselineFallback,
+      delta: baselineKpis ? activeKpis.revenue - baselineKpis.revenue : null,
       deltaPct:
-        baselineKPIs && baselineKPIs.revenue
-          ? ((kpis.revenue - baselineKPIs.revenue) / Math.max(baselineKPIs.revenue, 1e-9)) * 100
+        baselineKpis && baselineKpis.revenue
+          ? ((activeKpis.revenue - baselineKpis.revenue) / Math.max(baselineKpis.revenue, 1e-9)) * 100
           : null,
       formatter: (v: number) => fmtUSD(v),
     },
@@ -243,12 +250,12 @@ export default function Scorecard({
       label: "Profit (N=1000)",
       infoId: "kpi.profit",
       aria: "How is Profit calculated here?",
-      value: fmtUSD(kpis.profit),
-      baselineLabel: baselineKPIs ? `Baseline ${fmtUSD(baselineKPIs.profit)}` : baselineFallback,
-      delta: baselineKPIs ? kpis.profit - baselineKPIs.profit : null,
+      value: fmtUSD(activeKpis.profit),
+      baselineLabel: baselineKpis ? `Baseline ${fmtUSD(baselineKpis.profit)}` : baselineFallback,
+      delta: baselineKpis ? activeKpis.profit - baselineKpis.profit : null,
       deltaPct:
-        baselineKPIs && baselineKPIs.profit
-          ? ((kpis.profit - baselineKPIs.profit) / Math.max(baselineKPIs.profit, 1e-9)) * 100
+        baselineKpis && baselineKpis.profit
+          ? ((activeKpis.profit - baselineKpis.profit) / Math.max(baselineKpis.profit, 1e-9)) * 100
           : null,
       formatter: (v: number) => fmtUSD(v),
     },
@@ -272,12 +279,12 @@ export default function Scorecard({
       label: "ARPU (active)",
       infoId: "kpi.arpu",
       aria: "What is ARPU (active)?",
-      value: `$${kpis.arpuActive.toFixed(2)}`,
-      baselineLabel: baselineKPIs ? `Baseline $${baselineKPIs.arpuActive.toFixed(2)}` : baselineFallback,
-      delta: baselineKPIs ? kpis.arpuActive - baselineKPIs.arpuActive : null,
+      value: `$${activeKpis.arpuActive.toFixed(2)}`,
+      baselineLabel: baselineKpis ? `Baseline $${baselineKpis.arpuActive.toFixed(2)}` : baselineFallback,
+      delta: baselineKpis ? activeKpis.arpuActive - baselineKpis.arpuActive : null,
       deltaPct:
-        baselineKPIs && baselineKPIs.arpuActive
-          ? ((kpis.arpuActive - baselineKPIs.arpuActive) / Math.max(baselineKPIs.arpuActive, 1e-9)) * 100
+        baselineKpis && baselineKpis.arpuActive
+          ? ((activeKpis.arpuActive - baselineKpis.arpuActive) / Math.max(baselineKpis.arpuActive, 1e-9)) * 100
           : null,
       formatter: (v: number) => `$${v.toFixed(2)}`,
     },
@@ -294,15 +301,15 @@ export default function Scorecard({
     },
   ];
 
-  const shareTiles = shareTilesFromKPIs(kpis, baselineKPIs);
+  const shareTiles = shareTilesFromKPIs(activeKpis, baselineKpis);
   const headline = explain?.mainDriver
     ? explain.mainDriver
-    : baselineKPIs
+    : baselineKpis
     ? "Driver story appears once optimizer runs with a pinned baseline."
     : "Pin a baseline to unlock driver and lift narratives.";
   const segmentLine =
     explain?.segmentLine ??
-    (baselineKPIs
+    (baselineKpis
       ? "Narrate which segment is winning or losing once deltas are available."
       : "Apply a preset and pin baseline to populate change stories.");
 

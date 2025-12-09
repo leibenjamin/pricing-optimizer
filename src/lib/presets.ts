@@ -1,47 +1,8 @@
 // src/lib/presets.ts
-import type { Leakages } from "./waterfall";
-import type { Features, Prices, Segment } from "./segments";
-import type { SearchRanges } from "./optimize";
-import type { PriceRangeSource, TierRangeMap } from "./priceRange";
+import type { Scenario } from "./domain";
 import { blendLeakPresets } from "./waterfallPresets";
 
-export type Preset = {
-  id: string;
-  name: string;
-  prices: Prices;
-  costs: Prices;
-  refPrices: Prices;
-  leak: Leakages; // <-- use the same shape as the app
-  features?: Features;
-  segments?: Segment[];
-  channelMix?: Array<{ preset: string; w: number }>;
-  priceRange?: TierRangeMap;
-  priceRangeSource?: PriceRangeSource;
-  priceScale?: number; // optional scale applied to segment price sensitivity (betaPrice)
-  uncertainty?: { priceScaleDelta?: number; leakDeltaPct?: number };
-  optRanges?: SearchRanges;
-  optConstraints?: {
-    gapGB: number;
-    gapBB: number;
-    marginFloor: Prices;
-    charm?: boolean;
-    usePocketMargins?: boolean;
-    usePocketProfit?: boolean;
-    maxNoneShare?: number;
-    minTakeRate?: number;
-  };
-  tornado?: {
-    usePocket?: boolean;
-    priceBump?: number;
-    pctBump?: number;
-    rangeMode?: "symmetric" | "data";
-    metric?: "profit" | "revenue";
-    valueMode?: "absolute" | "percent";
-  };
-  retentionPct?: number;
-  kpiFloorAdj?: number;
-  note?: string;
-};
+export type Preset = Scenario;
 
 // helper to make tier-equal promo/volume quickly
 const sameTier = (v: number) => ({ good: v, better: v, best: v });
