@@ -78,7 +78,7 @@ import { runRobustnessScenarios, type UncertaintyScenario } from "./lib/robustne
 import { buildTornadoRows, tornadoSignalThreshold, type TornadoValueMode } from "./lib/tornadoView";
 import type { TornadoMetric, Scenario as TornadoScenario } from "./lib/sensitivity";
 import { type ScorecardBand, type ScorecardDelta } from "./lib/scorecard";
-import { buildFrontierViewModel } from "./lib/viewModels";
+import { buildFrontierViewModel, buildTornadoViewModel } from "./lib/viewModels";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -1811,34 +1811,36 @@ export default function App() {
     () => optResult?.kpis ?? null,
     [optResult?.kpis]
   );
+  const baselineKpis = baselineRun?.kpis ?? baselineKPIs;
+  const optimizedKpis = optimizedRun?.kpis ?? optimizedKPIs;
 
   const buildExplainDelta = useCallback(
     (target: SnapshotKPIs | null): ExplainDelta | null => {
-      if (!baselineKPIs || !segments.length || !target) return null;
+      if (!baselineKpis || !segments.length || !target) return null;
 
-      const deltaProfit = target.profit - baselineKPIs.profit;
-      const deltaRevenue = target.revenue - baselineKPIs.revenue;
+      const deltaProfit = target.profit - baselineKpis.profit;
+      const deltaRevenue = target.revenue - baselineKpis.revenue;
 
       const currentActive = N * (1 - target.shares.none);
-      const baselineActive = N * (1 - baselineKPIs.shares.none);
+      const baselineActive = N * (1 - baselineKpis.shares.none);
       const deltaActive = currentActive - baselineActive;
 
-      const deltaARPU = target.arpuActive - baselineKPIs.arpuActive;
+      const deltaARPU = target.arpuActive - baselineKpis.arpuActive;
 
       // --- Main driver by tier (Good / Better / Best) ---
       const tiers: Array<"good" | "better" | "best"> = ["good", "better", "best"];
       const perTier = tiers.map((tier) => {
-        const shareBase = baselineKPIs.shares[tier];
+        const shareBase = baselineKpis.shares[tier];
         const shareCur = target.shares[tier];
         const qBase = N * shareBase;
         const qCur = N * shareCur;
 
         // Approximate unit margin from baseline list prices
-        const marginBase = baselineKPIs.prices[tier] - costs[tier];
+        const marginBase = baselineKpis.prices[tier] - costs[tier];
 
         const mixEffect = (qCur - qBase) * marginBase;
         const priceEffect =
-          qBase * (target.prices[tier] - baselineKPIs.prices[tier]);
+          qBase * (target.prices[tier] - baselineKpis.prices[tier]);
         const total = mixEffect + priceEffect;
 
         return { tier, mixEffect, priceEffect, total };
@@ -1893,7 +1895,7 @@ export default function App() {
         suggestion,
       };
     },
-    [baselineKPIs, costs, N, segments]
+    [baselineKpis, costs, N, segments]
   );
 
   const explainDeltaCurrent = useMemo(
@@ -1901,38 +1903,38 @@ export default function App() {
     [buildExplainDelta, currentKPIs]
   );
   const explainDeltaOptimized = useMemo(
-    () => buildExplainDelta(optimizedKPIs),
-    [buildExplainDelta, optimizedKPIs]
+    () => buildExplainDelta(optimizedKpis),
+    [buildExplainDelta, optimizedKpis]
   );
 
   const scorecardKPIs =
-    scorecardView === "optimized" && optimizedKPIs
-      ? optimizedKPIs
+    scorecardView === "optimized" && optimizedKpis
+      ? optimizedKpis
       : currentKPIs;
   const scorecardExplainDelta =
-    scorecardView === "optimized" && optimizedKPIs
+    scorecardView === "optimized" && optimizedKpis
       ? explainDeltaOptimized
       : explainDeltaCurrent;
 
   const baselineActiveCustomers =
-    baselineKPIs ? Math.round(N * (1 - baselineKPIs.shares.none)) : null;
+    baselineKpis ? Math.round(N * (1 - baselineKpis.shares.none)) : null;
   const scorecardActiveFromShares = Math.round(
     N * (1 - scorecardKPIs.shares.none)
   );
   const scorecardMarginRatio =
     scorecardKPIs.revenue > 0 ? scorecardKPIs.profit / scorecardKPIs.revenue : 0;
   const baselineMarginRatio =
-    baselineKPIs && baselineKPIs.revenue > 0 ? baselineKPIs.profit / baselineKPIs.revenue : null;
+    baselineKpis && baselineKpis.revenue > 0 ? baselineKpis.profit / baselineKpis.revenue : null;
   const marginDeltaPP =
     baselineMarginRatio !== null
       ? (scorecardMarginRatio - baselineMarginRatio) * 100
       : null;
 
   useEffect(() => {
-    if (scorecardView === "optimized" && !optimizedKPIs) {
+    if (scorecardView === "optimized" && !optimizedKpis) {
       setScorecardView("current");
     }
-  }, [scorecardView, optimizedKPIs]);
+  }, [scorecardView, optimizedKpis]);
 
   type TakeRateContext = {
     key: string;
@@ -1980,26 +1982,26 @@ export default function App() {
         N,
         kpis: baselineRun.kpis,
       });
-    } else if (baselineKPIs) {
+    } else if (baselineKpis) {
       const snap = scenarioBaseline?.snapshot;
       const snapSegments = coerceSegmentsForCalc(snap?.segments, segments);
       list.push({
         key: "baseline",
         label: baselineMeta ? formatBaselineLabel(baselineMeta) : "Baseline (pinned)",
         kind: "baseline",
-        prices: snap?.prices ?? baselineKPIs.prices,
+        prices: snap?.prices ?? baselineKpis.prices,
         features: snap?.features ?? features,
         refPrices: snap?.refPrices ?? refPrices,
         segments: snapSegments,
         N,
-        kpis: baselineKPIs,
+        kpis: baselineKpis,
       });
     }
 
     if (currentKPIs) {
       list.push({
         key: "current",
-        label: baselineKPIs || baselineRun ? "Current" : "Current (no baseline pinned yet)",
+        label: baselineKpis || baselineRun ? "Current" : "Current (no baseline pinned yet)",
         kind: "current",
         prices,
         features,
@@ -2022,7 +2024,7 @@ export default function App() {
         N: optResult?.context.N ?? N,
         kpis: optimizedRun.kpis,
       });
-    } else if (optimizedKPIs && optResult?.prices) {
+    } else if (optimizedKpis && optResult?.prices) {
       list.push({
         key: "optimized",
         label: "Optimized",
@@ -2032,19 +2034,19 @@ export default function App() {
         refPrices: optResult.context.refPrices,
         segments: coerceSegmentsForCalc(optResult.context.segments, segments),
         N: optResult.context.N,
-        kpis: optimizedKPIs,
+        kpis: optimizedKpis,
       });
     }
 
     return list;
   }, [
     N,
-    baselineKPIs,
+    baselineKpis,
     baselineMeta,
     baselineRun,
     currentKPIs,
     features,
-    optimizedKPIs,
+    optimizedKpis,
     optResult?.context.features,
     optResult?.context.refPrices,
     optResult?.context.segments,
@@ -2301,15 +2303,21 @@ export default function App() {
 
     const scenarios: Array<ReturnType<typeof build>> = [];
 
-    if (baselineKPIs) {
-      const baseLeak = scenarioBaseline?.snapshot?.leak ?? leak;
-      const baseCosts = scenarioBaseline?.snapshot?.costs ?? costs;
-      const basePrices = scenarioBaseline?.snapshot?.prices ?? baselineKPIs.prices;
+    if (baselineKpis) {
+      const baseLeak = baselineRun?.leak ?? scenarioBaseline?.snapshot?.leak ?? leak;
+      const baseCosts = baselineRun?.costs ?? scenarioBaseline?.snapshot?.costs ?? costs;
+      const basePrices = baselineRun?.ladder ?? scenarioBaseline?.snapshot?.prices ?? baselineKpis.prices;
+      const baseLabel =
+        baselineMeta
+          ? formatBaselineLabel(baselineMeta)
+          : baselineRun?.meta
+          ? formatBaselineLabel({ label: baselineRun.meta.label, savedAt: baselineRun.meta.savedAt })
+          : "Baseline";
       scenarios.push(
         build(
           "baseline",
-          baselineMeta ? formatBaselineLabel(baselineMeta) : "Baseline",
-          baselineKPIs.shares,
+          baseLabel,
+          baselineKpis.shares,
           basePrices,
           baseLeak,
           baseCosts
@@ -2320,7 +2328,7 @@ export default function App() {
     scenarios.push(
       build(
         "current",
-        baselineKPIs ? "Current" : "Current (unpinned)",
+        baselineKpis ? "Current" : "Current (unpinned)",
         currentKPIs.shares,
         prices,
         leak,
@@ -2328,28 +2336,30 @@ export default function App() {
       )
     );
 
-    if (optimizedKPIs && optResult?.prices) {
+    if (optimizedKpis && (optimizedRun?.ladder || optResult?.prices)) {
       scenarios.push(
         build(
           "optimized",
           "Optimized",
-          optimizedKPIs.shares,
-          optResult.prices,
-          leak,
-          costs
+          optimizedKpis.shares,
+          optimizedRun?.ladder ?? optResult?.prices ?? prices,
+          optimizedRun?.leak ?? leak,
+          optimizedRun?.costs ?? costs
         )
       );
     }
 
     return scenarios;
   }, [
-    baselineKPIs,
+    baselineKpis,
     baselineMeta,
+    baselineRun,
     costs,
     currentKPIs,
     leak,
     optResult?.prices,
-    optimizedKPIs,
+    optimizedKpis,
+    optimizedRun,
     prices,
     retentionMonths,
     retentionPct,
@@ -2390,17 +2400,31 @@ export default function App() {
     });
 
     // Baseline marker should respect the pinned baseline KPIs/basis (no drift if knobs changed after pin).
-    if (baselineKPIs) {
+    if (baselineRun) {
       raw.push({
         label: "Baseline",
-        price: baselineKPIs.prices[frontierTier],
-        profit: baselineKPIs.profit,
+        price: baselineRun.ladder[frontierTier],
+        profit: baselineRun.kpis.profit,
+        kind: "baseline",
+      });
+    } else if (baselineKpis) {
+      raw.push({
+        label: "Baseline",
+        price: baselineKpis.prices[frontierTier],
+        profit: baselineKpis.profit,
         kind: "baseline",
       });
     }
 
     // Optimized marker should reflect the optimizer run context/profit (not recomputed on new knobs).
-    if (optResult?.prices) {
+    if (optimizedRun) {
+      raw.push({
+        label: "Optimized",
+        price: optimizedRun.ladder[frontierTier],
+        profit: optimizedRun.kpis.profit,
+        kind: "optimized",
+      });
+    } else if (optResult?.prices) {
       const profitOptimized =
         typeof optResult.profit === "number"
           ? optResult.profit
@@ -2459,7 +2483,16 @@ export default function App() {
     });
 
     return merged;
-  }, [baselineKPIs, optConstraints.usePocketProfit, optResult, prices, computeScenarioProfit, frontierTier]);
+  }, [
+    baselineKpis,
+    baselineRun,
+    optConstraints.usePocketProfit,
+    optResult,
+    optimizedRun,
+    prices,
+    computeScenarioProfit,
+    frontierTier,
+  ]);
 
   const frontierSummary = useMemo(() => {
     if (!frontier.base.optimum) return null;
@@ -2843,13 +2876,14 @@ export default function App() {
   const tornadoUnitLabel = tornadoValueMode === "percent" ? "% delta" : "$ delta";
   const tornadoChartTitle = `Tornado: ${tornadoViewLabel} ${tornadoMetricLabel.toLowerCase()} sensitivity (${tornadoUnitLabel})`;
   const tornadoViewModel = useMemo(
-    () => ({
-      title: tornadoChartTitle,
-      rows: activeTornadoRows,
-      valueMode: tornadoValueMode,
-      metric: tornadoMetric,
-      run: tornadoView === "optimized" ? optimizedRun : baselineRun,
-    }),
+    () =>
+      buildTornadoViewModel({
+        title: tornadoChartTitle,
+        rows: activeTornadoRows,
+        valueMode: tornadoValueMode,
+        metric: tornadoMetric,
+        run: tornadoView === "optimized" ? optimizedRun : baselineRun,
+      }),
     [activeTornadoRows, baselineRun, optimizedRun, tornadoChartTitle, tornadoMetric, tornadoValueMode, tornadoView]
   );
 
@@ -6011,15 +6045,15 @@ export default function App() {
 
                 const deltaProfit = (optimizerProfitDelta?.delta ?? bestProfit - curProfit) || 0;
                 const revenueDeltaCurrent =
-                  optimizedKPIs && currentKPIs ? optimizedKPIs.revenue - currentKPIs.revenue : null;
+                  optimizedKpis && currentKPIs ? optimizedKpis.revenue - currentKPIs.revenue : null;
                 const activeDeltaCurrent =
-                  optimizedKPIs && currentKPIs
-                    ? Math.round(N * (1 - optimizedKPIs.shares.none)) -
+                  optimizedKpis && currentKPIs
+                    ? Math.round(N * (1 - optimizedKpis.shares.none)) -
                       Math.round(N * (1 - currentKPIs.shares.none))
                     : null;
                 const arpuDeltaCurrent =
-                  optimizedKPIs && currentKPIs
-                    ? optimizedKPIs.arpuActive - currentKPIs.arpuActive
+                  optimizedKpis && currentKPIs
+                    ? optimizedKpis.arpuActive - currentKPIs.arpuActive
                     : null;
                 const guardrails = guardrailsForOptimized;
                 const binds = explainGaps(best, {
@@ -6269,7 +6303,7 @@ export default function App() {
           <Section id="scorecard" title="Scorecard">
             <Scorecard
               view={scorecardView}
-              hasOptimized={!!optimizedKPIs}
+              hasOptimized={!!optimizedKpis}
               onChangeView={setScorecardView}
               onPinBaseline={pinBaselineNow}
               basis={{
@@ -6278,7 +6312,7 @@ export default function App() {
                 pinned: scorecardPinnedBasis,
               }}
               kpis={scorecardKPIs}
-              baselineKPIs={baselineKPIs}
+              baselineKPIs={baselineKpis}
               run={scorecardView === "optimized" ? optimizedRun : null}
               baselineRun={baselineRun}
               activeCustomers={scorecardActiveFromShares}
