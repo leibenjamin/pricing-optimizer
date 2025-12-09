@@ -34,7 +34,6 @@ import { LEAK_PRESETS, blendLeakPresets } from "./lib/waterfallPresets";
 
 import { gridOptimize } from "./lib/optQuick";
 
-import { simulateCohort } from "./lib/simCohort";
 import MiniLine from "./components/MiniLine";
 import { describeSegment } from "./lib/segmentNarrative";
 
@@ -78,7 +77,12 @@ import { runRobustnessScenarios, type UncertaintyScenario } from "./lib/robustne
 import { buildTornadoRows, tornadoSignalThreshold, type TornadoValueMode } from "./lib/tornadoView";
 import type { TornadoMetric, Scenario as TornadoScenario } from "./lib/sensitivity";
 import { type ScorecardBand, type ScorecardDelta } from "./lib/scorecard";
-import { buildFrontierViewModel, buildTornadoViewModel } from "./lib/viewModels";
+import {
+  buildFrontierViewModel,
+  buildTornadoViewModel,
+  buildScorecardViewModel,
+  buildCohortViewModel,
+} from "./lib/viewModels";
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -1906,34 +1910,67 @@ export default function App() {
     [buildExplainDelta, optimizedKpis]
   );
 
-  const scorecardKPIs =
-    scorecardView === "optimized" && optimizedKpis
-      ? optimizedKpis
-      : currentKPIs;
-  const scorecardExplainDelta =
-    scorecardView === "optimized" && optimizedKpis
-      ? explainDeltaOptimized
-      : explainDeltaCurrent;
-
-  const baselineActiveCustomers =
-    baselineKpis ? Math.round(N * (1 - baselineKpis.shares.none)) : null;
-  const scorecardActiveFromShares = Math.round(
-    N * (1 - scorecardKPIs.shares.none)
+  const buildGuardrailSummary = useCallback(
+    (activePrices: Prices, overrides?: { constraints?: Constraints; ranges?: SearchRanges; hasOptimizer?: boolean }) => {
+      const constraints = overrides?.constraints ?? optConstraints;
+      const ranges = overrides?.ranges ?? optRanges;
+      const gapNotes = explainGaps(activePrices, {
+        gapGB: constraints.gapGB,
+        gapBB: constraints.gapBB,
+      });
+      const gapLine = gapNotes.length
+        ? gapNotes[0]
+        : `Gaps slack: ${(activePrices.better - activePrices.good - constraints.gapGB).toFixed(2)} / ${(activePrices.best - activePrices.better - constraints.gapBB).toFixed(2)} (G/B, B/Best)`;
+      const floorLine = `Floors: Good ${Math.round(constraints.marginFloor.good * 100)}% | Better ${Math.round(
+        constraints.marginFloor.better * 100
+      )}% | Best ${Math.round(constraints.marginFloor.best * 100)}%`;
+      const optimizerReady = overrides?.hasOptimizer ?? Boolean(optResult?.prices);
+      const optimizerLine = optimizerReady
+        ? `Optimizer ready - ranges ${ranges.good[0]}-${ranges.good[1]} / ${ranges.better[0]}-${ranges.better[1]} / ${ranges.best[0]}-${ranges.best[1]}`
+        : "Set ranges and floors, then run the optimizer";
+      return { gapLine, floorLine, optimizerLine };
+    },
+    [optConstraints, optRanges, optResult]
   );
-  const scorecardMarginRatio =
-    scorecardKPIs.revenue > 0 ? scorecardKPIs.profit / scorecardKPIs.revenue : 0;
-  const baselineMarginRatio =
-    baselineKpis && baselineKpis.revenue > 0 ? baselineKpis.profit / baselineKpis.revenue : null;
-  const marginDeltaPP =
-    baselineMarginRatio !== null
-      ? (scorecardMarginRatio - baselineMarginRatio) * 100
-      : null;
 
-  useEffect(() => {
-    if (scorecardView === "optimized" && !optimizedKpis) {
-      setScorecardView("current");
-    }
-  }, [scorecardView, optimizedKpis]);
+  const guardrailsForCurrent = useMemo(() => buildGuardrailSummary(prices), [buildGuardrailSummary, prices]);
+  const guardrailsForOptimized = useMemo(
+    () =>
+      buildGuardrailSummary(optResult?.prices ?? prices, {
+        constraints: optResult?.context?.constraints,
+        ranges: optResult?.context?.ranges,
+        hasOptimizer: Boolean(optResult?.prices),
+      }),
+    [buildGuardrailSummary, optResult, prices]
+  );
+
+  const scorecardVM = useMemo(
+    () =>
+      buildScorecardViewModel({
+        view: scorecardView,
+        baselineRun,
+        optimizedRun,
+        currentKPIs,
+        optimizedKPIs: optimizedKpis,
+        explainCurrent: explainDeltaCurrent,
+        explainOptimized: explainDeltaOptimized,
+        N,
+        guardrailsCurrent: guardrailsForCurrent,
+        guardrailsOptimized: guardrailsForOptimized,
+      }),
+    [
+      baselineRun,
+      currentKPIs,
+      explainDeltaCurrent,
+      explainDeltaOptimized,
+      guardrailsForCurrent,
+      guardrailsForOptimized,
+      N,
+      optimizedKpis,
+      optimizedRun,
+      scorecardView,
+    ]
+  );
 
   type TakeRateContext = {
     key: string;
@@ -2274,81 +2311,60 @@ export default function App() {
   const [showCohortAdvanced, setShowCohortAdvanced] = useState(false);
 
   // --- Cohort rehearsal scenarios (baseline/current/optimized) ---
-  const cohortScenarios = useMemo(() => {
-    if (!currentKPIs) return [];
-    const months = Math.max(6, Math.min(24, retentionMonths));
-    const r = retentionPct / 100;
+  const { scenarios: cohortScenarios, summaries: cohortSummaryCards } = useMemo(() => {
+    const baselineLabel =
+      baselineMeta && baselineRun?.meta
+        ? formatBaselineLabel({ label: baselineRun.meta.label, savedAt: baselineRun.meta.savedAt })
+        : baselineMeta
+        ? formatBaselineLabel(baselineMeta)
+        : "Baseline";
+    const baselineInfo =
+      baselineKpis && baselineRun
+        ? {
+            label: baselineLabel,
+            kpis: baselineKpis,
+            prices: baselineRun.ladder,
+            leak: baselineRun.leak,
+            costs: baselineRun.costs,
+          }
+        : baselineKpis
+        ? {
+            label: baselineLabel,
+            kpis: baselineKpis,
+            prices: scenarioBaseline?.snapshot?.prices ?? prices,
+            leak: scenarioBaseline?.snapshot?.leak ?? leak,
+            costs: scenarioBaseline?.snapshot?.costs ?? costs,
+          }
+        : null;
 
-    const build = (
-      key: string,
-      label: string,
-      shares: SnapshotKPIs["shares"],
-      pricesForMargin: Prices,
-      leakForMargin: typeof leak,
-      costsForMargin: Prices
-    ) => {
-      const pts = simulateCohort(pricesForMargin, shares, leakForMargin, costsForMargin, months, r);
-      const total = pts.reduce((s, p) => s + p.margin, 0);
-      return {
-        key,
-        label,
-        shares,
-        points: pts,
-        total,
-        month1: pts[0]?.margin ?? 0,
-        monthEnd: pts[pts.length - 1]?.margin ?? 0,
-      };
-    };
+    const optimizedInfo =
+      optimizedKpis && (optimizedRun?.ladder || optResult?.prices)
+        ? {
+            label: "Optimized",
+            kpis: optimizedKpis,
+            prices: optimizedRun?.ladder ?? optResult?.prices ?? prices,
+            leak: optimizedRun?.leak ?? leak,
+            costs: optimizedRun?.costs ?? costs,
+          }
+        : null;
 
-    const scenarios: Array<ReturnType<typeof build>> = [];
+    const currentInfo = currentKPIs
+      ? {
+          label: baselineKpis ? "Current" : "Current (unpinned)",
+          kpis: currentKPIs,
+          prices,
+          leak,
+          costs,
+        }
+      : null;
 
-    if (baselineKpis) {
-      const baseLeak = baselineRun?.leak ?? scenarioBaseline?.snapshot?.leak ?? leak;
-      const baseCosts = baselineRun?.costs ?? scenarioBaseline?.snapshot?.costs ?? costs;
-      const basePrices = baselineRun?.ladder ?? scenarioBaseline?.snapshot?.prices ?? baselineKpis.prices;
-      const baseLabel =
-        baselineMeta
-          ? formatBaselineLabel(baselineMeta)
-          : baselineRun?.meta
-          ? formatBaselineLabel({ label: baselineRun.meta.label, savedAt: baselineRun.meta.savedAt })
-          : "Baseline";
-      scenarios.push(
-        build(
-          "baseline",
-          baseLabel,
-          baselineKpis.shares,
-          basePrices,
-          baseLeak,
-          baseCosts
-        )
-      );
-    }
-
-    scenarios.push(
-      build(
-        "current",
-        baselineKpis ? "Current" : "Current (unpinned)",
-        currentKPIs.shares,
-        prices,
-        leak,
-        costs
-      )
-    );
-
-    if (optimizedKpis && (optimizedRun?.ladder || optResult?.prices)) {
-      scenarios.push(
-        build(
-          "optimized",
-          "Optimized",
-          optimizedKpis.shares,
-          optimizedRun?.ladder ?? optResult?.prices ?? prices,
-          optimizedRun?.leak ?? leak,
-          optimizedRun?.costs ?? costs
-        )
-      );
-    }
-
-    return scenarios;
+    return buildCohortViewModel({
+      baseline: baselineInfo,
+      current: currentInfo,
+      optimized: optimizedInfo,
+      retentionMonths,
+      retentionPct,
+    });
   }, [
     baselineKpis,
     baselineMeta,
@@ -2366,24 +2382,6 @@ export default function App() {
     scenarioBaseline?.snapshot?.leak,
     scenarioBaseline?.snapshot?.prices,
   ]);
-
-  const cohortSummaryCards = useMemo(() => {
-    if (!cohortScenarios.length) return [];
-    const base = cohortScenarios.find((c) => c.key === "baseline") ?? cohortScenarios[0];
-    return cohortScenarios.map((c) => {
-      const deltaTotal = c.key === base.key ? null : c.total - base.total;
-      const deltaEnd = c.key === base.key ? null : c.monthEnd - base.monthEnd;
-      const label = c.key === "baseline" ? "Baseline" : c.label;
-      return {
-        key: c.key,
-        label,
-        total: c.total,
-        monthEnd: c.monthEnd,
-        deltaTotal,
-        deltaEnd,
-      };
-    });
-  }, [cohortScenarios]);
 
   // --- Frontier markers & summary ---
   const frontierMarkers = useMemo(() => {
@@ -3104,6 +3102,65 @@ export default function App() {
     }
   }, [baselineRun, currentKPIs, scenarioBaseline, buildScenarioSnapshot, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, setScenarioBaseline, optimizerKind, scenarioPresetId, scenarioUncertainty, mapNormalizedToUI]);
 
+  // Derive scenarioBaseline from the run if we have one and the stored snapshot is missing or outdated.
+  useEffect(() => {
+    if (!baselineRun) return;
+    const existing = scenarioBaseline;
+    const needsUpdate = !existing || existing.meta.savedAt !== baselineRun.meta.savedAt;
+    if (!needsUpdate) return;
+    const snap = buildScenarioSnapshot({
+      prices: baselineRun.ladder,
+      costs: baselineRun.costs,
+      features: baselineRun.features,
+      refPrices: baselineRun.refPrices ?? refPrices,
+      leak: baselineRun.leak,
+      segments: baselineRun.segments,
+      tornadoPocket,
+      tornadoPriceBump,
+      tornadoPctBump,
+      tornadoRangeMode,
+      tornadoMetric,
+      tornadoValueMode,
+      retentionPct,
+      retentionMonths,
+      kpiFloorAdj,
+      priceRange: priceRangeState,
+      optRanges,
+      optConstraints,
+      channelMix,
+      optimizerKind,
+    });
+      setScenarioBaseline({
+        snapshot: snap,
+        kpis: baselineRun.kpis,
+        basis: {
+          usePocketProfit: !!baselineRun.basis?.usePocketProfit,
+          usePocketMargins: !!baselineRun.basis?.usePocketMargins,
+        },
+        meta: baselineRun.meta,
+      });
+  }, [
+    baselineRun,
+    channelMix,
+    kpiFloorAdj,
+    optConstraints,
+    optRanges,
+    optimizerKind,
+    priceRangeState,
+    refPrices,
+    retentionMonths,
+    retentionPct,
+    scenarioBaseline,
+    setScenarioBaseline,
+    tornadoMetric,
+    tornadoPocket,
+    tornadoPriceBump,
+    tornadoPctBump,
+    tornadoRangeMode,
+    tornadoValueMode,
+    buildScenarioSnapshot,
+  ]);
+
 
   async function handleImportJson(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -3569,43 +3626,6 @@ export default function App() {
 
     return () => observer.disconnect();
   }, [NAV_SECTIONS]);
-
-  const buildGuardrailSummary = useCallback(
-    (activePrices: Prices, overrides?: { constraints?: Constraints; ranges?: SearchRanges; hasOptimizer?: boolean }) => {
-      const constraints = overrides?.constraints ?? optConstraints;
-      const ranges = overrides?.ranges ?? optRanges;
-      const gapNotes = explainGaps(activePrices, {
-        gapGB: constraints.gapGB,
-        gapBB: constraints.gapBB,
-      });
-      const gapLine = gapNotes.length
-        ? gapNotes[0]
-        : `Gaps slack: ${(activePrices.better - activePrices.good - constraints.gapGB).toFixed(2)} / ${(activePrices.best - activePrices.better - constraints.gapBB).toFixed(2)} (G/B, B/Best)`;
-      const floorLine = `Floors: Good ${Math.round(constraints.marginFloor.good * 100)}% | Better ${Math.round(
-        constraints.marginFloor.better * 100
-      )}% | Best ${Math.round(constraints.marginFloor.best * 100)}%`;
-      const optimizerReady = overrides?.hasOptimizer ?? Boolean(optResult?.prices);
-      const optimizerLine = optimizerReady
-        ? `Optimizer ready - ranges ${ranges.good[0]}-${ranges.good[1]} / ${ranges.better[0]}-${ranges.better[1]} / ${ranges.best[0]}-${ranges.best[1]}`
-        : "Set ranges and floors, then run the optimizer";
-      return { gapLine, floorLine, optimizerLine };
-    },
-    [optConstraints, optRanges, optResult]
-  );
-
-  const guardrailsForCurrent = useMemo(
-    () => buildGuardrailSummary(prices),
-    [buildGuardrailSummary, prices]
-  );
-  const guardrailsForOptimized = useMemo(
-    () =>
-      buildGuardrailSummary(optResult?.prices ?? prices, {
-        constraints: optResult?.context?.constraints,
-        ranges: optResult?.context?.ranges,
-        hasOptimizer: Boolean(optResult?.prices),
-      }),
-    [buildGuardrailSummary, optResult, prices]
-  );
 
   const scorecardBaselineText = formatBaselineLabel(baselineMeta);
   const scorecardPinnedBasis = scenarioBaseline?.basis
@@ -6341,18 +6361,14 @@ export default function App() {
                 active: scorecardActiveBasis,
                 pinned: scorecardPinnedBasis,
               }}
-              kpis={scorecardKPIs}
-              run={scorecardView === "optimized" ? optimizedRun : null}
-              baselineRun={baselineRun}
-              activeCustomers={scorecardActiveFromShares}
-              baselineActiveCustomers={baselineActiveCustomers}
-              marginDeltaPP={marginDeltaPP}
-              guardrails={
-                scorecardView === "optimized" && optResult
-                  ? guardrailsForOptimized
-                  : guardrailsForCurrent
-              }
-              explain={scorecardExplainDelta}
+              kpis={scorecardVM.kpis}
+              run={scorecardVM.run}
+              baselineRun={scorecardVM.baselineRun}
+              activeCustomers={scorecardVM.activeCustomers}
+              baselineActiveCustomers={scorecardVM.baselineActiveCustomers}
+              marginDeltaPP={scorecardVM.marginDeltaPP}
+              guardrails={scorecardVM.guardrails}
+              explain={scorecardVM.explain}
               band={scorecardBand}
             />
           </Section>
@@ -6367,7 +6383,7 @@ export default function App() {
                   : ""
               }
               delta={explainDeltaOptimized}
-              fallbackNarrative={scorecardExplainDelta}
+              fallbackNarrative={scorecardVM.explain}
               guardrails={guardrailsForOptimized}
               optimizerWhyLines={optimizerWhyLines}
             />
