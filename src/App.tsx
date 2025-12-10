@@ -2608,6 +2608,95 @@ export default function App() {
     optConstraints,
   ]);
 
+  const resetOptimizer = useCallback(() => {
+    setOptResult(null);
+    setOptError(null);
+    setLastOptAt(null);
+  }, []);
+
+  const runQuickOptimizeInline = useCallback(() => {
+    setOptError(null);
+    const best = quickOpt.best;
+    if (!best) {
+      toast("info", "Quick grid found no feasible ladder in the current ranges/floors");
+      return;
+    }
+    const constraintsAtRun: Constraints = {
+      gapGB: optConstraints.gapGB,
+      gapBB: optConstraints.gapBB,
+      marginFloor: { ...optConstraints.marginFloor },
+      charm: optConstraints.charm,
+      usePocketMargins: optConstraints.usePocketMargins ?? false,
+      usePocketProfit: optConstraints.usePocketProfit ?? false,
+      maxNoneShare: optConstraints.maxNoneShare,
+      minTakeRate: optConstraints.minTakeRate,
+    };
+    const rangesAtRun: SearchRanges = {
+      good: [...optRanges.good] as [number, number],
+      better: [...optRanges.better] as [number, number],
+      best: [...optRanges.best] as [number, number],
+      step: optRanges.step,
+    };
+    const runContext: OptRunContext = {
+      pricesAtRun: { ...prices },
+      costs: { ...costs },
+      features: JSON.parse(JSON.stringify(features)) as Features,
+      segments: segments.map((s) => ({ ...s })),
+      refPrices: { ...refPrices },
+      leak: JSON.parse(JSON.stringify(leak)) as Leakages,
+      constraints: constraintsAtRun,
+      ranges: rangesAtRun,
+      usePocketProfit: !!constraintsAtRun.usePocketProfit,
+      usePocketMargins: !!constraintsAtRun.usePocketMargins,
+      N,
+    };
+    const baseProfit = computeScenarioProfit(runContext.pricesAtRun, runContext.usePocketProfit, {
+      costs: runContext.costs,
+      features: runContext.features,
+      segments: runContext.segments,
+      refPrices: runContext.refPrices,
+      leak: runContext.leak,
+      N: runContext.N,
+    });
+    const resultKPIs = kpisFromSnapshot(
+      {
+        prices: best,
+        costs: runContext.costs,
+        features: runContext.features,
+        segments: runContext.segments,
+        refPrices: runContext.refPrices,
+        leak: runContext.leak,
+      },
+      runContext.N,
+      !!constraintsAtRun.usePocketProfit,
+      constraintsAtRun.usePocketMargins ?? !!constraintsAtRun.usePocketProfit
+    );
+    setOptResult({
+      prices: best,
+      profit: quickOpt.profit ?? baseProfit,
+      kpis: resultKPIs,
+      diagnostics: quickOpt.diagnostics,
+      context: runContext,
+      baselineProfit: baseProfit,
+      runId: Date.now(),
+    });
+    setLastOptAt(Date.now());
+    toast("success", "Quick grid result ready");
+  }, [
+    computeScenarioProfit,
+    costs,
+    features,
+    leak,
+    N,
+    optConstraints,
+    optRanges,
+    prices,
+    refPrices,
+    segments,
+    quickOpt,
+    toast,
+  ]);
+
   const robustnessResults = useMemo(
     () => {
       if (!optResult) return [];
@@ -5359,6 +5448,8 @@ export default function App() {
                   setOptRanges={setOptRanges}
                   optConstraints={optConstraints}
                   setOptConstraints={setOptConstraints}
+                  coverageUsePocket={coverageUsePocket}
+                  setCoverageUsePocket={setCoverageUsePocket}
                   optError={optError}
                   optResult={optResult}
                   quickOptDiagnostics={quickOpt.diagnostics}
@@ -5368,6 +5459,10 @@ export default function App() {
                   setOptimizerKind={setOptimizerKind}
                   runOptimizer={runOptimizer}
                   applyOptimizedPrices={applyOptimizedPrices}
+                  onQuickOptimize={runQuickOptimizeInline}
+                  onResetOptimizer={resetOptimizer}
+                  prices={prices}
+                  costs={costs}
                   headline={
                     <Explanation slot="chart.optimizer">
                       Fast start: apply a preset then click Run. Set ranges, gaps, and margin floors, then run the grid optimizer (worker). Use pocket toggles to enforce floors and profit after leakages. Charm endings snap to .99 if applicable. If no feasible ladder is found, widen ranges or ease floors/gaps. Cite binding constraints when explaining results.

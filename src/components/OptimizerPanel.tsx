@@ -17,6 +17,8 @@ type OptimizerPanelProps = {
   setOptRanges: Dispatch<SetStateAction<SearchRanges>>;
   optConstraints: Constraints;
   setOptConstraints: Dispatch<SetStateAction<Constraints>>;
+  coverageUsePocket: boolean;
+  setCoverageUsePocket: Dispatch<SetStateAction<boolean>>;
   optError: string | null;
   optResult: OptimizerResult;
   quickOptDiagnostics?: GridDiagnostics;
@@ -26,6 +28,10 @@ type OptimizerPanelProps = {
   setOptimizerKind: Dispatch<SetStateAction<OptimizerKind>>;
   runOptimizer: () => void;
   applyOptimizedPrices: () => void;
+  onQuickOptimize: () => void;
+  onResetOptimizer: () => void;
+  prices: Prices;
+  costs: Prices;
   headline?: ReactNode;
   actions?: ReactNode;
 };
@@ -35,6 +41,8 @@ export function OptimizerPanel({
   setOptRanges,
   optConstraints,
   setOptConstraints,
+  coverageUsePocket,
+  setCoverageUsePocket,
   optError,
   optResult,
   quickOptDiagnostics,
@@ -44,6 +52,10 @@ export function OptimizerPanel({
   setOptimizerKind,
   runOptimizer,
   applyOptimizedPrices,
+  onQuickOptimize,
+  onResetOptimizer,
+  prices,
+  costs,
   headline,
   actions,
 }: OptimizerPanelProps) {
@@ -296,8 +308,39 @@ export function OptimizerPanel({
               <span>Compute profit using pocket price</span>
               <InfoTip id="optimizer.pocketProfit" ariaLabel="What is pocket profit?" />
             </label>
+            <label className="flex items-center gap-2 sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={coverageUsePocket}
+                onChange={(e) => setCoverageUsePocket(e.target.checked)}
+              />
+              <span>Coverage uses pocket (floors/coverage widgets)</span>
+            </label>
           </div>
         </details>
+
+        <div className="rounded border border-slate-200 bg-white px-3 py-2 shadow-sm space-y-2">
+          <div className="text-[11px] uppercase text-slate-500">Run options</div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <button
+              className="border rounded px-3 h-8 bg-white hover:bg-gray-50"
+              onClick={onQuickOptimize}
+              disabled={isOptRunning}
+            >
+              Quick grid (inline)
+            </button>
+            <button
+              className="border rounded px-3 h-8 bg-white hover:bg-gray-50"
+              onClick={onResetOptimizer}
+              disabled={isOptRunning}
+            >
+              Reset optimizer
+            </button>
+          </div>
+          <div className="text-[11px] text-slate-600">
+            Current ladder: ${prices.good}/${prices.better}/${prices.best}; costs ${costs.good}/${costs.better}/${costs.best}.
+          </div>
+        </div>
 
         <details className="mt-4 rounded border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs">
           <summary className="cursor-pointer select-none font-medium">Field guide (copy placeholder)</summary>
