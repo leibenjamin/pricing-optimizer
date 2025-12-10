@@ -1,125 +1,167 @@
-// src/lib/snapshots.ts
-import type { Prices, Features, Segment } from "./segments";
 import { choiceShares } from "./choice";
+import type { Constraints, SearchRanges } from "./optimize";
+import type { PriceRangeSource, TierRangeMap } from "./priceRange";
+import type { Features, Segment, Prices } from "./segments";
 import { computePocketPrice, type Leakages } from "./waterfall";
-import { csvFromRows } from "./download";
+import type { TornadoValueMode } from "./tornadoView";
+import type { TornadoMetric } from "./sensitivity";
 
-export type Snapshot = {
-  id: string;              // e.g., "S-001"
-  name: string;            // short label user can edit later (optional UX later)
-  at: string;              // ISO timestamp
-  prices: Prices;          // ladder captured
-  shares: { none: number; good: number; better: number; best: number };
-  // key KPIs at the moment of capture (N is implicit in revenue/profit)
-  revenue: number;
-  profit: number;
-  arpuActive: number;
-  grossMarginPct: number;
-  // segment summary (first 3 classes, clamp to available)
-  segShares: number[];     // [pGood, pBetter, pBest] or by segment? -> use class weights
+export type NormalizedSegment = {
+  weight: number;
+  beta: { price: number; featA: number; featB: number; refAnchor?: number };
 };
 
-function round2(x: number) { return Math.round(x * 100) / 100; }
-function pct(x: number) { return Math.round(x * 10000) / 100; } // 2dp %
+export type SnapshotKPIs = {
+  profit: number;
+  revenue: number;
+  arpuActive: number;
+  shares: { none: number; good: number; better: number; best: number };
+};
 
-/**
- * Capture a snapshot from current UI state.
- * - If usePocketProfit/usePocketMargins are true, we respect pocket where appropriate.
- */
-export function makeSnapshot(args: {
+export type ScenarioSnapshot = {
+  prices: Prices;
+  costs?: Prices;
+  refPrices?: Prices;
+  features?: Features;
+  leak?: Leakages;
+  segments?: NormalizedSegment[] | unknown;
+  basis?: { usePocketProfit?: boolean; usePocketMargins?: boolean };
+  kpis?: unknown;
+  meta?: { label?: string; savedAt?: number; source?: string };
+  channelMix?: Array<{ preset: string; w: number }>;
+  analysis?: {
+    optConstraints?: Partial<Constraints>;
+    optRanges?: SearchRanges;
+    tornadoPocket?: boolean;
+    tornadoPriceBump?: number;
+    tornadoPctBump?: number;
+    tornadoRangeMode?: "symmetric" | "data";
+    tornadoMetric?: TornadoMetric;
+    tornadoValueMode?: TornadoValueMode;
+    retentionPct?: number;
+    retentionMonths?: number;
+    kpiFloorAdj?: number;
+    priceRange?: TierRangeMap;
+    priceRangeSource?: PriceRangeSource;
+    optimizerKind?: "grid-worker" | "grid-inline" | "future";
+  };
+};
+
+export type ScenarioImport = ScenarioSnapshot;
+
+const toFinite = (n: unknown): number | null => {
+  const v = typeof n === "number" ? n : Number(n);
+  return Number.isFinite(v) ? v : null;
+};
+
+export function normalizeSegmentsForSave(segs: unknown): NormalizedSegment[] {
+  if (!Array.isArray(segs)) return [];
+  const out: NormalizedSegment[] = [];
+  for (const s of segs) {
+    if (!s || typeof s !== "object") continue;
+    const ss = s as Record<string, unknown>;
+    const beta = ss["beta"] as Record<string, unknown> | undefined;
+    const weight = toFinite(ss["weight"]);
+    const price = beta ? toFinite(beta["price"]) : toFinite(ss["price"]);
+    const featA = beta ? toFinite(beta["featA"]) : toFinite(ss["featA"]);
+    const featB = beta ? toFinite(beta["featB"]) : toFinite(ss["featB"]);
+    const refAnchor = beta ? toFinite(beta["refAnchor"]) : toFinite(ss["refAnchor"]);
+    if (
+      weight === null ||
+      price === null ||
+      featA === null ||
+      featB === null
+    )
+      continue;
+    out.push({
+      weight,
+      beta: {
+        price,
+        featA,
+        featB,
+        ...(refAnchor !== null ? { refAnchor } : {}),
+      },
+    });
+  }
+  return out;
+}
+
+export function mapNormalizedToUI(norm: NormalizedSegment[]): Segment[] {
+  return norm.map((s, i) => ({
+    name: `Segment ${i + 1}`,
+    weight: s.weight,
+    betaPrice: s.beta.price,
+    betaFeatA: s.beta.featA,
+    betaFeatB: s.beta.featB,
+    betaNone: 0,
+    ...(s.beta.refAnchor !== undefined ? { betaRefAnchor: s.beta.refAnchor } : {}),
+    alphaAnchor: 0,
+    lambdaLoss: 1,
+  }));
+}
+
+export type SnapshotBuildArgs = {
   prices: Prices;
   costs: Prices;
-  feats: Features;
-  segments: Segment[];
-  refPrices?: Prices;
-  N: number;
+  features: Features;
+  refPrices: Prices;
   leak: Leakages;
-  usePocketProfit?: boolean;
-  usePocketMargins?: boolean;
-  label?: string;
-}): Snapshot {
-  const {
-    prices, costs, feats, segments, refPrices, N, leak,
-    usePocketProfit = false, usePocketMargins = false,
-    label = ""
-  } = args;
-
-  const shares = choiceShares(prices, feats, segments, refPrices);
-
-  const usePocket = usePocketProfit || usePocketMargins;
-
-  // Quantities (rounded like optimizer)
-  const q = {
-    good:   N * shares.good,
-    better: N * shares.better,
-    best:   N * shares.best,
-  };
-
-  // Effective price for profit/margins
-  const effG = usePocket ? computePocketPrice(prices.good,   "good",   leak).pocket : prices.good;
-  const effB = usePocket ? computePocketPrice(prices.better, "better", leak).pocket : prices.better;
-  const effH = usePocket ? computePocketPrice(prices.best,   "best",   leak).pocket : prices.best;
-
-  const revenue = round2(q.good * effG + q.better * effB + q.best * effH);
-  const profit  = round2(q.good * (effG - costs.good) + q.better * (effB - costs.better) + q.best * (effH - costs.best));
-
-  // ARPU (active) = Revenue / (active customers)
-  const active = Math.max(1, q.good + q.better + q.best);
-  const arpuActive = round2(revenue / active);
-
-  // GM uses pocket/list consistent with usePocketMargins flag
-  // Gross margin as profit / revenue, respecting pocket vs list basis
-  const grossMarginPct = revenue > 0 ? pct(profit / revenue) : 0;
-
-  const segShares = segments.slice(0, 3).map(s => s.weight);
-
-  return {
-    id: `S-${Math.random().toString(36).slice(2,7).toUpperCase()}`,
-    name: label || "Snapshot",
-    at: new Date().toISOString(),
-    prices,
-    shares,
-    revenue,
-    profit,
-    arpuActive,
-    grossMarginPct,
-    segShares,
-  };
-}
-
-export function snapshotsToCSV(rows: Snapshot[]): string {
-  const header = [
-    "id","name","captured_at",
-    "price.good","price.better","price.best",
-    "share.none","share.good","share.better","share.best",
-    "revenue","profit","arpu_active","gross_margin_pct",
-    "seg.weight.1","seg.weight.2","seg.weight.3"
-  ];
-  const data = rows.map(s => ([
-    s.id, s.name, s.at,
-    s.prices.good, s.prices.better, s.prices.best,
-    s.shares.none, s.shares.good, s.shares.better, s.shares.best,
-    s.revenue, s.profit, s.arpuActive, s.grossMarginPct,
-    s.segShares[0] ?? "", s.segShares[1] ?? "", s.segShares[2] ?? ""
-  ] as (string | number)[]));
-  return csvFromRows([header, ...data]);
-}
-
-// --- ADD: light-weight KPI shape used by Compare Board ---
-export type SnapshotKPIs = {
-  prices: Prices;
-  shares: { none: number; good: number; better: number; best: number };
-  revenue: number;
-  profit: number;
-  arpuActive: number;
-  grossMarginPct: number;
-  segShares: number[];
-  // optional UI label (used by Compare Board cards)
-  title?: string;
-  subtitle?: string;
+  segments: Segment[];
+  tornadoPocket: boolean;
+  tornadoPriceBump: number;
+  tornadoPctBump: number;
+  tornadoRangeMode: "symmetric" | "data";
+  tornadoMetric: TornadoMetric;
+  tornadoValueMode: TornadoValueMode;
+  retentionPct: number;
+  retentionMonths: number;
+  kpiFloorAdj: number;
+  priceRange: { map: TierRangeMap; source: PriceRangeSource } | null;
+  optRanges: SearchRanges;
+  optConstraints: Constraints;
+  channelMix?: Array<{ preset: string; w: number }>;
+  optimizerKind?: "grid-worker" | "grid-inline" | "future";
 };
 
-// --- ADD: compute KPIs without creating a full Snapshot record ---
+export function buildScenarioSnapshot(args: SnapshotBuildArgs): ScenarioSnapshot {
+  const segs = normalizeSegmentsForSave(args.segments);
+  return {
+    prices: args.prices,
+    costs: args.costs,
+    features: args.features,
+    refPrices: args.refPrices,
+    leak: args.leak,
+    ...(segs.length ? { segments: segs } : {}),
+    analysis: {
+      tornadoPocket: args.tornadoPocket,
+      tornadoPriceBump: args.tornadoPriceBump,
+      tornadoPctBump: args.tornadoPctBump,
+      tornadoRangeMode: args.tornadoRangeMode,
+      tornadoMetric: args.tornadoMetric,
+      tornadoValueMode: args.tornadoValueMode,
+      retentionPct: args.retentionPct,
+      retentionMonths: args.retentionMonths,
+      kpiFloorAdj: args.kpiFloorAdj,
+      optRanges: args.optRanges,
+      optConstraints: args.optConstraints,
+      optimizerKind: args.optimizerKind ?? "grid-worker",
+      ...(args.priceRange
+        ? {
+            priceRange: args.priceRange.map,
+            priceRangeSource: args.priceRange.source,
+          }
+        : {}),
+    },
+    ...(args.channelMix ? { channelMix: args.channelMix } : {}),
+  };
+}
+
+export const isScenarioImport = (x: unknown): x is ScenarioImport => {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return typeof o.prices === "object";
+};
+
 export function kpisFromSnapshot(
   args: {
     prices: Prices;
@@ -131,37 +173,45 @@ export function kpisFromSnapshot(
   },
   N: number,
   usePocketProfit: boolean,
-  usePocketMargins = usePocketProfit
+  usePocketMargins: boolean
 ): SnapshotKPIs {
-  const { prices, costs, features, segments, refPrices, leak } = args;
-
-  const shares = choiceShares(prices, features, segments, refPrices);
-
-  const usePocket = usePocketProfit || usePocketMargins;
-
-  const q = {
+  const shares = choiceShares(args.prices, args.features, args.segments, args.refPrices);
+  const units = {
     good: N * shares.good,
     better: N * shares.better,
     best: N * shares.best,
   };
 
-  const effG = usePocket ? computePocketPrice(prices.good, "good", leak).pocket : prices.good;
-  const effB = usePocket ? computePocketPrice(prices.better, "better", leak).pocket : prices.better;
-  const effH = usePocket ? computePocketPrice(prices.best, "best", leak).pocket : prices.best;
+  const listRevenue =
+    args.prices.good * units.good +
+    args.prices.better * units.better +
+    args.prices.best * units.best;
 
-  const revenue = Math.round((q.good * effG + q.better * effB + q.best * effH) * 100) / 100;
-  const profit  = Math.round((q.good * (effG - costs.good) + q.better * (effB - costs.better) + q.best * (effH - costs.best)) * 100) / 100;
+  const pocketPrices = {
+    good: computePocketPrice(args.prices.good, "good", args.leak).pocket,
+    better: computePocketPrice(args.prices.better, "better", args.leak).pocket,
+    best: computePocketPrice(args.prices.best, "best", args.leak).pocket,
+  };
 
-  const active = Math.max(1, q.good + q.better + q.best);
-  const arpuActive = Math.round((revenue / active) * 100) / 100;
+  const pocketRevenue =
+    pocketPrices.good * units.good +
+    pocketPrices.better * units.better +
+    pocketPrices.best * units.best;
 
-  // Gross margin as profit / revenue, respecting pocket vs list basis
-  const grossMarginPct = revenue > 0
-    ? Math.round((profit / revenue) * 10000) / 100
-    : 0;
+  const costTotal =
+    args.costs.good * (usePocketMargins ? units.good : units.good) +
+    args.costs.better * (usePocketMargins ? units.better : units.better) +
+    args.costs.best * (usePocketMargins ? units.best : units.best);
 
-  const segShares = segments.slice(0, 3).map(s => s.weight);
+  const revenue = usePocketProfit ? pocketRevenue : listRevenue;
+  const profit = revenue - costTotal;
+  const activeCustomers = N * (1 - shares.none);
+  const arpuActive = activeCustomers > 0 ? revenue / activeCustomers : 0;
 
-  return { prices, shares, revenue, profit, arpuActive, grossMarginPct, segShares };
+  return {
+    profit,
+    revenue,
+    arpuActive,
+    shares,
+  };
 }
-

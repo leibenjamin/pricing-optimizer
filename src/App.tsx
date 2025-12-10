@@ -87,6 +87,15 @@ import {
   formatBaselineLabel,
   buildGuardrailSummary,
 } from "./lib/viewModels";
+import {
+  buildScenarioSnapshot,
+  isScenarioImport,
+  mapNormalizedToUI,
+  normalizeSegmentsForSave,
+  type NormalizedSegment,
+  type ScenarioImport,
+  type ScenarioSnapshot,
+} from "./lib/snapshots";
 
 type SlotId = "A" | "B" | "C";
 const SLOT_KEYS: Record<SlotId, string> = {
@@ -94,43 +103,6 @@ const SLOT_KEYS: Record<SlotId, string> = {
   B: "po_compare_B_v1",
   C: "po_compare_C_v1",
 };
-
-type ScenarioSnapshot = {
-  prices: Prices;
-  costs?: Prices;
-  refPrices?: Prices;
-  features?: Features;
-  leak?: Leakages;
-  segments?: unknown;
-  basis?: { usePocketProfit?: boolean; usePocketMargins?: boolean };
-  kpis?: SnapshotKPIs;
-  meta?: { label?: string; savedAt?: number; source?: string };
-  channelMix?: Array<{ preset: string; w: number }>;
-  analysis?: {
-    optConstraints?: Partial<Constraints>;
-    optRanges?: SearchRanges;
-    tornadoPocket?: boolean;
-    tornadoPriceBump?: number;
-    tornadoPctBump?: number;
-    tornadoRangeMode?: "symmetric" | "data";
-    tornadoMetric?: TornadoMetric;
-    tornadoValueMode?: TornadoValueMode;
-    retentionPct?: number;
-    retentionMonths?: number;
-    kpiFloorAdj?: number;
-    priceRange?: TierRangeMap;
-    priceRangeSource?: PriceRangeSource;
-    optimizerKind?: OptimizerKind;
-  };
-};
-
-const isScenarioImport = (x: unknown): x is ScenarioSnapshot => {
-  if (!x || typeof x !== "object") return false;
-  const o = x as Record<string, unknown>;
-  return typeof o.prices === "object";
-};
-
-type ScenarioImport = ScenarioSnapshot;
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -233,102 +205,6 @@ function Explanation({
   );
 }
 
-// --- Segments: typed normalizer (no `any`) ---
-type SegmentNested = {
-  weight: number;
-  beta: { price: number; featA: number; featB: number; refAnchor?: number };
-};
-const isFullSegment = (s: unknown): s is Segment =>
-  !!s &&
-  typeof s === "object" &&
-  typeof (s as Segment).name === "string" &&
-  typeof (s as Segment).betaPrice === "number" &&
-  typeof (s as Segment).betaFeatA === "number" &&
-  typeof (s as Segment).betaFeatB === "number" &&
-  typeof (s as Segment).betaNone === "number" &&
-  typeof (s as Segment).weight === "number";
-
-type SegmentFlat = {
-  weight: number;
-  price: number;
-  featA: number;
-  featB: number;
-  refAnchor?: number;
-};
-type SegmentNormalized = SegmentNested;
-
-type ExplainDelta = ScorecardDelta;
-
-function toFinite(n: unknown): number | null {
-  const v = typeof n === "number" ? n : Number(n);
-  return Number.isFinite(v) ? v : null;
-}
-
-function isSegmentNested(s: unknown): s is SegmentNested {
-  if (!s || typeof s !== "object") return false;
-  const ss = s as Record<string, unknown>;
-  const b = ss["beta"];
-  if (!b || typeof b !== "object") return false;
-  const bb = b as Record<string, unknown>;
-  return (
-    toFinite(ss["weight"]) !== null &&
-    toFinite(bb["price"]) !== null &&
-    toFinite(bb["featA"]) !== null &&
-    toFinite(bb["featB"]) !== null
-  );
-}
-
-function isSegmentFlat(s: unknown): s is SegmentFlat {
-  if (!s || typeof s !== "object") return false;
-  const ss = s as Record<string, unknown>;
-  return (
-    toFinite(ss["weight"]) !== null &&
-    toFinite(ss["price"]) !== null &&
-    toFinite(ss["featA"]) !== null &&
-    toFinite(ss["featB"]) !== null
-  );
-}
-
-function normalizeSegmentsForSave(segs: unknown): SegmentNormalized[] {
-  if (!Array.isArray(segs)) return [];
-  const out: SegmentNormalized[] = [];
-  for (const s of segs) {
-    if (isSegmentNested(s)) {
-      const weight = toFinite(s.weight)!;
-      const price = toFinite(s.beta.price)!;
-      const featA = toFinite(s.beta.featA)!;
-      const featB = toFinite(s.beta.featB)!;
-      const refAnchor = toFinite(s.beta.refAnchor);
-      out.push({
-        weight,
-        beta: {
-          price,
-          featA,
-          featB,
-          ...(refAnchor !== null ? { refAnchor } : {}),
-        },
-      });
-    } else if (isSegmentFlat(s)) {
-      const weight = toFinite(s.weight)!;
-      const price = toFinite(s.price)!;
-      const featA = toFinite(s.featA)!;
-      const featB = toFinite(s.featB)!;
-      const refAnchor = toFinite(s.refAnchor);
-      out.push({
-        weight,
-        beta: {
-          price,
-          featA,
-          featB,
-          ...(refAnchor !== null ? { refAnchor } : {}),
-        },
-      });
-    }
-    // invalid rows are skipped
-  }
-  return out;
-}
-
 function mapFitToSegments(
   inSegs: Array<{ name: string; weight: number; beta: { price: number; featA: number; featB: number } }>
 ): Segment[] {
@@ -344,6 +220,16 @@ function mapFitToSegments(
     lambdaLoss: 1,
   }));
 }
+
+const isFullSegment = (s: unknown): s is Segment =>
+  !!s &&
+  typeof s === "object" &&
+  typeof (s as Segment).name === "string" &&
+  typeof (s as Segment).betaPrice === "number" &&
+  typeof (s as Segment).betaFeatA === "number" &&
+  typeof (s as Segment).betaFeatB === "number" &&
+  typeof (s as Segment).betaNone === "number" &&
+  typeof (s as Segment).weight === "number";
 
 function coerceSegmentsForCalc(input: unknown, fallback: Segment[]): Segment[] {
   if (Array.isArray(input) && input.every(isFullSegment)) {
@@ -1199,18 +1085,6 @@ export default function App() {
     }
   }, []);
 
-  const mapNormalizedToUI = useCallback((norm: SegmentNested[]): typeof segments => {
-    const ui = norm.map((s) => ({
-      name: "" as string,
-      weight: s.weight,
-      betaPrice: s.beta.price,
-      betaFeatA: s.beta.featA,
-      betaFeatB: s.beta.featB,
-      ...(s.beta.refAnchor !== undefined ? { betaRefAnchor: s.beta.refAnchor } : {}),
-    }));
-    return ui as unknown as typeof segments;
-  }, []);
-
 
   // Estimate model once from synthetic data
   useEffect(() => {
@@ -1640,8 +1514,7 @@ export default function App() {
     );
 
     const slotKpis = (
-      obj: ReturnType<typeof readSlot>,
-      fallbackTitle: string
+      obj: ReturnType<typeof readSlot>
     ): SnapshotKPIs | null => {
       if (!obj) return null;
       const slotSegments = obj.segments
@@ -1656,38 +1529,30 @@ export default function App() {
         obj.analysis?.optConstraints?.usePocketProfit ?? usePocket;
       const slotUsePocketMargins =
         obj.analysis?.optConstraints?.usePocketMargins ?? slotUsePocket;
-      return {
-        ...kpisFromSnapshot(
-          {
-            prices: obj.prices,
-            costs: obj.costs ?? costs,
-            features: slotFeats,
-            refPrices: slotRef,
-            leak: slotLeak,
-            segments: slotSegments,
-          },
-          N,
-          slotUsePocket,
-          slotUsePocketMargins
-        ),
-        title: `${fallbackTitle} (${slotUsePocket ? "pocket" : "list"})`,
-        subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} | Segments: ${
-          compareUseSavedSegments && obj.segments ? "saved" : "current"
-        } | Leak: ${
-          compareUseSavedLeak && obj.leak ? "saved" : "current"
-        } | Refs: ${compareUseSavedRefs && obj.refPrices ? "saved" : "current"}`,
-      };
+      return kpisFromSnapshot(
+        {
+          prices: obj.prices,
+          costs: obj.costs ?? costs,
+          features: slotFeats,
+          refPrices: slotRef,
+          leak: slotLeak,
+          segments: slotSegments,
+        },
+        N,
+        slotUsePocket,
+        slotUsePocketMargins
+      );
     };
 
     return {
       current: curKPIs,
       slots: {
-        A: slotKpis(readSlot("A"), "Saved A"),
-        B: slotKpis(readSlot("B"), "Saved B"),
-        C: slotKpis(readSlot("C"), "Saved C"),
+        A: slotKpis(readSlot("A")),
+        B: slotKpis(readSlot("B")),
+        C: slotKpis(readSlot("C")),
       },
     };
-  }, [N, compareUseSavedLeak, compareUseSavedRefs, compareUseSavedSegments, costs, features, leak, mapNormalizedToUI, optConstraints.usePocketMargins, optConstraints.usePocketProfit, prices, readSlot, refPrices, segments]);
+  }, [N, compareUseSavedLeak, compareUseSavedRefs, compareUseSavedSegments, costs, features, leak, optConstraints.usePocketMargins, optConstraints.usePocketProfit, prices, readSlot, refPrices, segments]);
 
   const applyOptimizedLadder = useCallback(
     (best: Prices) => {
@@ -1864,8 +1729,8 @@ export default function App() {
   const optimizedKpis = optimizedRun?.kpis ?? optimizedKPIs;
 
   const buildExplainDelta = useCallback(
-    (target: SnapshotKPIs | null): ExplainDelta | null => {
-      if (!baselineKpis || !segments.length || !target) return null;
+    (target: SnapshotKPIs | null, targetPrices: Prices | null): ScorecardDelta | null => {
+      if (!baselineKpis || !segments.length || !target || !targetPrices || !baselineRun?.ladder) return null;
 
       const deltaProfit = target.profit - baselineKpis.profit;
       const deltaRevenue = target.revenue - baselineKpis.revenue;
@@ -1885,11 +1750,10 @@ export default function App() {
         const qCur = N * shareCur;
 
         // Approximate unit margin from baseline list prices
-        const marginBase = baselineKpis.prices[tier] - costs[tier];
+        const marginBase = baselineRun.ladder[tier] - costs[tier];
 
         const mixEffect = (qCur - qBase) * marginBase;
-        const priceEffect =
-          qBase * (target.prices[tier] - baselineKpis.prices[tier]);
+        const priceEffect = qBase * (targetPrices[tier] - baselineRun.ladder[tier]);
         const total = mixEffect + priceEffect;
 
         return { tier, mixEffect, priceEffect, total };
@@ -1944,16 +1808,16 @@ export default function App() {
         suggestion,
       };
     },
-    [baselineKpis, costs, N, segments]
+    [baselineKpis, baselineRun?.ladder, costs, N, segments]
   );
 
   const explainDeltaCurrent = useMemo(
-    () => buildExplainDelta(currentKPIs),
-    [buildExplainDelta, currentKPIs]
+    () => buildExplainDelta(currentKPIs, prices),
+    [buildExplainDelta, currentKPIs, prices]
   );
   const explainDeltaOptimized = useMemo(
-    () => buildExplainDelta(optimizedKpis),
-    [buildExplainDelta, optimizedKpis]
+    () => buildExplainDelta(optimizedKpis, optResult?.prices ?? optimizedRun?.ladder ?? null),
+    [buildExplainDelta, optimizedKpis, optResult?.prices, optimizedRun?.ladder]
   );
 
   const guardrailsForCurrent = useMemo(
@@ -2420,7 +2284,7 @@ export default function App() {
     } else if (baselineKpis) {
       raw.push({
         label: "Baseline",
-        price: baselineKpis.prices[frontierTier],
+        price: prices[frontierTier],
         profit: baselineKpis.profit,
         kind: "baseline",
       });
@@ -3069,61 +2933,6 @@ export default function App() {
     [defaults]
   );
 
-  // --- JSON snapshot (portable) ---
-  const buildScenarioSnapshot = useCallback((args: {
-    prices: typeof prices;
-    costs: typeof costs;
-    features: typeof features;
-    refPrices: typeof refPrices;
-    leak: typeof leak;
-    segments: typeof segments;
-    tornadoPocket: boolean;
-    tornadoPriceBump: number;
-    tornadoPctBump: number;
-    tornadoRangeMode: "symmetric" | "data";
-    tornadoMetric: TornadoMetric;
-    tornadoValueMode: TornadoValueMode;
-    retentionPct: number;
-    retentionMonths: number;
-    kpiFloorAdj: number;
-    priceRange: PriceRangeState | null;
-    optRanges: typeof optRanges;
-    optConstraints: typeof optConstraints;
-    channelMix?: typeof channelMix;
-    optimizerKind?: OptimizerKind;
-  }) => {
-    const segs = normalizeSegmentsForSave(args.segments);
-    return {
-      prices: args.prices,
-      costs: args.costs,
-      features: args.features,
-      refPrices: args.refPrices,
-      leak: args.leak,
-      ...(segs.length ? { segments: segs } : {}),
-      analysis: {
-        tornadoPocket: args.tornadoPocket,
-        tornadoPriceBump: args.tornadoPriceBump,
-        tornadoPctBump: args.tornadoPctBump,
-        tornadoRangeMode: args.tornadoRangeMode,
-        tornadoMetric: args.tornadoMetric,
-        tornadoValueMode: args.tornadoValueMode,
-        retentionPct: args.retentionPct,
-        retentionMonths: args.retentionMonths,
-        kpiFloorAdj: args.kpiFloorAdj,
-        optRanges: args.optRanges,
-        optConstraints: args.optConstraints,
-        optimizerKind: args.optimizerKind ?? "grid-worker",
-        ...(args.priceRange
-          ? {
-              priceRange: args.priceRange.map,
-              priceRangeSource: args.priceRange.source,
-            }
-          : {}),
-      },
-      ...(args.channelMix ? { channelMix: args.channelMix } : {}),
-    };
-  }, []);
-
   // Migrate legacy stored baseline snapshot to the new baselineRun store.
   useEffect(() => {
     if (baselineRun) return;
@@ -3149,7 +2958,7 @@ export default function App() {
         leak: snap.leak ?? leak,
         refPrices: snap.refPrices ?? refPrices,
         features: snap.features ?? features,
-        segments: snap.segments ? mapNormalizedToUI(snap.segments as SegmentNested[]) : segments,
+        segments: snap.segments ? mapNormalizedToUI(snap.segments as NormalizedSegment[]) : segments,
         basis,
         kpis: parsed.kpis,
         uncertainty: scenarioUncertainty ?? undefined,
@@ -3164,7 +2973,6 @@ export default function App() {
     costs,
     features,
     leak,
-    mapNormalizedToUI,
     refPrices,
     scenarioPresetId,
     segments,
@@ -3240,7 +3048,6 @@ export default function App() {
     );
   }, [
     baselineRun,
-    buildScenarioSnapshot,
     channelMix,
     costs,
     currentKPIs,
