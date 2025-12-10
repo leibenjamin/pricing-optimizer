@@ -37,9 +37,6 @@ import { describeSegment } from "./lib/segmentNarrative";
 
 import { pocketCoverage } from "./lib/coverage";
 
-import HeatmapMini from "./components/HeatmapMini";
-import { feasibilitySliceGB } from "./lib/coverage";
-
 import {
   collectPriceRange,
   hasMeaningfulRange,
@@ -73,6 +70,8 @@ import { CohortSection } from "./components/CohortSection";
 import { FrontierSection } from "./components/FrontierSection";
 import { OptimizerPanel } from "./components/OptimizerPanel";
 import { WaterfallSection } from "./components/WaterfallSection";
+import { RobustnessSection } from "./components/RobustnessSection";
+import { CoverageSection } from "./components/CoverageSection";
 import { kpisFromSnapshot, type SnapshotKPIs } from "./lib/snapshots";
 import { runRobustnessScenarios, type UncertaintyScenario } from "./lib/robustness";
 import { buildTornadoRows, tornadoSignalThreshold, type TornadoValueMode } from "./lib/tornadoView";
@@ -368,7 +367,7 @@ export default function App() {
   // --- Toasts ---
   type Toast = {
     id: number;
-    kind: "error" | "success" | "info";
+    kind: "error" | "success" | "info" | "warning";
     msg: string;
     ttl?: number;
   };
@@ -395,12 +394,16 @@ export default function App() {
               ? "border-red-300 bg-red-50 text-red-800"
               : t.kind === "success"
               ? "border-green-300 bg-green-50 text-green-800"
+              : t.kind === "warning"
+              ? "border-amber-300 bg-amber-50 text-amber-800"
               : "border-slate-300 bg-white text-slate-800";
           const iconTone =
             t.kind === "error"
               ? "bg-red-500"
               : t.kind === "success"
               ? "bg-green-500"
+              : t.kind === "warning"
+              ? "bg-amber-500"
               : "bg-slate-500";
           return (
             <div
@@ -2583,7 +2586,7 @@ export default function App() {
     setOptError(null);
     const best = quickOpt.best;
     if (!best) {
-      toast("info", "Quick grid found no feasible ladder in the current ranges/floors");
+      toast("warning", "Quick grid found no feasible ladder in the current ranges/floors");
       return;
     }
     const constraintsAtRun: Constraints = {
@@ -4992,170 +4995,19 @@ export default function App() {
                     </Explanation>
                   }
                 />
-                <Section
-                  id="kpi-pocket-coverage"
-                  title="KPI - Pocket floor coverage"
-                  actions={<ActionCluster chart="coverage" id="coverage-heatmap" csv />}
-                >
-              <div className="text-[11px] text-slate-600 mb-1">
-                Basis: {coverageUsePocket ? "Pocket margins (after leakages)" : "List margins (before leakages)"}.
-                <InfoTip id="coverage.basis" ariaLabel="How is coverage basis used?" />
-              </div>
-              <div className="flex items-center gap-3 text-xs mb-2">
-                <label className="inline-flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    checked={coverageUsePocket}
-                    onChange={(e) => setCoverageUsePocket(e.target.checked)}
-                  />
-                  Use pocket margins for coverage
-                </label>
-                <span className="text-[11px] text-slate-500">
-                  Toggle to inspect list vs pocket feasibility; optimizer runs use the pocket toggle above.
-                </span>
-              </div>
-              <Explanation slot="kpi.pocketCoverage">
-                <div className="font-semibold text-[11px] text-slate-700">
-                  How to read pocket floor coverage
-                </div>
-                <ul className="mt-1 list-disc space-y-1 pl-4">
-                  <li>
-                    Coverage is the share of Good/Better/Best ladders inside the search grid that clear pocket-margin floors
-                    after promo/FX/refund leakages.
-                  </li>
-                  <li>
-                    The sensitivity slider bumps every floor up or down (in percentage points) to stress-test how fragile feasibility is
-                    before you run the optimizer.
-                  </li>
-                  <li>
-                    Apply floors pushes the adjusted floors into the optimizer guardrails so the global search aligns with what you are validating here.
-                  </li>
-                </ul>
-              </Explanation>
-              <div className="flex items-center gap-2 text-xs mb-2">
-                <span className="text-gray-600">Floor sensitivity:</span>
-                <input
-                  type="range"
-                  min={-10}
-                  max={10}
-                  value={kpiFloorAdj}
-                  onChange={(e) => setKpiFloorAdj(Number(e.target.value))}
+                <CoverageSection
+                  coverageUsePocket={coverageUsePocket}
+                  setCoverageUsePocket={setCoverageUsePocket}
+                  kpiFloorAdj={kpiFloorAdj}
+                  setKpiFloorAdj={setKpiFloorAdj}
+                  coverageSnapshot={coverageSnapshot}
+                  optConstraints={optConstraints}
+                  optRanges={optRanges}
+                  costs={costs}
+                  leak={leak}
+                  setOptConstraints={setOptConstraints}
+                  toast={toast}
                 />
-                <span className="w-10 text-right">{kpiFloorAdj} pp</span>
-              </div>
-
-              {(() => {
-                const pct0 = coverageSnapshot.pct0;
-                const pct1 = coverageSnapshot.pct1;
-                const delta = coverageSnapshot.delta;
-                const tone =
-                  pct1 >= 70
-                    ? "text-green-700 bg-green-50 border-green-200"
-                    : pct1 >= 40
-                    ? "text-amber-700 bg-amber-50 border-amber-200"
-                    : "text-red-700 bg-red-50 border-red-200";
-                const floors1 = coverageSnapshot.floors;
-                return (
-                  <>
-                    <div
-                      className={`rounded border px-4 py-3 inline-flex items-center gap-4 ${tone}`}
-                    >
-                      <div>
-                        <div className="text-2xl font-semibold leading-tight">
-                          {pct1}%
-                        </div>
-                        <div className="text-xs">
-                          feasible ladders (pocket floors)
-                        </div>
-                        <div className="text-[11px] text-gray-600 mt-1">
-                          baseline {pct0}% -&gt; {pct1}% -{" "}
-                          {delta >= 0 ? `+${delta}pp` : `${delta}pp`} -{" "}
-                          {coverageSnapshot.tested.toLocaleString()} combos - step $
-                          {coverageSnapshot.step}
-                        </div>
-                      </div>
-                      <button
-                        className="text-xs border rounded px-3 py-1 bg-white hover:bg-gray-50"
-                        onClick={() => {
-                          setOptConstraints((c) => ({
-                            ...c,
-                            marginFloor: { ...floors1 },
-                          }));
-                          toast(
-                            "success",
-                            `Applied floors: Good ${Math.round(
-                              floors1.good * 100
-                            )}%, Better ${Math.round(
-                              floors1.better * 100
-                            )}%, Best ${Math.round(floors1.best * 100)}%`
-                          );
-                        }}
-                      >
-                        Apply floors
-                      </button>
-                    </div>
-                    <div className="text-[11px] text-gray-700 mt-2 space-y-1">
-                      <div>
-                        <span className="font-semibold text-gray-800">Floors tested:</span>{" "}
-                        Good {Math.round(floors1.good * 100)}% | Better {Math.round(floors1.better * 100)}% | Best{" "}
-                        {Math.round(floors1.best * 100)}% ({kpiFloorAdj} pp sensitivity applied).
-                      </div>
-                      <div>
-                        <span className="font-semibold text-gray-800">Grid and gaps:</span>{" "}
-                        Good -&gt; Better gap {optConstraints.gapGB}, Better -&gt; Best gap {optConstraints.gapBB}; step $
-                        {optRanges.step} across {coverageSnapshot.tested.toLocaleString()} ladder combinations.
-                      </div>
-                    </div>
-
-                    <div className="mt-3">
-                      {(() => {
-                          const { cells, gTicks, bTicks, bestUsed } =
-                            feasibilitySliceGB(
-                              optRanges,
-                              costs,
-                              floors1,
-                              {
-                                gapGB: optConstraints.gapGB,
-                                gapBB: optConstraints.gapBB,
-                              },
-                              leak,
-                              coverageUsePocket
-                            );
-                        return (
-                          <>
-                            <details className="mb-1">
-                              <summary className="cursor-pointer select-none text-[11px] text-gray-600">
-                                How to read this heatmap
-                              </summary>
-                              <div className="text-[11px] text-gray-600 mt-1 space-y-1">
-                                <div>
-                                  Best is pinned near the lowest feasible price (about {bestUsed}) so we can see the Good
-                                  vs Better feasibility wedge.
-                                </div>
-                                <div>
-                                  Green cells = Good/Better price pairs that clear the pocket floors and respect the required gaps; gray cells fail a gap or a margin floor.
-                                </div>
-                                <div>
-                                  If the green band collapses as you raise floors, either ease the floors, widen the gap guardrails, or broaden the search ranges before running the optimizer.
-                                </div>
-                              </div>
-                            </details>
-
-
-                            <HeatmapMini
-                              cells={cells}
-                              gTicks={gTicks}
-                              bTicks={bTicks}
-                              chartId="coverage-heatmap"
-                            />
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </>
-                );
-              })()}
-            </Section>
             <Section id="current-vs-optimized" title="Current vs Optimized">
               <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
                 <div className="flex items-center justify-between gap-2">
@@ -5395,42 +5247,7 @@ export default function App() {
                 </div>
               )}
             </Section>
-            <Section id="optimizer-robustness" title="Optimizer robustness">
-              <div className="text-[11px] text-slate-700 bg-slate-50 border border-dashed border-slate-200 rounded px-3 py-2">
-                Stress scenarios scale price sensitivity and leakages to show how fragile the recommendation is.
-                We re-run the grid under each scenario and compare profits at your optimized ladder vs the per-scenario optimum.
-              </div>
-              {robustnessResults.length === 0 ? (
-                <div className="text-xs text-gray-600">Run the optimizer to populate robustness scenarios.</div>
-              ) : (
-                <div className="overflow-auto">
-                  <table className="min-w-full text-[11px] border border-slate-200 rounded">
-                    <thead className="bg-slate-100 text-slate-700">
-                      <tr>
-                        <th className="px-2 py-1 text-left">Scenario</th>
-                        <th className="px-2 py-1 text-left">Profit @ optimized ladder</th>
-                        <th className="px-2 py-1 text-left">Scenario-optimal profit</th>
-                        <th className="px-2 py-1 text-left">Price shift vs optimized</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {robustnessResults.map((r) => (
-                        <tr key={r.name} className="odd:bg-white even:bg-slate-50">
-                          <td className="px-2 py-1 font-semibold text-slate-800">{r.name}</td>
-                          <td className="px-2 py-1">
-                            {r.profitAtBase != null ? fmtUSD(r.profitAtBase) : "n/a"}
-                          </td>
-                          <td className="px-2 py-1">{fmtUSD(r.bestProfit)}</td>
-                          <td className="px-2 py-1 text-slate-700">
-                            {r.priceDelta != null ? `$${r.priceDelta.toFixed(2)} avg abs delta` : "n/a"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Section>
+            <RobustnessSection results={robustnessResults} />
             </div>
           )}
         </div>
