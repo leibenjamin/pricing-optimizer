@@ -14,6 +14,10 @@ type CalloutsSnapshotProps = {
   fallbackNarrative: ScorecardDelta | null;
   guardrails: GuardrailSummary;
   optimizerWhyLines: string[];
+  binds?: string[];
+  topDriverLine?: string | null;
+  guardrailFloorLine?: string | null;
+  validationNotes?: string[];
 };
 
 export default function CalloutsSnapshot({
@@ -24,6 +28,10 @@ export default function CalloutsSnapshot({
   fallbackNarrative,
   guardrails,
   optimizerWhyLines,
+  binds = [],
+  topDriverLine,
+  guardrailFloorLine,
+  validationNotes,
 }: CalloutsSnapshotProps) {
   if (!hasResult) {
     return (
@@ -46,6 +54,15 @@ export default function CalloutsSnapshot({
     optimizerWhyLines.length > 0
       ? optimizerWhyLines.slice(0, 2)
       : [guardrails.optimizerLine || "Optimizer ready - rerun if you change ranges, floors, or basis."];
+  const validationList =
+    validationNotes && validationNotes.length
+      ? validationNotes
+      : [
+          "Validate guardrails in Pocket floor coverage.",
+          "Review leakages in Pocket waterfall.",
+          "Rerun optimizer after ladder or basis tweaks, then export/print the summary.",
+          "Baseline auto-saved before this run; re-pin after manual tweaks to compare future changes.",
+        ];
 
   return (
     <>
@@ -91,7 +108,17 @@ export default function CalloutsSnapshot({
         <div className="rounded-xl border border-purple-100 bg-purple-50/50 px-3 py-3 shadow-sm">
           <div className="text-[11px] uppercase text-slate-600">Guardrails & outlook</div>
           <div className="text-sm font-semibold text-slate-900 leading-snug">{guardrails.gapLine}</div>
-          <p className="text-[11px] text-slate-600 mt-1 leading-snug">{guardrails.floorLine}</p>
+          <p className="text-[11px] text-slate-600 mt-1 leading-snug">{guardrailFloorLine ?? guardrails.floorLine}</p>
+          {binds.length ? (
+            <ul className="mt-1 list-disc space-y-1 pl-4 text-[11px] text-slate-700 leading-snug">
+              {binds.map((b, i) => (
+                <li key={i}>{b}</li>
+              ))}
+            </ul>
+          ) : null}
+          {topDriverLine ? (
+            <p className="text-[11px] text-slate-600 mt-1 leading-snug">Largest driver near optimum: {topDriverLine}</p>
+          ) : null}
           {optimizerNote.map((line, idx) => (
             <p key={idx} className="text-[11px] text-slate-600 mt-1 leading-snug">
               {line}
@@ -102,10 +129,9 @@ export default function CalloutsSnapshot({
         <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3 shadow-sm">
           <div className="text-[11px] uppercase text-slate-600">Next steps</div>
           <ul className="mt-1 list-disc space-y-1 pl-4 text-[11px] text-slate-700 leading-snug">
-            <li>Validate guardrails in Pocket floor coverage.</li>
-            <li>Review leakages in Pocket waterfall.</li>
-            <li>Rerun optimizer after ladder or basis tweaks, then export/print the summary.</li>
-            <li>Baseline auto-saved before this run; re-pin after manual tweaks to compare future changes.</li>
+            {validationList.map((line, idx) => (
+              <li key={idx}>{line}</li>
+            ))}
           </ul>
         </div>
       </div>

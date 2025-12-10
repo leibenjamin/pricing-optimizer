@@ -1,5 +1,5 @@
 import { useMemo, Suspense } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, SetStateAction, ComponentProps, ComponentType, LazyExoticComponent } from "react";
 import { computePocketPrice, type Leakages, type Tier } from "../lib/waterfall";
 import { LEAK_PRESETS, blendLeakPresets } from "../lib/waterfallPresets";
 import type { Prices } from "../lib/segments";
@@ -7,7 +7,7 @@ import ActionCluster from "./ActionCluster";
 import InfoTip from "./InfoTip";
 import { Section } from "./Section";
 import ErrorBoundary from "./ErrorBoundary";
-import Waterfall from "./Waterfall";
+import type Waterfall from "./Waterfall";
 
 type ChannelMixRow = { preset: string; w: number };
 
@@ -23,6 +23,7 @@ type WaterfallSectionProps = {
   channelMix: ChannelMixRow[];
   setChannelMix: Dispatch<SetStateAction<ChannelMixRow[]>>;
   prices: Prices;
+  WaterfallComponent: ComponentType<ComponentProps<typeof Waterfall>> | LazyExoticComponent<ComponentType<ComponentProps<typeof Waterfall>>>;
 };
 
 const WATERFALL_LEGEND = [
@@ -55,6 +56,7 @@ export function WaterfallSection({
   channelMix,
   setChannelMix,
   prices,
+  WaterfallComponent,
 }: WaterfallSectionProps) {
   const listForWater =
     waterTier === "good"
@@ -327,7 +329,7 @@ export function WaterfallSection({
           </div>
           <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading waterfall...</div>}>
             <ErrorBoundary title="Waterfall chart failed">
-              <Waterfall
+              <WaterfallComponent
                 chartId="waterfall-main"
                 title="Pocket Price Waterfall"
                 subtitle={`${waterTier} - list $${listForWater.toFixed(2)}`}
@@ -351,7 +353,7 @@ export function WaterfallSection({
                   <div key={t} className="min-w-0 h-56 overflow-hidden print:h-48">
                     <Suspense fallback={<div className="text-xs text-gray-500 p-2">Loading...</div>}>
                       <ErrorBoundary title="Waterfall mini chart failed">
-                        <Waterfall title={t} subtitle={`list $${list.toFixed(2)}`} listPrice={list} steps={wf.steps} variant="mini" colorMap={WATERFALL_COLOR_MAP} />
+                        <WaterfallComponent title={t} subtitle={`list $${list.toFixed(2)}`} listPrice={list} steps={wf.steps} variant="mini" colorMap={WATERFALL_COLOR_MAP} />
                       </ErrorBoundary>
                     </Suspense>
                   </div>

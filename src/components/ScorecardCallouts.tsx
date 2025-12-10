@@ -19,6 +19,10 @@ type ScorecardCalloutsProps = {
     fallbackNarrative: ScorecardDelta | null;
     guardrails: ScorecardGuardrails;
     optimizerWhyLines: string[];
+    binds?: string[];
+    topDriverLine?: string | null;
+    guardrailFloorLine?: string | null;
+    validationNotes?: string[];
   };
 };
 
@@ -61,6 +65,10 @@ export function ScorecardCallouts({
           fallbackNarrative={callouts.fallbackNarrative}
           guardrails={callouts.guardrails}
           optimizerWhyLines={callouts.optimizerWhyLines}
+          binds={callouts.binds}
+          topDriverLine={callouts.topDriverLine}
+          guardrailFloorLine={callouts.guardrailFloorLine}
+          validationNotes={callouts.validationNotes}
         />
       </Section>
     </>

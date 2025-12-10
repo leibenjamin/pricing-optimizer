@@ -4,6 +4,7 @@ import { Suspense, lazy, type ReactNode, type ChangeEvent } from "react";
 // replace direct imports:
 const FrontierChartReal = lazy(() => import("./components/FrontierChart"));
 const Tornado = lazy(() => import("./components/Tornado"));
+const Waterfall = lazy(() => import("./components/Waterfall"));
 import type { TakeRateScenario } from "./components/TakeRateChart";
 import { Section } from "./components/Section";
 
@@ -63,7 +64,7 @@ import { csvTemplate } from "./lib/csv";
 
 import { preflight, fetchWithRetry, apiUrl } from "./lib/net";
 
-import CompareBoard from "./components/CompareBoard";
+import { CompareBoardSection } from "./components/CompareBoardSection";
 import { ScorecardCallouts } from "./components/ScorecardCallouts";
 import { TakeRateSection } from "./components/TakeRateSection";
 import { CohortSection } from "./components/CohortSection";
@@ -72,6 +73,7 @@ import { OptimizerPanel } from "./components/OptimizerPanel";
 import { WaterfallSection } from "./components/WaterfallSection";
 import { RobustnessSection } from "./components/RobustnessSection";
 import { CoverageSection } from "./components/CoverageSection";
+import { CurrentVsOptimizedSection, type CurrentVsOptimizedVM } from "./components/CurrentVsOptimizedSection";
 import { kpisFromSnapshot, type SnapshotKPIs } from "./lib/snapshots";
 import { runRobustnessScenarios, type UncertaintyScenario } from "./lib/robustness";
 import { buildTornadoRows, tornadoSignalThreshold, type TornadoValueMode } from "./lib/tornadoView";
@@ -85,6 +87,50 @@ import {
   formatBaselineLabel,
   buildGuardrailSummary,
 } from "./lib/viewModels";
+
+type SlotId = "A" | "B" | "C";
+const SLOT_KEYS: Record<SlotId, string> = {
+  A: "po_compare_A_v1",
+  B: "po_compare_B_v1",
+  C: "po_compare_C_v1",
+};
+
+type ScenarioSnapshot = {
+  prices: Prices;
+  costs?: Prices;
+  refPrices?: Prices;
+  features?: Features;
+  leak?: Leakages;
+  segments?: unknown;
+  basis?: { usePocketProfit?: boolean; usePocketMargins?: boolean };
+  kpis?: SnapshotKPIs;
+  meta?: { label?: string; savedAt?: number; source?: string };
+  channelMix?: Array<{ preset: string; w: number }>;
+  analysis?: {
+    optConstraints?: Partial<Constraints>;
+    optRanges?: SearchRanges;
+    tornadoPocket?: boolean;
+    tornadoPriceBump?: number;
+    tornadoPctBump?: number;
+    tornadoRangeMode?: "symmetric" | "data";
+    tornadoMetric?: TornadoMetric;
+    tornadoValueMode?: TornadoValueMode;
+    retentionPct?: number;
+    retentionMonths?: number;
+    kpiFloorAdj?: number;
+    priceRange?: TierRangeMap;
+    priceRangeSource?: PriceRangeSource;
+    optimizerKind?: OptimizerKind;
+  };
+};
+
+const isScenarioImport = (x: unknown): x is ScenarioSnapshot => {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return typeof o.prices === "object";
+};
+
+type ScenarioImport = ScenarioSnapshot;
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
@@ -1110,23 +1156,16 @@ export default function App() {
   const [compareUseSavedLeak, setCompareUseSavedLeak] = useState(true);
   const [compareUseSavedRefs, setCompareUseSavedRefs] = useState(true);
 
-  type SlotId = "A" | "B" | "C";
-  const SLOT_KEYS: Record<SlotId, string> = {
-    A: "po_compare_A_v1",
-    B: "po_compare_B_v1",
-    C: "po_compare_C_v1",
-  };
-
-  function readSlot(id: SlotId): ReturnType<typeof buildScenarioSnapshot> | null {
+  const readSlot = useCallback((id: SlotId): ScenarioSnapshot | null => {
     try {
       const raw = localStorage.getItem(SLOT_KEYS[id]);
       if (!raw) return null;
       const obj = JSON.parse(raw);
-      return isScenarioImport(obj) ? obj : null;
+      return isScenarioImport(obj) ? (obj as ScenarioSnapshot) : null;
     } catch {
       return null;
     }
-  }
+  }, []);
   function writeSlot(id: SlotId, data: ReturnType<typeof buildScenarioSnapshot>) {
     localStorage.setItem(SLOT_KEYS[id], JSON.stringify(data));
   }
@@ -1158,6 +1197,18 @@ export default function App() {
     } else {
       setPriceRangeState(null);
     }
+  }, []);
+
+  const mapNormalizedToUI = useCallback((norm: SegmentNested[]): typeof segments => {
+    const ui = norm.map((s) => ({
+      name: "" as string,
+      weight: s.weight,
+      betaPrice: s.beta.price,
+      betaFeatA: s.beta.featA,
+      betaFeatB: s.beta.featB,
+      ...(s.beta.refAnchor !== undefined ? { betaRefAnchor: s.beta.refAnchor } : {}),
+    }));
+    return ui as unknown as typeof segments;
   }, []);
 
 
@@ -1574,11 +1625,86 @@ export default function App() {
     };
   }, [optConstraints.marginFloor, optConstraints.gapGB, optConstraints.gapBB, optRanges, costs, leak, kpiFloorAdj, coverageUsePocket]);
 
-  const lastAppliedPricesRef = useRef<{
-    good: number;
-    better: number;
-    best: number;
-  } | null>(null);
+  const lastAppliedPricesRef = useRef<Prices | null>(null);
+
+  const compareBoardData = useMemo<{
+    current: SnapshotKPIs;
+    slots: Record<"A" | "B" | "C", SnapshotKPIs | null>;
+  }>(() => {
+    const usePocket = !!optConstraints.usePocketProfit;
+    const curKPIs = kpisFromSnapshot(
+      { prices, costs, features, refPrices, leak, segments },
+      N,
+      usePocket,
+      optConstraints.usePocketMargins ?? usePocket
+    );
+
+    const slotKpis = (
+      obj: ReturnType<typeof readSlot>,
+      fallbackTitle: string
+    ): SnapshotKPIs | null => {
+      if (!obj) return null;
+      const slotSegments = obj.segments
+        ? compareUseSavedSegments
+          ? mapNormalizedToUI(normalizeSegmentsForSave(obj.segments))
+          : segments
+        : segments;
+      const slotRef = compareUseSavedRefs && obj.refPrices ? obj.refPrices : refPrices;
+      const slotLeak = compareUseSavedLeak && obj.leak ? obj.leak : leak;
+      const slotFeats = obj.features ?? features;
+      const slotUsePocket =
+        obj.analysis?.optConstraints?.usePocketProfit ?? usePocket;
+      const slotUsePocketMargins =
+        obj.analysis?.optConstraints?.usePocketMargins ?? slotUsePocket;
+      return {
+        ...kpisFromSnapshot(
+          {
+            prices: obj.prices,
+            costs: obj.costs ?? costs,
+            features: slotFeats,
+            refPrices: slotRef,
+            leak: slotLeak,
+            segments: slotSegments,
+          },
+          N,
+          slotUsePocket,
+          slotUsePocketMargins
+        ),
+        title: `${fallbackTitle} (${slotUsePocket ? "pocket" : "list"})`,
+        subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} | Segments: ${
+          compareUseSavedSegments && obj.segments ? "saved" : "current"
+        } | Leak: ${
+          compareUseSavedLeak && obj.leak ? "saved" : "current"
+        } | Refs: ${compareUseSavedRefs && obj.refPrices ? "saved" : "current"}`,
+      };
+    };
+
+    return {
+      current: curKPIs,
+      slots: {
+        A: slotKpis(readSlot("A"), "Saved A"),
+        B: slotKpis(readSlot("B"), "Saved B"),
+        C: slotKpis(readSlot("C"), "Saved C"),
+      },
+    };
+  }, [N, compareUseSavedLeak, compareUseSavedRefs, compareUseSavedSegments, costs, features, leak, mapNormalizedToUI, optConstraints.usePocketMargins, optConstraints.usePocketProfit, prices, readSlot, refPrices, segments]);
+
+  const applyOptimizedLadder = useCallback(
+    (best: Prices) => {
+      lastAppliedPricesRef.current = { ...prices };
+      setPrices(best);
+      pushJ?.(`Applied optimized ladder: ${best.good}/${best.better}/${best.best}`);
+    },
+    [prices, pushJ, setPrices]
+  );
+
+  const undoAppliedLadder = useCallback(() => {
+    const prev = lastAppliedPricesRef.current;
+    if (!prev) return;
+    setPrices(prev);
+    lastAppliedPricesRef.current = null;
+    pushJ?.("Undo: restored ladder to previous prices");
+  }, [pushJ, setPrices]);
 
   useEffect(() => {
     return () => {
@@ -2848,6 +2974,71 @@ export default function App() {
   const tornadoMetricLabel = tornadoMetric === "revenue" ? "Revenue" : "Profit";
   const tornadoUnitLabel = tornadoValueMode === "percent" ? "% delta" : "$ delta";
   const tornadoChartTitle = `Tornado: ${tornadoViewLabel} ${tornadoMetricLabel.toLowerCase()} sensitivity (${tornadoUnitLabel})`;
+
+  const currentVsOptimizedVM = useMemo<CurrentVsOptimizedVM | null>(() => {
+    if (!optResult) return null;
+    const ctx = optResult.context;
+    const basisLabel = ctx.usePocketProfit ? "Pocket profit (after leakages)" : "List profit";
+    const curPrices = ctx.pricesAtRun;
+    const curProfit =
+      optResult.baselineProfit ??
+      computeScenarioProfit(curPrices, ctx.usePocketProfit, {
+        costs: ctx.costs,
+        features: ctx.features,
+        segments: ctx.segments,
+        refPrices: ctx.refPrices,
+        leak: ctx.leak,
+        N: ctx.N,
+      });
+    const best = optResult.prices;
+    const bestProfit = optResult.profit ?? null;
+    if (!best || bestProfit === null) return null;
+    const deltaProfit = (optimizerProfitDelta?.delta ?? bestProfit - curProfit) || 0;
+    const revenueDeltaCurrent = optimizedKpis && currentKPIs ? optimizedKpis.revenue - currentKPIs.revenue : null;
+    const activeDeltaCurrent =
+      optimizedKpis && currentKPIs ? Math.round(N * (1 - optimizedKpis.shares.none)) - Math.round(N * (1 - currentKPIs.shares.none)) : null;
+    const arpuDeltaCurrent = optimizedKpis && currentKPIs ? optimizedKpis.arpuActive - currentKPIs.arpuActive : null;
+    const binds = explainGaps(best, { gapGB: ctx.constraints.gapGB, gapBB: ctx.constraints.gapBB });
+    const topDriverLine = topDriver(tornadoRowsOptim, { unit: tornadoValueMode === "percent" ? "percent" : "usd", metric: tornadoMetric });
+    const deltaLabel = optimizerInputDrift.length ? "vs run baseline" : "vs current profit";
+    const driftNote =
+      optimizerInputDrift.length > 0
+        ? `Inputs changed since the optimizer run (${optimizerInputDrift.join(", ")}). Numbers here use the saved run inputs.`
+        : null;
+    return {
+      basisLabel,
+      driftNote,
+      deltaLabel,
+      curPrices,
+      curProfit,
+      best,
+      bestProfit,
+      deltaProfit,
+      revenueDeltaCurrent,
+      activeDeltaCurrent,
+      arpuDeltaCurrent,
+      binds,
+      topDriverLine: topDriverLine ?? null,
+      guardrailFloorLine: guardrailsForOptimized.floorLine,
+      tornadoMetricLabel,
+      explainDelta: explainDeltaOptimized,
+    };
+  }, [
+    N,
+    computeScenarioProfit,
+    currentKPIs,
+    explainDeltaOptimized,
+    guardrailsForOptimized.floorLine,
+    optResult,
+    optimizerInputDrift,
+    optimizerProfitDelta?.delta,
+    optimizedKpis,
+    tornadoMetric,
+    tornadoMetricLabel,
+    tornadoRowsOptim,
+    tornadoValueMode,
+  ]);
+
   const tornadoViewModel = useMemo(
     () =>
       buildTornadoViewModel({
@@ -2877,18 +3068,6 @@ export default function App() {
     },
     [defaults]
   );
-
-  const mapNormalizedToUI = useCallback((norm: SegmentNested[]): typeof segments => {
-    const ui = norm.map((s) => ({
-      name: "" as string,
-      weight: s.weight,
-      betaPrice: s.beta.price,
-      betaFeatA: s.beta.featA,
-      betaFeatB: s.beta.featB,
-      ...(s.beta.refAnchor !== undefined ? { betaRefAnchor: s.beta.refAnchor } : {}),
-    }));
-    return ui as unknown as typeof segments;
-  }, []);
 
   // --- JSON snapshot (portable) ---
   const buildScenarioSnapshot = useCallback((args: {
@@ -2992,17 +3171,6 @@ export default function App() {
     scenarioUncertainty,
     setBaselineRun,
   ]);
-
-  // --- Import guard for JSON ---
-  type ScenarioImport = ReturnType<typeof buildScenarioSnapshot>;
-  function isScenarioImport(x: unknown): x is ScenarioImport {
-    if (!x || typeof x !== "object") return false;
-    const o = x as Record<string, unknown>;
-    return (
-      typeof o.prices === "object" &&
-      typeof o.costs === "object"
-    );
-  }
 
   type SegmentImportNested = { weight: number; beta: { price: number; featA: number; featB: number; refAnchor?: number } };
   const isSegmentImportNested = (segs: unknown): segs is SegmentImportNested[] => {
@@ -3155,8 +3323,18 @@ export default function App() {
           setRetentionPct(sc.analysis.retentionPct);
         if (typeof sc.analysis.kpiFloorAdj === "number")
           setKpiFloorAdj(sc.analysis.kpiFloorAdj);
-        if (sc.analysis.optRanges) setOptRanges(sc.analysis.optRanges);
-        if (sc.analysis.optConstraints) setOptConstraints(sc.analysis.optConstraints);
+        if (sc.analysis.optRanges) setOptRanges(sc.analysis.optRanges as typeof optRanges);
+        if (sc.analysis.optConstraints) {
+          const partial = sc.analysis.optConstraints;
+          setOptConstraints((prev) => ({
+            ...prev,
+            ...partial,
+            marginFloor: {
+              ...prev.marginFloor,
+              ...(partial.marginFloor ?? {}),
+            },
+          }));
+        }
         if (sc.analysis.priceRange) {
           const ok = setPriceRangeFromData(
             sc.analysis.priceRange,
@@ -3172,6 +3350,12 @@ export default function App() {
       if (sc.channelMix) {
         setChannelMix(sc.channelMix as typeof channelMix);
         setChannelBlendApplied(true);
+      }
+
+      if (sc.analysis) {
+        if (typeof sc.analysis.retentionMonths === "number")
+          setRetentionMonths(Math.min(24, Math.max(6, sc.analysis.retentionMonths)));
+        if (typeof sc.analysis.optimizerKind === "string") setOptimizerKind(sc.analysis.optimizerKind);
       }
 
       pushJ?.(`[${now()}] Imported scenario JSON`);
@@ -3484,10 +3668,11 @@ export default function App() {
     if (sc.refPrices) setRefPrices(sc.refPrices);
     if (sc.leak) setLeak(sc.leak);
     if (sc.segments)
-      setSegments(
-        mapNormalizedToUI(normalizeSegmentsForSave(sc.segments))
-      );
-    if (sc.channelMix) setChannelMix(sc.channelMix as typeof channelMix);
+      setSegments(mapNormalizedToUI(normalizeSegmentsForSave(sc.segments)));
+    if (sc.channelMix) {
+      setChannelMix(sc.channelMix as typeof channelMix);
+      setChannelBlendApplied(true);
+    }
     if (sc.analysis) {
       if (typeof sc.analysis.tornadoPocket === "boolean")
         setTornadoPocket(sc.analysis.tornadoPocket);
@@ -3505,8 +3690,18 @@ export default function App() {
         sc.analysis.tornadoValueMode === "percent"
       )
         setTornadoValueMode(sc.analysis.tornadoValueMode);
-      if (sc.analysis.optRanges) setOptRanges(sc.analysis.optRanges);
-      if (sc.analysis.optConstraints) setOptConstraints(sc.analysis.optConstraints);
+      if (sc.analysis.optRanges) setOptRanges(sc.analysis.optRanges as typeof optRanges);
+      if (sc.analysis.optConstraints) {
+        const partial = sc.analysis.optConstraints;
+        setOptConstraints((prev) => ({
+          ...prev,
+          ...partial,
+          marginFloor: {
+            ...prev.marginFloor,
+            ...(partial.marginFloor ?? {}),
+          },
+        }));
+      }
       if (
         sc.analysis.tornadoRangeMode === "symmetric" ||
         sc.analysis.tornadoRangeMode === "data"
@@ -3528,6 +3723,8 @@ export default function App() {
       } else {
         fallbackToSyntheticRanges();
       }
+      if (typeof sc.analysis.optimizerKind === "string")
+        setOptimizerKind(sc.analysis.optimizerKind);
     } else {
       fallbackToSyntheticRanges();
     }
@@ -4610,6 +4807,7 @@ export default function App() {
                 channelMix={channelMix}
                 setChannelMix={setChannelMix}
                 prices={prices}
+                WaterfallComponent={Waterfall}
               />
             )}
             </div>
@@ -4689,131 +4887,29 @@ export default function App() {
                   </p>
                 </div>
               </Section>
-            <Section id="compare-board" title="Scenario Compare (A/B/C)" className="order-3">
-              <Explanation slot="chart.compareBoard">
-                Save the current ladder into A/B/C, branch your changes, then reload slots while narrating differences. KPIs auto-recompute; use the toggles to control whether saved or current segments/leak/refs are used so you know exactly what's being compared.
-              </Explanation>
-              <div className="text-[11px] text-slate-600 mb-1">
-                Slots use saved prices/costs/refs/leak/segments and the saved pocket/list basis if present; Current uses live state.
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-1">
-                <label className="inline-flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    checked={compareUseSavedSegments}
-                    onChange={(e) => setCompareUseSavedSegments(e.target.checked)}
-                  />
-                  Use saved segments for slots
-                </label>
-                <InfoTip id="compare.toggles" ariaLabel="How compare toggles work" />
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-2">
-                <label className="inline-flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    checked={compareUseSavedLeak}
-                    onChange={(e) => setCompareUseSavedLeak(e.target.checked)}
-                  />
-                  Use saved leak for slots
-                </label>
-                <InfoTip id="compare.leak" ariaLabel="Use saved leak?" />
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-3">
-                <label className="inline-flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    checked={compareUseSavedRefs}
-                    onChange={(e) => setCompareUseSavedRefs(e.target.checked)}
-                  />
-                  Use saved reference prices for slots
-                </label>
-                <InfoTip id="compare.refs" ariaLabel="Use saved reference prices?" />
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
-                <span className="text-gray-600">Save current to:</span>
-                {(["A", "B", "C"] as const).map((id) => (
-                  <button
-                    key={id}
-                    className="border rounded px-2 py-1 bg-white hover:bg-gray-50"
-                    onClick={() => saveToSlot(id)}
-                  >
-                    Save to {id}
-                  </button>
-                ))}
-              </div>
-
-              {(() => {
-                // derive KPIs for the board
-                const usePocket = !!optConstraints.usePocketProfit;
-                const curKPIs = kpisFromSnapshot(
-                  { prices, costs, features, refPrices, leak, segments },
-                  N,
-                  usePocket,
-                  optConstraints.usePocketMargins ?? usePocket
-                );
-
-                const objA = readSlot("A");
-                const objB = readSlot("B");
-                const objC = readSlot("C");
-
-                const slotKpis = (
-                  obj: ReturnType<typeof readSlot>,
-                  fallbackTitle: string
-                ): SnapshotKPIs | null => {
-                  if (!obj) return null;
-                  const slotSegments = obj.segments
-                    ? compareUseSavedSegments
-                      ? mapNormalizedToUI(normalizeSegmentsForSave(obj.segments))
-                      : segments
-                    : segments;
-                  const slotRef = compareUseSavedRefs && obj.refPrices ? obj.refPrices : refPrices;
-                  const slotLeak = compareUseSavedLeak && obj.leak ? obj.leak : leak;
-                  const slotFeats = obj.features ?? features;
-                  const slotUsePocket =
-                    obj.analysis?.optConstraints?.usePocketProfit ??
-                    usePocket;
-                  const slotUsePocketMargins =
-                    obj.analysis?.optConstraints?.usePocketMargins ??
-                    slotUsePocket;
-                  return {
-                    ...kpisFromSnapshot(
-                      {
-                        prices: obj.prices,
-                        costs: obj.costs,
-                        features: slotFeats,
-                        refPrices: slotRef,
-                        leak: slotLeak,
-                        segments: slotSegments,
-                      },
-                      N,
-                      slotUsePocket,
-                      slotUsePocketMargins
-                    ),
-                    title: `${fallbackTitle} (${slotUsePocket ? "pocket" : "list"})`,
-                    subtitle: `Basis: ${slotUsePocket ? "pocket" : "list"} | Segments: ${compareUseSavedSegments && obj.segments ? "saved" : "current"} | Leak: ${compareUseSavedLeak && obj.leak ? "saved" : "current"} | Refs: ${compareUseSavedRefs && obj.refPrices ? "saved" : "current"}`,
-                  };
-                };
-
-                const slots: Record<"A" | "B" | "C", SnapshotKPIs | null> = {
-                  A: slotKpis(objA, "Saved A"),
-                  B: slotKpis(objB, "Saved B"),
-                  C: slotKpis(objC, "Saved C"),
-                };
-
-                return (
-                  <CompareBoard
-                    slots={slots}
-                    current={curKPIs}
-                    onLoad={(id: "A" | "B" | "C") => loadFromSlot(id)}
-                    onClear={(id: "A" | "B" | "C") => {
-                      clearSlot(id);
-                      toast("info", `Cleared slot ${id}`);
-                      setJournal((j) => [...j]);
-                    }}
-                  />
-                );
-              })()}
-            </Section>
+            <CompareBoardSection
+              className="order-3"
+              explanation={
+                <Explanation slot="chart.compareBoard">
+                  Save the current ladder into A/B/C, branch your changes, then reload slots while narrating differences. KPIs auto-recompute; use the toggles to control whether saved or current segments/leak/refs are used so you know exactly what's being compared.
+                </Explanation>
+              }
+              compareUseSavedSegments={compareUseSavedSegments}
+              setCompareUseSavedSegments={setCompareUseSavedSegments}
+              compareUseSavedLeak={compareUseSavedLeak}
+              setCompareUseSavedLeak={setCompareUseSavedLeak}
+              compareUseSavedRefs={compareUseSavedRefs}
+              setCompareUseSavedRefs={setCompareUseSavedRefs}
+              onSaveSlot={saveToSlot}
+              onLoadSlot={(id) => loadFromSlot(id)}
+              onClearSlot={(id) => {
+                clearSlot(id);
+                toast("info", `Cleared slot ${id}`);
+                setJournal((j) => [...j]);
+              }}
+              slots={compareBoardData.slots}
+              current={compareBoardData.current}
+            />
               <Section id="share-links" title="Share & export">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <button
@@ -5008,212 +5104,36 @@ export default function App() {
                   setOptConstraints={setOptConstraints}
                   toast={toast}
                 />
-            <Section id="current-vs-optimized" title="Current vs Optimized">
-              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-slate-900 text-sm">How to read this card</span>
-                  <span className="text-[10px] uppercase tracking-wide text-slate-500">Demo aid</span>
-                </div>
-                <p className="mt-1 leading-snug">
-                  Use this to narrate "before vs after." Apply the optimized ladder to push prices back to Scenario Panel,
-                  undo to revert, then call out the delta and which constraints or drivers mattered most.
-                </p>
-                <p className="mt-1 text-slate-600">
-                  Basis: {(optResult?.context.usePocketProfit ?? optConstraints.usePocketProfit) ? "Pocket profit (after leakages)" : "List profit"}.
-                </p>
-              </div>
-              {(() => {
-                if (!optResult)
-                  return <div className="text-xs text-gray-600">Run the optimizer to populate the optimized ladder.</div>;
-
-                const ctx = optResult.context;
-                const basisLabel = ctx.usePocketProfit ? "Pocket profit (after leakages)" : "List profit";
-                const curPrices = ctx.pricesAtRun;
-                const curProfit =
-                  optResult.baselineProfit ??
-                  computeScenarioProfit(curPrices, ctx.usePocketProfit, {
-                    costs: ctx.costs,
-                    features: ctx.features,
-                    segments: ctx.segments,
-                    refPrices: ctx.refPrices,
-                    leak: ctx.leak,
-                    N: ctx.N,
-                  });
-
-                const best = optResult.prices;
-                const bestProfit = optResult.profit ?? null;
-
-                if (!best || bestProfit === null)
-                  return <div className="text-xs text-gray-600">Run the optimizer to populate the optimized ladder.</div>;
-
-                const deltaProfit = (optimizerProfitDelta?.delta ?? bestProfit - curProfit) || 0;
-                const revenueDeltaCurrent =
-                  optimizedKpis && currentKPIs ? optimizedKpis.revenue - currentKPIs.revenue : null;
-                const activeDeltaCurrent =
-                  optimizedKpis && currentKPIs
-                    ? Math.round(N * (1 - optimizedKpis.shares.none)) -
-                      Math.round(N * (1 - currentKPIs.shares.none))
-                    : null;
-                const arpuDeltaCurrent =
-                  optimizedKpis && currentKPIs
-                    ? optimizedKpis.arpuActive - currentKPIs.arpuActive
-                    : null;
-                const guardrails = guardrailsForOptimized;
-                const binds = explainGaps(best, {
-                  gapGB: ctx.constraints.gapGB,
-                  gapBB: ctx.constraints.gapBB,
-                });
-                const topDriverLine = topDriver(tornadoRowsOptim, {
-                  unit: tornadoValueMode === "percent" ? "percent" : "usd",
-                  metric: tornadoMetric,
-                });
-                const deltaLabel = optimizerInputDrift.length ? "vs run baseline" : "vs current profit";
-                const driftNote = optimizerInputDrift.length
-                  ? `Inputs changed since the optimizer run (${optimizerInputDrift.join(", ")}). Numbers here use the saved run inputs.`
-                  : null;
-
-                return (
-                  <div className="space-y-3">
-                    <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-semibold text-slate-900 text-sm">How to read this card</span>
-                        <span className="text-[10px] uppercase tracking-wide text-slate-500">Demo aid</span>
-                      </div>
-                      <p className="mt-1 leading-snug">
-                        Narrate the before vs after. Apply the optimized ladder to push prices back to Scenario Panel, undo to revert, then call out the delta and which constraints or drivers mattered most.
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] uppercase tracking-wide text-slate-600">
-                          Basis: {basisLabel}
-                        </span>
-                        {driftNote && (
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] text-amber-800">
-                            {driftNote}
-                          </span>
-                        )}
-                        <a className="text-sky-600 hover:underline" href="#callouts">
-                          Jump to Callouts for the narrative
-                        </a>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 text-sm">
-                      <div className="rounded-xl border border-slate-200 bg-white/70 p-3">
-                        <div className="font-semibold mb-1">Current</div>
-                        <div>Good: ${curPrices.good}</div>
-                        <div>Better: ${curPrices.better}</div>
-                        <div>Best: ${curPrices.best}</div>
-                        <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(curProfit).toLocaleString()}</div>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white/70 p-3">
-                        <div className="font-semibold mb-1">Optimized</div>
-                        <div>Good: ${best.good}</div>
-                        <div>Better: ${best.better}</div>
-                        <div>Best: ${best.best}</div>
-                        <div className="mt-2 text-xs text-gray-600">Profit: ${Math.round(bestProfit).toLocaleString()}</div>
-                      </div>
-                      <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 p-3 lg:col-span-2 flex flex-col gap-2">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-[11px] uppercase tracking-wide text-slate-600">Delta</div>
-                            <div className="text-xl font-bold leading-tight">
-                              {deltaProfit >= 0 ? "+" : "-"}${Math.abs(Math.round(deltaProfit)).toLocaleString()}
-                            </div>
-                            <div className="text-[11px] text-slate-600">{deltaLabel}</div>
-                          </div>
-                          <div className="text-right text-[11px] text-slate-600">
-                            <div>Revenue {revenueDeltaCurrent != null ? `${revenueDeltaCurrent >= 0 ? "+" : "-"}$${Math.abs(revenueDeltaCurrent).toLocaleString()}` : "n/a"}</div>
-                            <div>Active {activeDeltaCurrent != null ? `${activeDeltaCurrent >= 0 ? "+" : "-"}${Math.abs(activeDeltaCurrent)}` : "n/a"}</div>
-                            <div>ARPU {arpuDeltaCurrent != null ? `${arpuDeltaCurrent >= 0 ? "+" : "-"}$${Math.abs(arpuDeltaCurrent).toFixed(2)}` : "n/a"}</div>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          <button
-                            className="w-full border rounded px-3 py-2 text-sm font-semibold bg-white hover:bg-gray-50"
-                            onClick={() => {
-                              lastAppliedPricesRef.current = { ...prices };
-                              setPrices(best as typeof prices);
-                              pushJ?.(`Applied optimized ladder: ${(best as typeof prices).good}/${(best as typeof prices).better}/${(best as typeof prices).best}`);
-                            }}
-                          >
-                            Apply optimized ladder
-                          </button>
-                          <button
-                            className="w-full text-sm border rounded px-3 py-2 bg-white hover:bg-gray-50 disabled:opacity-50"
-                            disabled={!lastAppliedPricesRef.current}
-                            onClick={() => {
-                              const prev = lastAppliedPricesRef.current;
-                              if (!prev) return;
-                              setPrices(prev);
-                              lastAppliedPricesRef.current = null;
-                              pushJ?.("Undo: restored ladder to previous prices");
-                            }}
-                          >
-                            Undo apply ladder
-                          </button>
-                          {lastOptAt && (!baselineMeta || lastOptAt > baselineMeta.savedAt) ? (
-                            <button
-                              className="w-full text-xs border rounded px-3 py-2 bg-white hover:bg-gray-50"
-                              onClick={() => {
-                                if (!optResult?.kpis) return;
-                                const meta = { label: "Pinned from optimizer", savedAt: Date.now() };
-                                const ctx = optResult.context;
-                                const run = makeScenarioRun({
-                                  scenarioId: scenarioPresetId ?? "custom",
-                                  ladder: optResult.prices,
-                                  costs: ctx.costs,
-                                  leak: ctx.leak,
-                                  refPrices: ctx.refPrices,
-                                  features: ctx.features,
-                                  segments: ctx.segments,
-                                  basis: {
-                                    usePocketProfit: !!ctx.usePocketProfit,
-                                    usePocketMargins: !!ctx.usePocketMargins,
-                                  },
-                                  kpis: optResult.kpis,
-                                  uncertainty: scenarioUncertainty ?? undefined,
-                                  meta: { label: meta.label, savedAt: meta.savedAt, source: "baseline" },
-                                });
-                                setBaselineRun(run);
-                                toast("success", "Baseline pinned from optimizer");
-                              }}
-                            >
-                              Pin this as baseline
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                      <div className="rounded-lg border border-slate-200 bg-white/70 p-3 space-y-1">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
-                          Why this recommendation?
-                        </div>
-                        <ul className="list-disc ml-4 space-y-1 text-slate-700 leading-snug">
-                          {binds.length ? binds.map((b, i) => <li key={i}>{b}</li>) : <li>No gap constraints binding.</li>}
-                          <li>Largest {tornadoMetricLabel.toLowerCase()} driver near optimum: {topDriverLine ? topDriverLine : "n/a"}.</li>
-                          <li>{guardrails.floorLine}</li>
-                        </ul>
-                      </div>
-                      <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 space-y-1">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
-                          Validation & follow-ups
-                        </div>
-                        <ul className="list-disc ml-4 space-y-1 text-slate-700 leading-snug">
-                          <li>Check guardrail feasibility in <a className="text-sky-600 hover:underline" href="#kpi-pocket-coverage">Pocket floor coverage</a>.</li>
-                          <li>Review leakages in <a className="text-sky-600 hover:underline" href="#pocket-price-waterfall">Pocket waterfall</a>.</li>
-                          <li>Compare narrative in <a className="text-sky-600 hover:underline" href="#callouts">Callouts snapshot</a> and export/print.</li>
-                        </ul>
-                        <p className="text-[11px] text-slate-600">
-                          Need to rerun? Adjust ranges, floors, or basis, then trigger the optimizer again to refresh this card.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </Section>
+                <CurrentVsOptimizedSection
+                  vm={currentVsOptimizedVM}
+                  canUndo={!!lastAppliedPricesRef.current}
+                  canPinBaseline={Boolean(lastOptAt && (!baselineMeta || lastOptAt > baselineMeta.savedAt) && optResult?.kpis)}
+                  onApplyOptimized={applyOptimizedLadder}
+                  onUndoApply={undoAppliedLadder}
+                  onPinBaseline={() => {
+                    if (!optResult?.kpis) return;
+                    const meta = { label: "Pinned from optimizer", savedAt: Date.now() };
+                    const ctx = optResult.context;
+                    const run = makeScenarioRun({
+                      scenarioId: scenarioPresetId ?? "custom",
+                      ladder: optResult.prices,
+                      costs: ctx.costs,
+                      leak: ctx.leak,
+                      refPrices: ctx.refPrices,
+                      features: ctx.features,
+                      segments: ctx.segments,
+                      basis: {
+                        usePocketProfit: !!ctx.usePocketProfit,
+                        usePocketMargins: !!ctx.usePocketMargins,
+                      },
+                      kpis: optResult.kpis,
+                      uncertainty: scenarioUncertainty ?? undefined,
+                      meta: { label: meta.label, savedAt: meta.savedAt, source: "baseline" },
+                    });
+                    setBaselineRun(run);
+                    toast("success", "Baseline pinned from optimizer");
+                  }}
+                />
             <Section id="methods" title="Methods">
               <p className="text-sm text-gray-700 print-tight">
                 MNL: U = b0(j) + bP*price + bA*featA + bB*featB; outside option
@@ -5271,6 +5191,17 @@ export default function App() {
               fallbackNarrative: scorecardVM.explain,
               guardrails: guardrailsForOptimized,
               optimizerWhyLines,
+              binds: currentVsOptimizedVM?.binds,
+              topDriverLine: currentVsOptimizedVM?.topDriverLine,
+              guardrailFloorLine: currentVsOptimizedVM?.guardrailFloorLine ?? guardrailsForOptimized.floorLine,
+              validationNotes: currentVsOptimizedVM
+                ? [
+                    currentVsOptimizedVM.driftNote ?? undefined,
+                    "Check guardrail feasibility in Pocket floor coverage.",
+                    "Review leakages in Pocket waterfall.",
+                    "Re-run optimizer after ladder or basis tweaks, then export/print.",
+                  ].filter(Boolean) as string[]
+                : undefined,
             }}
           />
 
