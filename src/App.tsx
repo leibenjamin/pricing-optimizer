@@ -60,9 +60,8 @@ import Modal from "./components/Modal";
 import ErrorBoundary from "./components/ErrorBoundary";
 import OnboardingOverlay from "./components/OnboardingOverlay";
 import { useStickyState } from "./lib/useStickyState";
-import { csvTemplate } from "./lib/csv";
 
-import { preflight, fetchWithRetry, apiUrl } from "./lib/net";
+import { preflight, fetchWithRetry, apiUrl, type RetryConfig } from "./lib/net";
 
 import { CompareBoardSection } from "./components/CompareBoardSection";
 import { ScorecardCallouts } from "./components/ScorecardCallouts";
@@ -74,6 +73,9 @@ import { WaterfallSection } from "./components/WaterfallSection";
 import { RobustnessSection } from "./components/RobustnessSection";
 import { CoverageSection } from "./components/CoverageSection";
 import { CurrentVsOptimizedSection, type CurrentVsOptimizedVM } from "./components/CurrentVsOptimizedSection";
+import { ShareExportSection } from "./components/ShareExportSection";
+import { RecentLinksSection } from "./components/RecentLinksSection";
+import { ScenarioJournalSection } from "./components/ScenarioJournalSection";
 import { kpisFromSnapshot, type SnapshotKPIs } from "./lib/snapshots";
 import { runRobustnessScenarios, type UncertaintyScenario } from "./lib/robustness";
 import { buildTornadoRows, tornadoSignalThreshold, type TornadoValueMode } from "./lib/tornadoView";
@@ -94,18 +96,18 @@ import {
   normalizeSegmentsForSave,
   type NormalizedSegment,
   type ScenarioImport,
-  type ScenarioSnapshot,
 } from "./lib/snapshots";
-
-type SlotId = "A" | "B" | "C";
-const SLOT_KEYS: Record<SlotId, string> = {
-  A: "po_compare_A_v1",
-  B: "po_compare_B_v1",
-  C: "po_compare_C_v1",
-};
-
-const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
-const fmtPct = (x: number) => `${Math.round(x * 1000) / 10}%`;
+import {
+  buildSharePayload,
+  downloadScenarioJson,
+  downloadScenarioCsv,
+  downloadJournal,
+  saveShortLink,
+  buildLongUrl,
+  copyToClipboard,
+} from "./lib/share";
+import { readSlot, writeSlot, clearSlot, type SlotId } from "./lib/slots";
+import { clearRecents, readRecents, rememberId } from "./lib/recents";
 
 const TIER_ORDER: readonly Tier[] = ["good", "better", "best"] as const;
 type OptimizerKind = "grid-worker" | "grid-inline" | "future";
@@ -178,13 +180,6 @@ const OPTIMIZE_TAB_SECTION_IDS = [
   "methods",
 ] as const;
 
-type SaveError = {
-  error?: string;
-  issues?: Array<{ path?: Array<string | number>; message?: string }>;
-};
-function isSaveError(x: unknown): x is SaveError {
-  return !!x && typeof x === "object";
-}
 
 function Explanation({
   slot,
@@ -1021,44 +1016,9 @@ export default function App() {
   };
 
   // ---- recent IDs helpers ----
-  type RecentItem = { id: string; t: number };
-  const RECENT_KEY = "po_recent_ids_v1";
-  const readRecents = (): RecentItem[] => {
-    try {
-      return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
-    } catch {
-      return [];
-    }
-  };
-  const writeRecents = (arr: RecentItem[]) => {
-    localStorage.setItem(RECENT_KEY, JSON.stringify(arr.slice(0, 5)));
-  };
-  const rememberId = (id: string) => {
-    const now = Date.now();
-    const seen = readRecents().filter((r) => r.id !== id);
-    writeRecents([{ id, t: now }, ...seen]);
-  };
   const [compareUseSavedSegments, setCompareUseSavedSegments] = useState(true);
   const [compareUseSavedLeak, setCompareUseSavedLeak] = useState(true);
   const [compareUseSavedRefs, setCompareUseSavedRefs] = useState(true);
-
-  const readSlot = useCallback((id: SlotId): ScenarioSnapshot | null => {
-    try {
-      const raw = localStorage.getItem(SLOT_KEYS[id]);
-      if (!raw) return null;
-      const obj = JSON.parse(raw);
-      return isScenarioImport(obj) ? (obj as ScenarioSnapshot) : null;
-    } catch {
-      return null;
-    }
-  }, []);
-  function writeSlot(id: SlotId, data: ReturnType<typeof buildScenarioSnapshot>) {
-    localStorage.setItem(SLOT_KEYS[id], JSON.stringify(data));
-  }
-  function clearSlot(id: SlotId) {
-    localStorage.removeItem(SLOT_KEYS[id]);
-  }
-
 
   // ADD: latent-class segments state
   const [segments, setSegments] = useState<Segment[]>(defaultSegments);
@@ -1127,32 +1087,38 @@ export default function App() {
             leak?: typeof leak;
             segments?: typeof segments;
             channelMix?: typeof channelMix;
-            analysis?: {
-              tornadoPocket?: boolean;
-              tornadoPriceBump?: number;
-              tornadoPctBump?: number;
-              tornadoRangeMode?: "symmetric" | "data";
-              retentionPct?: number;
-              retentionMonths?: number;
-              kpiFloorAdj?: number;
-              priceRange?: TierRangeMap;
-              priceRangeSource?: PriceRangeSource;
-              optRanges?: typeof optRanges;
-              optConstraints?: typeof optConstraints;
-            };
+          analysis?: {
+            tornadoPocket?: boolean;
+            tornadoPriceBump?: number;
+            tornadoPctBump?: number;
+            tornadoRangeMode?: "symmetric" | "data";
+            retentionPct?: number;
+            retentionMonths?: number;
+            kpiFloorAdj?: number;
+            priceRange?: TierRangeMap;
+            priceRangeSource?: PriceRangeSource;
+            optRanges?: typeof optRanges;
+            optConstraints?: typeof optConstraints;
+            channelMix?: typeof channelMix;
+            uncertainty?: ScenarioUncertainty;
           };
         };
+      };
         setPrices(scenario.prices);
         setCosts(scenario.costs);
         setFeatures(scenario.features);
         if (scenario.refPrices) setRefPrices(scenario.refPrices);
         if (scenario.leak) setLeak(scenario.leak);
         if (scenario.segments) setSegments(scenario.segments);
-        if (scenario.channelMix) {
-          setChannelMix(scenario.channelMix);
+        const incomingMix = scenario.channelMix ?? scenario.analysis?.channelMix;
+        if (incomingMix && Array.isArray(incomingMix) && incomingMix.length) {
+          setChannelMix(incomingMix as typeof channelMix);
           setChannelBlendApplied(true);
         }
-        if (scenario.channelMix) setChannelMix(scenario.channelMix);
+        const incomingUnc = (scenario as { uncertainty?: unknown }).uncertainty ?? scenario.analysis?.uncertainty;
+        if (incomingUnc) {
+          setScenarioUncertainty(incomingUnc as ScenarioUncertainty);
+        }
 
         // Restore analysis knobs if present
         if (scenario.analysis) {
@@ -1552,7 +1518,7 @@ export default function App() {
         C: slotKpis(readSlot("C")),
       },
     };
-  }, [N, compareUseSavedLeak, compareUseSavedRefs, compareUseSavedSegments, costs, features, leak, optConstraints.usePocketMargins, optConstraints.usePocketProfit, prices, readSlot, refPrices, segments]);
+  }, [N, compareUseSavedLeak, compareUseSavedRefs, compareUseSavedSegments, costs, features, leak, optConstraints.usePocketMargins, optConstraints.usePocketProfit, prices, refPrices, segments]);
 
   const applyOptimizedLadder = useCallback(
     (best: Prices) => {
@@ -3154,16 +3120,21 @@ export default function App() {
       } else {
         fallbackToSyntheticRanges();
       }
-      if (sc.channelMix) {
-        setChannelMix(sc.channelMix as typeof channelMix);
-        setChannelBlendApplied(true);
-      }
+        const incomingMix = sc.channelMix ?? sc.analysis?.channelMix;
+        if (incomingMix && (incomingMix as Array<{ preset: string; w: number }>).length) {
+          setChannelMix(incomingMix as typeof channelMix);
+          setChannelBlendApplied(true);
+        }
 
-      if (sc.analysis) {
-        if (typeof sc.analysis.retentionMonths === "number")
-          setRetentionMonths(Math.min(24, Math.max(6, sc.analysis.retentionMonths)));
-        if (typeof sc.analysis.optimizerKind === "string") setOptimizerKind(sc.analysis.optimizerKind);
-      }
+        if (sc.analysis) {
+          if (typeof sc.analysis.retentionMonths === "number")
+            setRetentionMonths(Math.min(24, Math.max(6, sc.analysis.retentionMonths)));
+          if (typeof sc.analysis.optimizerKind === "string") setOptimizerKind(sc.analysis.optimizerKind);
+        }
+        const incomingUnc = sc.uncertainty ?? sc.analysis?.uncertainty;
+        if (incomingUnc) {
+          setScenarioUncertainty(incomingUnc as ScenarioUncertainty);
+        }
 
       pushJ?.(`[${now()}] Imported scenario JSON`);
       toast("success", "Imported scenario");
@@ -3194,36 +3165,26 @@ export default function App() {
   }
 
   async function handleCopyLink() {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast?.("success", "URL copied to clipboard");
-    } catch {
-      toast?.("error", "Copy failed - select and copy the address bar");
-    }
+    await copyToClipboard(window.location.href, {
+      onSuccess: () => toast?.("success", "URL copied to clipboard"),
+      onError: () => toast?.("error", "Copy failed - select and copy the address bar"),
+    });
   }
 
   function handleCopyLongUrl() {
-    const q = new URLSearchParams({
-      p: [prices.good, prices.better, prices.best].join(","),
-      c: [costs.good, costs.better, costs.best].join(","),
-      fa: [
-        features.featA.good,
-        features.featA.better,
-        features.featA.best,
-      ].join(","),
-      fb: [
-        features.featB.good,
-        features.featB.better,
-        features.featB.best,
-      ].join(","),
+    const longUrl = buildLongUrl({
+      origin: location.origin,
+      pathname: location.pathname,
+      prices,
+      costs,
+      features,
     });
-    const longUrl = `${location.origin}${location.pathname}?${q.toString()}`;
-    navigator.clipboard.writeText(longUrl).catch(() => {});
+    copyToClipboard(longUrl);
     pushJ(`[${now()}] Copied long URL state`);
   }
 
   function handleExportJson() {
-    const snap = buildScenarioSnapshot({
+    const snap = buildSharePayload({
       prices,
       costs,
       features,
@@ -3244,199 +3205,42 @@ export default function App() {
       optConstraints,
       channelMix,
       optimizerKind,
+      uncertainty: scenarioUncertainty,
     });
-    const blob = new Blob([JSON.stringify(snap, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "pricing_scenario.json";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadScenarioJson(snap);
     pushJ?.(`[${now()}] Exported scenario JSON`);
   }
 
-  function handleExportCsv() {
-    const header = csvTemplate().split(/\r?\n/)[0]?.split(",") ?? [];
-    const setValue = (
-      row: string[],
-      key: string,
-      value: string | number | null | undefined
-    ) => {
-      const idx = header.findIndex(
-        (h) => h.toLowerCase() === key.toLowerCase()
-      );
-      if (idx >= 0) {
-        row[idx] = value === undefined || value === null ? "" : String(value);
-      }
-    };
-    const makeRow = (
-      seg:
-        | {
-            name?: string;
-            weight: number;
-            beta: {
-              price: number;
-              featA: number;
-              featB: number;
-              refAnchor?: number;
-            };
-          }
-        | null,
-      includeGlobals: boolean
-    ) => {
-      const row = Array(header.length).fill("");
-      if (includeGlobals) {
-        setValue(row, "prices.good", prices.good);
-        setValue(row, "prices.better", prices.better);
-        setValue(row, "prices.best", prices.best);
-        setValue(row, "costs.good", costs.good);
-        setValue(row, "costs.better", costs.better);
-        setValue(row, "costs.best", costs.best);
-        setValue(row, "ref.good", refPrices.good);
-        setValue(row, "ref.better", refPrices.better);
-        setValue(row, "ref.best", refPrices.best);
-        setValue(row, "promo.good", leak.promo.good);
-        setValue(row, "promo.better", leak.promo.better);
-        setValue(row, "promo.best", leak.promo.best);
-        setValue(row, "volume.good", leak.volume.good);
-        setValue(row, "volume.better", leak.volume.better);
-        setValue(row, "volume.best", leak.volume.best);
-        setValue(row, "leak.paymentPct", leak.paymentPct);
-        setValue(row, "leak.paymentFixed", leak.paymentFixed);
-        setValue(row, "leak.fxPct", leak.fxPct);
-        setValue(row, "leak.refundsPct", leak.refundsPct);
-      }
-      if (seg) {
-        setValue(row, "name", seg.name ?? "");
-        setValue(row, "weight", seg.weight);
-        setValue(row, "beta.price", seg.beta.price);
-        setValue(row, "beta.featA", seg.beta.featA);
-        setValue(row, "beta.featB", seg.beta.featB);
-        setValue(row, "beta.refAnchor", seg.beta.refAnchor);
-      }
-      return row.join(",");
-    };
-
-    const segRows = segments.map((seg) => ({
-      name: seg.name,
-      weight: seg.weight,
-      beta: {
-        price: seg.betaPrice,
-        featA: seg.betaFeatA,
-        featB: seg.betaFeatB,
-        ...(seg.betaRefAnchor !== undefined
-          ? { refAnchor: seg.betaRefAnchor }
-          : {}),
-      },
-    }));
-
-    const lines: string[] = [];
-    if (segRows.length) {
-      segRows.forEach((seg, idx) => {
-        lines.push(makeRow(seg, idx === 0));
-      });
-    } else {
-      lines.push(makeRow(null, true));
-    }
-    const csv = [header.join(","), ...lines].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "pricing_scenario.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+      function handleExportCsv() {
+    const snap = buildSharePayload({
+      prices,
+      costs,
+      features,
+      refPrices,
+      leak,
+      segments,
+      tornadoPocket,
+      tornadoPriceBump,
+      tornadoPctBump,
+      tornadoRangeMode,
+      tornadoMetric,
+      tornadoValueMode,
+      retentionPct,
+      retentionMonths,
+      kpiFloorAdj,
+      priceRange: priceRangeState,
+      optRanges,
+      optConstraints,
+      channelMix,
+      optimizerKind,
+      uncertainty: scenarioUncertainty,
+    });
+    downloadScenarioCsv(snap);
     pushJ?.(`[${now()}] Exported scenario CSV`);
   }
 
   async function saveScenarioShortLink() {
-    try {
-      // 1) Cheap warmup - if it fails, we continue anyway
-      const ok = await preflight("/api/get?s=ping");
-      if (!ok) {
-        pushJ(`[${now()}] Preflight failed (continuing to save)`);
-      }
-
-      // 2) Build EXACT payload your /api/save expects (matches zod in save.ts)
-      const payload = buildScenarioSnapshot({
-        prices,
-        costs,
-        features,
-        refPrices,
-        leak,
-        segments,
-        tornadoPocket,
-        tornadoPriceBump,
-        tornadoPctBump,
-        tornadoRangeMode,
-        tornadoMetric,
-        tornadoValueMode,
-        retentionPct,
-        retentionMonths,
-        kpiFloorAdj,
-        priceRange: priceRangeState,
-        optRanges,
-        optConstraints,
-        channelMix,
-        optimizerKind,
-      });
-
-      // 3) POST with retries/backoff for 5xx/429 + per-request timeout
-      const res = await fetchWithRetry(
-        "/api/save",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
-        { attempts: 3, baseDelayMs: 300, timeoutMs: 5000, jitter: true }
-      );
-
-      // 4) Handle server responses
-      if (res.ok) {
-        const { id } = (await res.json()) as { id: string };
-        const url = new URL(window.location.href);
-        url.searchParams.set("s", id);
-        window.history.replaceState({}, "", url.toString());
-        rememberId(id);
-        pushJ(`[${now()}] Saved scenario ${id}`);
-        toast("success", `Saved: ${id}`);
-        return;
-      }
-
-      // Show 4xx reasons (validation, etc.)
-      if (res.status >= 400 && res.status < 500) {
-        let detail = `HTTP ${res.status}`;
-        try {
-          const bodyUnknown: unknown = await res.json();
-          if (isSaveError(bodyUnknown)) {
-            if (bodyUnknown.error) detail += ` - ${bodyUnknown.error}`;
-            if (Array.isArray(bodyUnknown.issues) && bodyUnknown.issues.length) {
-              const i0 = bodyUnknown.issues[0];
-              const at = i0?.path ? ` at ${i0.path.join(".")}` : "";
-              detail += `${at}: ${i0?.message ?? ""}`;
-            }
-          }
-        } catch { /* ignore parse errors */ }
-        pushJ(`[${now()}] Save failed: ${detail}`);
-        toast("error", `Save failed: ${detail}`);
-        return;
-      }
-
-      // Rare: non-ok after retries
-      pushJ(`[${now()}] Save failed: HTTP ${res.status}`);
-      toast("error", `Save failed: HTTP ${res.status}`);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      pushJ(`[${now()}] Save failed: ${msg}`);
-      toast("error", `Save failed: ${msg}`);
-    }
-  }
-
-  function saveToSlot(id: SlotId) {
-    const snap = buildScenarioSnapshot({
+    const payload = buildSharePayload({
       prices,
       costs,
       features,
@@ -3457,6 +3261,49 @@ export default function App() {
       optConstraints,
       channelMix,
       optimizerKind,
+      uncertainty: scenarioUncertainty,
+    });
+
+    const id = await saveShortLink(payload, {
+      preflight,
+      fetchWithRetry: (input, init, cfg) =>
+        fetchWithRetry(input, init ?? {}, cfg as RetryConfig | undefined),
+      onLog: (msg) => pushJ?.(`[${now()}] ${msg}`),
+      onToast: toast,
+    });
+    if (id) {
+      rememberId(id);
+      const url = new URL(window.location.href);
+      url.searchParams.set("s", id);
+      window.history.replaceState({}, "", url.toString());
+      pushJ?.(`[${now()}] Saved short link ${id}`);
+      toast("success", `Saved: ${id}`);
+    }
+  }
+
+  function saveToSlot(id: SlotId) {
+    const snap = buildSharePayload({
+      prices,
+      costs,
+      features,
+      refPrices,
+      leak,
+      segments,
+      tornadoPocket,
+      tornadoPriceBump,
+      tornadoPctBump,
+      tornadoRangeMode,
+      tornadoMetric,
+      tornadoValueMode,
+      retentionPct,
+      retentionMonths,
+      kpiFloorAdj,
+      priceRange: priceRangeState,
+      optRanges,
+      optConstraints,
+      channelMix,
+      optimizerKind,
+      uncertainty: scenarioUncertainty,
     });
     writeSlot(id, snap);
     pushJ?.(`[${now()}] Saved current scenario to slot ${id}`);
@@ -3476,8 +3323,9 @@ export default function App() {
     if (sc.leak) setLeak(sc.leak);
     if (sc.segments)
       setSegments(mapNormalizedToUI(normalizeSegmentsForSave(sc.segments)));
-    if (sc.channelMix) {
-      setChannelMix(sc.channelMix as typeof channelMix);
+    const incomingMix = sc.channelMix ?? sc.analysis?.channelMix;
+    if (incomingMix && (incomingMix as Array<{ preset: string; w: number }>).length) {
+      setChannelMix(incomingMix as typeof channelMix);
       setChannelBlendApplied(true);
     }
     if (sc.analysis) {
@@ -4717,156 +4565,45 @@ export default function App() {
               slots={compareBoardData.slots}
               current={compareBoardData.current}
             />
-              <Section id="share-links" title="Share & export">
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <button
-                    className="text-xs border px-2 py-1 rounded"
-                    onClick={saveScenarioShortLink}
-                    title="Create a short link (saved in Cloudflare KV)"
-                  >
-                    Save short link
-                  </button>
-                  <button
-                    className="border rounded px-2 py-1 text-sm bg-white hover:bg-gray-50"
-                    onClick={handleCopyLink}
-                    title="Copy URL with current short link id if present"
-                  >
-                    Copy link
-                  </button>
-                  <button
-                    className="text-xs border px-2 py-1 rounded"
-                    onClick={handleCopyLongUrl}
-                    title="Lightweight URL with ladder + features only"
-                  >
-                    Copy long URL
-                  </button>
-                  <button
-                    className="text-xs border px-2 py-1 rounded"
-                    onClick={handleExportJson}
-                    title="Full snapshot JSON (including constraints and analysis knobs)"
-                  >
-                    Export JSON
-                  </button>
-                  <button
-                    className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
-                    onClick={handleExportCsv}
-                    title="CSV of ladder/leak/segments (no constraints/features/analysis)"
-                  >
-                    Export Sales Parameters CSV
-                  </button>
-                </div>
-                <div className="text-[11px] text-slate-600">
-                  JSON/short link includes prices/costs/features/refs/leak/segments + optimizer ranges/constraints, tornado/retention (with KPI/unit), price ranges, channel blend, and optimizer engine. CSV/long URL are lighter: CSV carries ladder/leak/segments only (no constraints/features/analysis), long URL carries ladder + feature flags only.
-                </div>
-              </Section>
-            <Section id="recent-short-links" title="Recent short links" className="order-5">
-              <details className="text-xs">
-                <summary className="cursor-pointer select-none font-medium mb-2">
-                  Show recents
-                </summary>
-
-                <ul className="text-xs space-y-1">
-                  {readRecents().length === 0 ? (
-                    <li className="text-gray-500">None yet</li>
-                  ) : (
-                    readRecents().map((r) => (
-                      <li
-                        key={r.id}
-                        className="flex items-center justify-between gap-2"
-                      >
-                        <button
-                          className="underline"
-                          title={new Date(r.t).toLocaleString()}
-                          onClick={() => {
-                            const url = `${location.origin}${location.pathname}?s=${r.id}`;
-                            location.assign(url); // reload page with this id
-                          }}
-                        >
-                          {r.id}
-                        </button>
-                        <button
-                          className="border rounded px-2 py-0.5"
-                          onClick={() => {
-                            const url = `${location.origin}${location.pathname}?s=${r.id}`;
-                            navigator.clipboard.writeText(url).catch(() => {});
-                            pushJ(`[${now()}] Copied short link ${r.id}`);
-                          }}
-                        >
-                          Copy
-                        </button>
-                      </li>
-                    ))
-                  )}
-                </ul>
-                <div className="mt-2">
-                  <button
-                    className="text-xs border rounded px-2 py-1"
-                    onClick={() => {
-                      localStorage.removeItem(RECENT_KEY);
-                      pushJ(`[${now()}] Cleared recent short links`);
-                      location.reload();
-                    }}
-                  >
-                    Clear recents
-                  </button>
-                </div>
-              </details>
-            </Section>
-            <Section id="scenario-journal" title="Scenario Journal" className="order-4">
-              <ul className="text-xs text-gray-700 space-y-1 max-h-64 overflow-auto pr-1 wrap-break-word min-w-0">
-                {journal.length === 0 ? (
-                  <li className="text-gray-400">
-                    Adjust sliders/toggles to log changes...
-                  </li>
-                ) : (
-                  journal.map((line, i) => <li key={i}>{line}</li>)
-                )}
-                <li>
-                  Revenue (N=1000): <strong>{fmtUSD(revenue)}</strong>
-                </li>
-                <li>
-                  Profit (N=1000): <strong>{fmtUSD(profit)}</strong>
-                </li>
-                <li>
-                  Active customers:{" "}
-                  <strong>{activeCustomers.toLocaleString()}</strong>
-                </li>
-                <li>
-                  ARPU (active only): <strong>{fmtUSD(arpu)}</strong>
-                </li>
-                <li>
-                  Profit / customer (all N):{" "}
-                  <strong>{fmtUSD(profitPerCustomer)}</strong>
-                </li>
-                <li>
-                  Gross margin: <strong>{fmtPct(grossMarginPct)}</strong>
-                </li>
-              </ul>
-              <div className="mt-2 flex gap-2">
-                <button
-                  className="text-xs border px-2 py-1 rounded"
-                  onClick={() => setJournal([])}
-                >
-                  Clear
-                </button>
-                <button
-                  className="text-xs border px-2 py-1 rounded"
-                  onClick={() => {
-                    const blob = new Blob([journal.slice().reverse().join("\n")], {
-                      type: "text/plain",
-                    });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = "scenario-journal.txt";
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                >
-                  Download .txt
-                </button>
-              </div>
-            </Section>
+            <ShareExportSection
+              onExportJson={handleExportJson}
+              onExportCsv={handleExportCsv}
+              onSaveShortLink={saveScenarioShortLink}
+              onCopyLink={handleCopyLink}
+              onCopyLongUrl={handleCopyLongUrl}
+              onTestBackend={handleTestBackend}
+            />
+            <RecentLinksSection
+              recents={readRecents()}
+              onReload={(id) => {
+                const url = `${location.origin}${location.pathname}?s=${id}`;
+                location.assign(url);
+              }}
+              onCopy={(id) => {
+                const url = `${location.origin}${location.pathname}?s=${id}`;
+                navigator.clipboard.writeText(url).catch(() => {});
+                pushJ(`[${now()}] Copied short link ${id}`);
+              }}
+              onClearAll={() => {
+                clearRecents();
+                pushJ(`[${now()}] Cleared recent short links`);
+                location.reload();
+              }}
+            />
+            <ScenarioJournalSection
+              journal={journal}
+              revenue={revenue}
+              profit={profit}
+              activeCustomers={activeCustomers}
+              arpu={arpu}
+              profitPerCustomer={profitPerCustomer}
+              grossMarginPct={grossMarginPct}
+              onClear={() => setJournal([])}
+              onDownload={() => {
+                downloadJournal(journal);
+                pushJ?.(`[${now()}] Downloaded journal`);
+              }}
+            />
               </div>
             )}
 
@@ -5241,17 +4978,3 @@ export default function App() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -29,6 +29,7 @@ export type ScenarioSnapshot = {
   kpis?: unknown;
   meta?: { label?: string; savedAt?: number; source?: string };
   channelMix?: Array<{ preset: string; w: number }>;
+  uncertainty?: unknown;
   analysis?: {
     optConstraints?: Partial<Constraints>;
     optRanges?: SearchRanges;
@@ -44,6 +45,8 @@ export type ScenarioSnapshot = {
     priceRange?: TierRangeMap;
     priceRangeSource?: PriceRangeSource;
     optimizerKind?: "grid-worker" | "grid-inline" | "future";
+    channelMix?: Array<{ preset: string; w: number }>;
+    uncertainty?: unknown;
   };
 };
 
@@ -121,10 +124,13 @@ export type SnapshotBuildArgs = {
   optConstraints: Constraints;
   channelMix?: Array<{ preset: string; w: number }>;
   optimizerKind?: "grid-worker" | "grid-inline" | "future";
+  uncertainty?: unknown;
 };
 
 export function buildScenarioSnapshot(args: SnapshotBuildArgs): ScenarioSnapshot {
   const segs = normalizeSegmentsForSave(args.segments);
+  const channelMix = args.channelMix && args.channelMix.length ? args.channelMix : undefined;
+  const uncertainty = args.uncertainty;
   return {
     prices: args.prices,
     costs: args.costs,
@@ -132,6 +138,8 @@ export function buildScenarioSnapshot(args: SnapshotBuildArgs): ScenarioSnapshot
     refPrices: args.refPrices,
     leak: args.leak,
     ...(segs.length ? { segments: segs } : {}),
+    ...(channelMix ? { channelMix } : {}),
+    ...(uncertainty ? { uncertainty } : {}),
     analysis: {
       tornadoPocket: args.tornadoPocket,
       tornadoPriceBump: args.tornadoPriceBump,
@@ -151,8 +159,9 @@ export function buildScenarioSnapshot(args: SnapshotBuildArgs): ScenarioSnapshot
             priceRangeSource: args.priceRange.source,
           }
         : {}),
+      ...(channelMix ? { channelMix } : {}),
+      ...(uncertainty ? { uncertainty } : {}),
     },
-    ...(args.channelMix ? { channelMix: args.channelMix } : {}),
   };
 }
 

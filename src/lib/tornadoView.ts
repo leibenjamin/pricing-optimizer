@@ -6,6 +6,7 @@ import {
   type TornadoMetric,
   type TornadoOpts,
 } from "./sensitivity";
+export type { TornadoMetric } from "./sensitivity";
 
 export type TornadoValueMode = "absolute" | "percent";
 

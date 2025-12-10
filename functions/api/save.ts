@@ -54,14 +54,43 @@ const PriceRange = z.object({
   best: Range.optional(),
 }).partial()
 
+const ChannelMix = z.array(z.object({ preset: z.string(), w: Num })).optional()
+
+const OptConstraints = z.object({
+  gapGB: Num.optional(),
+  gapBB: Num.optional(),
+  marginFloor: Prices.optional(),
+  charm: z.boolean().optional(),
+  usePocketProfit: z.boolean().optional(),
+  usePocketMargins: z.boolean().optional(),
+  maxNoneShare: Num.optional(),
+  minTakeRate: Num.optional(),
+}).passthrough()
+
+const SearchRanges = z.object({
+  good: z.tuple([Num, Num]).optional(),
+  better: z.tuple([Num, Num]).optional(),
+  best: z.tuple([Num, Num]).optional(),
+  step: Num.optional(),
+}).passthrough()
+
 const Analysis = z.object({
   tornadoPocket: z.boolean().optional(),
   tornadoPriceBump: Num.optional(),
   tornadoPctBump: Num.optional(),
+  tornadoRangeMode: z.enum(["symmetric", "data"]).optional(),
+  tornadoMetric: z.string().optional(),
+  tornadoValueMode: z.string().optional(),
   retentionPct: Num.optional(),
+  retentionMonths: Num.optional(),
   kpiFloorAdj: Num.optional(),
   priceRange: PriceRange.optional(),
   priceRangeSource: z.enum(["synthetic", "imported", "shared"]).optional(),
+  optRanges: SearchRanges.optional(),
+  optConstraints: OptConstraints.optional(),
+  channelMix: ChannelMix,
+  uncertainty: z.any().optional(),
+  optimizerKind: z.enum(["grid-worker", "grid-inline", "future"]).optional(),
 }).passthrough() // allow future keys
 
 const ScenarioSchema = z.object({
@@ -71,6 +100,8 @@ const ScenarioSchema = z.object({
   refPrices: Prices,
   leak: Leakages,
   segments: z.array(Segment).optional(),
+  channelMix: ChannelMix,
+  uncertainty: z.any().optional(),
   analysis: Analysis.optional(),
 }).passthrough() // allow extra keys so future expansions don't break
 
