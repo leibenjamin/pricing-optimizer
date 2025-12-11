@@ -129,6 +129,10 @@ export const EXPLAIN: Record<string, string> = {
   "optimizer.floorsLabel": `
     Margin floors are minimum required margins per tier. Pocket mode applies leakages before checking floors.`,
 
+  // --- Uncertainty / risk ---
+  "risk.badge": `
+    <b>Confidence badge</b> is a quick read on preset uncertainty inputs (price and leakage deltas). High/Med/Low is a heuristic; bands widen as uncertainty grows. Use it to remind readers that ranges, not points, matter. See the Uncertainty & Risk notes for bands/whiskers guidance.`,
+
   // --- Presets ---
   "presets.scenario": `
     <b>Scenario presets</b> apply a coherent bundle: ladder, costs,
@@ -284,5 +288,4 @@ export function explainOptimizerResult(args: {
 
   return bullets;
 }
-
 

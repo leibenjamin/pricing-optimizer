@@ -54,6 +54,7 @@ export function ScorecardCallouts({
           guardrails={scorecardVM.guardrails}
           explain={scorecardVM.explain}
           band={scorecardBand}
+          riskNote={callouts.riskNote}
         />
       </Section>
 

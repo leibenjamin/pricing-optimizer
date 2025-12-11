@@ -7,6 +7,7 @@ import {
 } from "../lib/scorecard";
 import type { SnapshotKPIs } from "../lib/snapshots";
 import type { ScenarioRun } from "../lib/domain";
+import RiskBadge from "./RiskBadge";
 
 type GuardrailSummary = {
   gapLine: string;
@@ -35,6 +36,7 @@ type ScorecardProps = {
   guardrails: GuardrailSummary;
   explain: ScorecardDelta | null;
   band?: ScorecardBand | null;
+  riskNote?: string | null;
 };
 
 const TIER_LABEL: Record<ScorecardShareTile["tier"], string> = {
@@ -198,6 +200,7 @@ export default function Scorecard({
   guardrails,
   explain,
   band,
+  riskNote,
 }: ScorecardProps) {
   const activeKpis = run?.kpis ?? kpis;
   const baselineKpis = baselineRun?.kpis ?? null;
@@ -345,11 +348,12 @@ export default function Scorecard({
               <a className="text-sky-600 text-xs hover:underline ml-auto" href="#callouts">
                 Jump to Callouts
               </a>
-            </div>
-            <div className="text-[11px] text-slate-500">
-              Baseline: {basis.baseline}. Pinned story: {basis.pinned}. View toggle sits above.
-            </div>
           </div>
+          <div className="text-[11px] text-slate-500">
+            Baseline: {basis.baseline}. Pinned story: {basis.pinned}. View toggle sits above.
+          </div>
+          <RiskBadge note={riskNote} infoId="risk.badge" />
+        </div>
           <div className="flex w-full flex-col gap-2 sm:w-72">
             <div className="flex items-center justify-between text-[11px] text-slate-600">
               <span className="font-semibold text-slate-800">Context</span>

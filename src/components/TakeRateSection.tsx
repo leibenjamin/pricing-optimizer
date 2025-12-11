@@ -64,7 +64,7 @@ export function TakeRateSection({
             Baseline: {summary.baselineLabel}
           </span>
         )}
-        <RiskBadge note={riskNote} />
+        <RiskBadge note={riskNote} infoId="risk.badge" />
       </div>
 
       <div className="flex flex-wrap gap-2 items-center text-[11px] text-slate-700">

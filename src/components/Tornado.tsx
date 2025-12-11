@@ -294,7 +294,7 @@ export default function Tornado({
         <span className="text-[11px] text-slate-600">
           Varies one driver from low to high; sorted by absolute impact on {resolvedMetric}.
         </span>
-        <RiskBadge note={riskNote} />
+        <RiskBadge note={riskNote} infoId="risk.badge" />
       </div>
       <div ref={ref} className="w-full min-h-[420px] lg:min-h-[520px]" />
     </div>

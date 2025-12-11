@@ -76,7 +76,7 @@ export default function CalloutsSnapshot({
             {ladderLabel}
           </span>
         ) : null}
-        <RiskBadge note={riskNote} />
+        <RiskBadge note={riskNote} infoId="risk.badge" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

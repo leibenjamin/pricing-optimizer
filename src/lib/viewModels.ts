@@ -173,14 +173,17 @@ export type CohortSummaryCard = {
 
 export function formatRiskNote(uncertainty: ScenarioUncertainty | null): string | null {
   if (!uncertainty) return null;
+  const price = Math.round(Math.abs((uncertainty.priceScaleDelta ?? 0) * 100));
+  const leak = Math.round(Math.abs((uncertainty.leakDeltaPct ?? 0) * 100));
+  const span = Math.max(price, leak);
+  const confidence = span <= 7 ? "High" : span <= 14 ? "Medium" : "Low";
   const parts: string[] = [];
-  const price = Math.round((uncertainty.priceScaleDelta ?? 0) * 100);
-  const leak = Math.round((uncertainty.leakDeltaPct ?? 0) * 100);
   if (price) parts.push(`price +/-${price}%`);
   if (leak) parts.push(`leak +/-${leak}%`);
-  const source = uncertainty.source ?? "preset";
-  const detail = parts.length ? `; ${parts.join(", ")}` : "";
-  return `Uncertainty: ${source}${detail}`;
+  if (!parts.length) parts.push("minimal variance");
+  const detail = parts.join(", ");
+  const source = uncertainty.source ? ` (source: ${uncertainty.source})` : "";
+  return `Confidence: ${confidence} - ${detail}${source}`;
 }
 
 export function buildCohortViewModel(args: {

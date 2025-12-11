@@ -5023,7 +5023,7 @@ export default function App() {
             <div className="flex items-center justify-between mb-2 text-xs text-slate-600">
               <span>Showing: {tornadoViewLabel} ladder • {tornadoMetricLabel} • {tornadoUnitLabel}</span>
               <div className="flex items-center gap-2">
-                <RiskBadge note={riskNote} />
+                <RiskBadge note={riskNote} infoId="risk.badge" />
                 <InfoTip
                   className="ml-1"
                   align="right"
