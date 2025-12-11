@@ -14,6 +14,7 @@ type CohortSectionProps = {
   cohortSummaryCards: CohortSummaryCard[];
   cohortScenarios: CohortScenarioVM[];
   actions?: ReactNode;
+  riskNote?: string | null;
 };
 
 export function CohortSection({
@@ -26,6 +27,7 @@ export function CohortSection({
   cohortSummaryCards,
   cohortScenarios,
   actions,
+  riskNote,
 }: CohortSectionProps) {
   return (
     <Section id="cohort-rehearsal" title="Cohort rehearsal" actions={actions}>
@@ -34,6 +36,11 @@ export function CohortSection({
         className="text-sm text-slate-700 leading-snug"
       >
         Cohort rehearsal simulates pocket margin on a shrinking cohort. Overlay Baseline/Current/Optimized to see whether lift holds past month 1; adjust retention/horizon to stress churn vs contribution.
+        {riskNote ? (
+          <span className="ml-2 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-700">
+            {riskNote}
+          </span>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

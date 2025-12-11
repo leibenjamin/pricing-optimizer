@@ -18,6 +18,7 @@ type CalloutsSnapshotProps = {
   topDriverLine?: string | null;
   guardrailFloorLine?: string | null;
   validationNotes?: string[];
+  riskNote?: string | null;
 };
 
 export default function CalloutsSnapshot({
@@ -32,6 +33,7 @@ export default function CalloutsSnapshot({
   topDriverLine,
   guardrailFloorLine,
   validationNotes,
+  riskNote,
 }: CalloutsSnapshotProps) {
   if (!hasResult) {
     return (
@@ -71,6 +73,11 @@ export default function CalloutsSnapshot({
         {ladderLabel ? (
           <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
             {ladderLabel}
+          </span>
+        ) : null}
+        {riskNote ? (
+          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-700">
+            {riskNote}
           </span>
         ) : null}
       </div>

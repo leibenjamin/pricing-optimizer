@@ -23,6 +23,7 @@ type ScorecardCalloutsProps = {
     topDriverLine?: string | null;
     guardrailFloorLine?: string | null;
     validationNotes?: string[];
+    riskNote?: string | null;
   };
 };
 
@@ -69,6 +70,7 @@ export function ScorecardCallouts({
           topDriverLine={callouts.topDriverLine}
           guardrailFloorLine={callouts.guardrailFloorLine}
           validationNotes={callouts.validationNotes}
+          riskNote={callouts.riskNote}
         />
       </Section>
     </>

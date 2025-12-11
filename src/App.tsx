@@ -103,8 +103,14 @@ import {
   downloadScenarioCsv,
   downloadJournal,
   saveShortLink,
-  buildLongUrl,
+  roundTripValidate,
+  runRoundTripSuite,
+  buildPayloadFromScenario,
   copyToClipboard,
+  buildShortLinkUrl,
+  copyPageUrl,
+  copyScenarioLongUrl,
+  type SharePayload,
 } from "./lib/share";
 import { readSlot, writeSlot, clearSlot, type SlotId } from "./lib/slots";
 import { clearRecents, readRecents, rememberId } from "./lib/recents";
@@ -284,6 +290,14 @@ export default function App() {
   const [baselineRun, setBaselineRun] = useStickyState<ScenarioRun | null>("po:baseline-run-v1", null);
   const [optimizedRun, setOptimizedRun] = useState<ScenarioRun | null>(null);
   const [scenarioUncertainty, setScenarioUncertainty] = useState<ScenarioUncertainty | null>(null);
+  const riskNote =
+    scenarioUncertainty && (scenarioUncertainty.priceScaleDelta || scenarioUncertainty.leakDeltaPct)
+      ? `Uncertainty: ${scenarioUncertainty.source ?? "preset"}; price ±${Math.round(
+          (scenarioUncertainty.priceScaleDelta ?? 0) * 100
+        )}%, leak ±${Math.round((scenarioUncertainty.leakDeltaPct ?? 0) * 100)}%`
+      : scenarioUncertainty?.source
+      ? `Uncertainty: ${scenarioUncertainty.source}`
+      : null;
   const baselineMeta = baselineRun?.meta ?? null;
   const [scorecardView, setScorecardView] = useState<"current" | "optimized">("current");
   const [takeRateMode, setTakeRateMode] = useState<"mix" | "delta">("mix");
@@ -2962,6 +2976,13 @@ export default function App() {
     refPrices?: typeof refPrices;
     leak?: typeof leak;
     segments?: Segment[] | SegmentImportNested[];
+    optConstraints?: Partial<Constraints>;
+    optRanges?: Partial<SearchRanges>;
+    priceRange?: TierRangeMap;
+    priceRangeSource?: PriceRangeSource;
+    channelMix?: Array<{ preset: string; w: number }>;
+    uncertainty?: ScenarioUncertainty | null;
+    optimizerKind?: OptimizerKind;
   }) {
     if (obj.prices) setPrices(obj.prices);
     if (obj.costs) setCosts(obj.costs);
@@ -2986,6 +3007,34 @@ export default function App() {
         nextSegs = normalizeWeights(obj.segments as Segment[]);
       }
       setSegments(nextSegs);
+    }
+    if (obj.optConstraints) {
+      const partial = obj.optConstraints;
+      setOptConstraints((prev) => ({
+        ...prev,
+        ...partial,
+        marginFloor: {
+          ...prev.marginFloor,
+          ...(partial.marginFloor ?? {}),
+        },
+      }));
+    }
+    if (obj.optRanges) {
+      setOptRanges((prev) => ({ ...prev, ...obj.optRanges }));
+    }
+    if (obj.priceRange) {
+      const ok = setPriceRangeFromData(obj.priceRange, obj.priceRangeSource ?? "shared");
+      if (!ok) fallbackToSyntheticRanges();
+    }
+    if (obj.channelMix) {
+      setChannelMix(obj.channelMix as typeof channelMix);
+      setChannelBlendApplied(true);
+    }
+    if (obj.uncertainty !== undefined) {
+      setScenarioUncertainty(obj.uncertainty);
+    }
+    if (obj.optimizerKind) {
+      setOptimizerKind(obj.optimizerKind);
     }
   }
 
@@ -3165,26 +3214,63 @@ export default function App() {
   }
 
   async function handleCopyLink() {
-    await copyToClipboard(window.location.href, {
+    await copyPageUrl(window.location, {
       onSuccess: () => toast?.("success", "URL copied to clipboard"),
       onError: () => toast?.("error", "Copy failed - select and copy the address bar"),
     });
   }
 
   function handleCopyLongUrl() {
-    const longUrl = buildLongUrl({
-      origin: location.origin,
-      pathname: location.pathname,
-      prices,
-      costs,
-      features,
-    });
-    copyToClipboard(longUrl);
-    pushJ(`[${now()}] Copied long URL state`);
+    copyScenarioLongUrl(
+      {
+        origin: location.origin,
+        pathname: location.pathname,
+        prices,
+        costs,
+        features,
+      },
+      {
+        onSuccess: () => toast("success", "Long URL copied"),
+        onError: (msg) => toast("error", msg ?? "Copy failed"),
+      }
+    );
+    pushJ?.(`[${now()}] Copied long URL state`);
   }
 
-  function handleExportJson() {
-    const snap = buildSharePayload({
+  const buildSharePayloadChecked = useCallback(
+    (context: string): SharePayload => {
+      const snap = buildSharePayload({
+        prices,
+        costs,
+        features,
+        refPrices,
+        leak,
+        segments,
+        tornadoPocket,
+        tornadoPriceBump,
+        tornadoPctBump,
+        tornadoRangeMode,
+        tornadoMetric,
+        tornadoValueMode,
+        retentionPct,
+        retentionMonths,
+        kpiFloorAdj,
+        priceRange: priceRangeState,
+        optRanges,
+        optConstraints,
+        channelMix,
+        optimizerKind,
+        uncertainty: scenarioUncertainty,
+      });
+      const { ok, issues } = roundTripValidate(snap);
+      if (!ok) {
+        const msg = `Round-trip mismatch during ${context}: ${issues.join("; ")}`;
+        pushJ?.(`[${now()}] ${msg}`);
+        toast("warning", "Export payload had missing fields; see journal");
+      }
+      return snap;
+    },
+    [
       prices,
       costs,
       features,
@@ -3200,69 +3286,101 @@ export default function App() {
       retentionPct,
       retentionMonths,
       kpiFloorAdj,
-      priceRange: priceRangeState,
+      priceRangeState,
       optRanges,
       optConstraints,
       channelMix,
       optimizerKind,
-      uncertainty: scenarioUncertainty,
-    });
+      scenarioUncertainty,
+      pushJ,
+      toast,
+    ]
+  );
+
+  const roundTripDevRan = useRef(false);
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (roundTripDevRan.current) return;
+    roundTripDevRan.current = true;
+
+    const currentSnap = buildSharePayloadChecked("dev round-trip check (current)");
+    const presetPayloads = PRESETS.slice(0, 3).map((p, idx) => ({
+      label: p.id ?? p.name ?? `preset-${idx}`,
+      payload: buildPayloadFromScenario(p, {
+        prices,
+        costs,
+        refPrices,
+        features,
+        leak,
+        segments,
+        priceRange: p.priceRange ? { map: p.priceRange, source: p.priceRangeSource ?? "shared" } : priceRangeState,
+        optRanges,
+        optConstraints,
+        channelMix,
+        uncertainty: scenarioUncertainty,
+        retentionPct,
+        retentionMonths,
+        kpiFloorAdj,
+        tornadoDefaults: {
+          usePocket: tornadoPocket,
+          priceBump: tornadoPriceBump,
+          pctBump: tornadoPctBump,
+          rangeMode: tornadoRangeMode,
+          metric: tornadoMetric,
+          valueMode: tornadoValueMode,
+        },
+        optimizerKind,
+      }),
+    }));
+    const suite = runRoundTripSuite([{ label: "current", payload: currentSnap }, ...presetPayloads]);
+    if (!suite.ok) {
+      suite.issues.forEach((issue) => {
+        pushJ?.(
+          `[${now()}] Round-trip preset check (${issue.label}): ${issue.issues.join("; ")}`
+        );
+      });
+      console.warn("Round-trip preset issues", suite.issues);
+    }
+  }, [
+    buildSharePayloadChecked,
+    pushJ,
+    prices,
+    costs,
+    features,
+    refPrices,
+    leak,
+    segments,
+    tornadoPocket,
+    tornadoPriceBump,
+    tornadoPctBump,
+    tornadoRangeMode,
+    tornadoMetric,
+    tornadoValueMode,
+    retentionPct,
+    retentionMonths,
+    kpiFloorAdj,
+    priceRangeState,
+    optRanges,
+    optConstraints,
+    channelMix,
+    optimizerKind,
+    scenarioUncertainty,
+  ]);
+
+  function handleExportJson() {
+    const snap = buildSharePayloadChecked("export json");
     downloadScenarioJson(snap);
     pushJ?.(`[${now()}] Exported scenario JSON`);
   }
 
-      function handleExportCsv() {
-    const snap = buildSharePayload({
-      prices,
-      costs,
-      features,
-      refPrices,
-      leak,
-      segments,
-      tornadoPocket,
-      tornadoPriceBump,
-      tornadoPctBump,
-      tornadoRangeMode,
-      tornadoMetric,
-      tornadoValueMode,
-      retentionPct,
-      retentionMonths,
-      kpiFloorAdj,
-      priceRange: priceRangeState,
-      optRanges,
-      optConstraints,
-      channelMix,
-      optimizerKind,
-      uncertainty: scenarioUncertainty,
-    });
+  function handleExportCsv() {
+    const snap = buildSharePayloadChecked("export csv");
     downloadScenarioCsv(snap);
     pushJ?.(`[${now()}] Exported scenario CSV`);
   }
 
   async function saveScenarioShortLink() {
-    const payload = buildSharePayload({
-      prices,
-      costs,
-      features,
-      refPrices,
-      leak,
-      segments,
-      tornadoPocket,
-      tornadoPriceBump,
-      tornadoPctBump,
-      tornadoRangeMode,
-      tornadoMetric,
-      tornadoValueMode,
-      retentionPct,
-      retentionMonths,
-      kpiFloorAdj,
-      priceRange: priceRangeState,
-      optRanges,
-      optConstraints,
-      channelMix,
-      optimizerKind,
-      uncertainty: scenarioUncertainty,
-    });
+    const payload = buildSharePayloadChecked("save short link");
 
     const id = await saveShortLink(payload, {
       preflight,
@@ -3273,38 +3391,19 @@ export default function App() {
     });
     if (id) {
       rememberId(id);
-      const url = new URL(window.location.href);
-      url.searchParams.set("s", id);
-      window.history.replaceState({}, "", url.toString());
+      const url = buildShortLinkUrl({
+        origin: location.origin,
+        pathname: location.pathname,
+        id,
+      });
+      window.history.replaceState({}, "", url);
       pushJ?.(`[${now()}] Saved short link ${id}`);
       toast("success", `Saved: ${id}`);
     }
   }
 
   function saveToSlot(id: SlotId) {
-    const snap = buildSharePayload({
-      prices,
-      costs,
-      features,
-      refPrices,
-      leak,
-      segments,
-      tornadoPocket,
-      tornadoPriceBump,
-      tornadoPctBump,
-      tornadoRangeMode,
-      tornadoMetric,
-      tornadoValueMode,
-      retentionPct,
-      retentionMonths,
-      kpiFloorAdj,
-      priceRange: priceRangeState,
-      optRanges,
-      optConstraints,
-      channelMix,
-      optimizerKind,
-      uncertainty: scenarioUncertainty,
-    });
+    const snap = buildSharePayloadChecked(`save slot ${id}`);
     writeSlot(id, snap);
     pushJ?.(`[${now()}] Saved current scenario to slot ${id}`);
     toast("success", `Saved to ${id}`);
@@ -4576,12 +4675,20 @@ export default function App() {
             <RecentLinksSection
               recents={readRecents()}
               onReload={(id) => {
-                const url = `${location.origin}${location.pathname}?s=${id}`;
+                const url = buildShortLinkUrl({
+                  origin: location.origin,
+                  pathname: location.pathname,
+                  id,
+                });
                 location.assign(url);
               }}
               onCopy={(id) => {
-                const url = `${location.origin}${location.pathname}?s=${id}`;
-                navigator.clipboard.writeText(url).catch(() => {});
+                const url = buildShortLinkUrl({
+                  origin: location.origin,
+                  pathname: location.pathname,
+                  id,
+                });
+                copyToClipboard(url);
                 pushJ(`[${now()}] Copied short link ${id}`);
               }}
               onClearAll={() => {
@@ -4746,6 +4853,7 @@ export default function App() {
                     "Re-run optimizer after ladder or basis tweaks, then export/print.",
                   ].filter(Boolean) as string[]
                 : undefined,
+              riskNote: riskNote,
             }}
           />
 
@@ -4754,13 +4862,14 @@ export default function App() {
             frontierSummary={frontierSummary}
             frontierTier={frontierTier}
             setFrontierTier={setFrontierTier}
-            frontierCompareCharm={frontierCompareCharm}
-            setFrontierCompareCharm={setFrontierCompareCharm}
-            usePocketProfit={!!optConstraints.usePocketProfit}
-            frontierSweep={frontierSweep}
-            actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
-            FrontierChartComponent={FrontierChartReal}
-          />
+          frontierCompareCharm={frontierCompareCharm}
+          setFrontierCompareCharm={setFrontierCompareCharm}
+          usePocketProfit={!!optConstraints.usePocketProfit}
+          frontierSweep={frontierSweep}
+          actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
+          riskNote={riskNote}
+          FrontierChartComponent={FrontierChartReal}
+        />
 
 
           <TakeRateSection
@@ -4775,23 +4884,25 @@ export default function App() {
             segmentBreakdownEnabled={showSegmentBreakdown}
             setSegmentBreakdownEnabled={setShowSegmentBreakdown}
             segmentBreakdownScenarioKey={segmentBreakdownScenarioKey}
-            setSegmentBreakdownScenarioKey={setSegmentBreakdownScenarioKey}
-            segmentBreakdownScenarios={segmentBreakdownScenarios}
-            segmentScenarioOptions={takeRateContexts.map((c) => ({ key: c.key, label: c.label }))}
-            selectedSegmentLabel={selectedSegmentLabel}
-          />
+          setSegmentBreakdownScenarioKey={setSegmentBreakdownScenarioKey}
+          segmentBreakdownScenarios={segmentBreakdownScenarios}
+          segmentScenarioOptions={takeRateContexts.map((c) => ({ key: c.key, label: c.label }))}
+          selectedSegmentLabel={selectedSegmentLabel}
+          riskNote={riskNote}
+        />
 
-          <CohortSection
-            retentionPct={retentionPct}
-            setRetentionPct={setRetentionPct}
-            retentionMonths={retentionMonths}
-            setRetentionMonths={setRetentionMonths}
-            showAdvanced={showCohortAdvanced}
-            setShowAdvanced={setShowCohortAdvanced}
-            cohortSummaryCards={cohortSummaryCards}
-            cohortScenarios={cohortScenarios}
-            actions={<ActionCluster chart="cohort" id="cohort-curve" csv />}
-          />
+        <CohortSection
+          retentionPct={retentionPct}
+          setRetentionPct={setRetentionPct}
+          retentionMonths={retentionMonths}
+          setRetentionMonths={setRetentionMonths}
+          showAdvanced={showCohortAdvanced}
+          setShowAdvanced={setShowCohortAdvanced}
+          cohortSummaryCards={cohortSummaryCards}
+          cohortScenarios={cohortScenarios}
+          actions={<ActionCluster chart="cohort" id="cohort-curve" csv />}
+          riskNote={riskNote}
+        />
 
           <Section
             id="tornado"

@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "roundtrip": "npx ts-node scripts/roundtrip.ts",
+    "csv:roundtrip": "npx ts-node scripts/csv-roundtrip.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.5",

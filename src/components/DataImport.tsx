@@ -23,6 +23,13 @@ export default function DataImport(props: {
         ...(sc.refPrices ? { refPrices: sc.refPrices } : {}),
         ...(sc.leak ? { leak: sc.leak } : {}),
         ...(sc.segments ? { segments: sc.segments } : {}),
+        ...(sc.optConstraints ? { optConstraints: sc.optConstraints } : {}),
+        ...(sc.optRanges ? { optRanges: sc.optRanges } : {}),
+        ...(sc.priceRange ? { priceRange: sc.priceRange } : {}),
+        ...(sc.priceRangeSource ? { priceRangeSource: sc.priceRangeSource } : {}),
+        ...(sc.channelMix ? { channelMix: sc.channelMix } : {}),
+        ...(sc.uncertainty !== undefined ? { uncertainty: sc.uncertainty } : {}),
+        ...(sc.optimizerKind ? { optimizerKind: sc.optimizerKind } : {}),
       };
       if (Object.keys(out).length === 0) {
         onToast?.("error", "CSV contained no recognized fields");

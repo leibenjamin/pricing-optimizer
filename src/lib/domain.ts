@@ -60,6 +60,7 @@ export type Scenario = {
     valueMode?: "absolute" | "percent";
   };
   retentionPct?: number;
+  retentionMonths?: number;
   kpiFloorAdj?: number;
   note?: string;
 };

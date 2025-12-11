@@ -4,7 +4,7 @@ import type { PriceRangeSource, TierRangeMap } from "./priceRange";
 import type { Features, Prices, Segment } from "./segments";
 import type { Leakages } from "./waterfall";
 import type { TornadoMetric, TornadoValueMode } from "./tornadoView";
-import type { ScenarioUncertainty } from "./domain";
+import type { ChannelMix, Scenario, ScenarioUncertainty } from "./domain";
 import type { RetryConfig } from "./net";
 import { csvTemplate } from "./csv";
 import { downloadBlob } from "./download";
@@ -28,7 +28,7 @@ export type SharePayloadArgs = {
   priceRange: { map: TierRangeMap; source: PriceRangeSource } | null;
   optRanges: SearchRanges;
   optConstraints: Constraints;
-  channelMix?: Array<{ preset: string; w: number }>;
+  channelMix?: ChannelMix;
   optimizerKind?: "grid-worker" | "grid-inline" | "future";
   uncertainty?: ScenarioUncertainty | null;
 };
@@ -76,12 +76,28 @@ export function downloadScenarioJson(payload: SharePayload, opts?: { filename?: 
   downloadBlob(JSON.stringify(payload, null, 2), name, "application/json");
 }
 
-export function buildScenarioCsv(payload: SharePayload, template: string = csvTemplate()): string {
+type CsvOptions = { includeMeta?: boolean };
+
+export function buildScenarioCsv(
+  payload: SharePayload,
+  template: string = csvTemplate(),
+  opts: CsvOptions = { includeMeta: true }
+): string {
   const header = template.split(/\r?\n/)[0]?.split(",") ?? [];
-  const setValue = (row: string[], key: string, value: string | number | null | undefined) => {
+  const setValue = (
+    row: string[],
+    key: string,
+    value: string | number | boolean | null | undefined
+  ) => {
     const idx = header.findIndex((h) => h.toLowerCase() === key.toLowerCase());
     if (idx >= 0) {
-      row[idx] = value === undefined || value === null ? "" : String(value);
+      if (value === undefined || value === null) {
+        row[idx] = "";
+      } else if (typeof value === "boolean") {
+        row[idx] = value ? "true" : "false";
+      } else {
+        row[idx] = String(value);
+      }
     }
   };
   const makeRow = (
@@ -126,6 +142,50 @@ export function buildScenarioCsv(payload: SharePayload, template: string = csvTe
         setValue(row, "leak.fxPct", payload.leak.fxPct);
         setValue(row, "leak.refundsPct", payload.leak.refundsPct);
       }
+      const oc = payload.analysis?.optConstraints;
+      if (oc) {
+        setValue(row, "constraints.gapGB", oc.gapGB);
+        setValue(row, "constraints.gapBB", oc.gapBB);
+        setValue(row, "constraints.charm", oc.charm);
+        setValue(row, "constraints.usePocketProfit", oc.usePocketProfit);
+        setValue(row, "constraints.usePocketMargins", oc.usePocketMargins);
+        setValue(row, "constraints.maxNoneShare", oc.maxNoneShare);
+        setValue(row, "constraints.minTakeRate", oc.minTakeRate);
+        if (oc.marginFloor) {
+          setValue(row, "constraints.margin.good", oc.marginFloor.good);
+          setValue(row, "constraints.margin.better", oc.marginFloor.better);
+          setValue(row, "constraints.margin.best", oc.marginFloor.best);
+        }
+      }
+      const rng = payload.analysis?.optRanges;
+      if (rng) {
+        setValue(row, "ranges.good.min", rng.good?.[0]);
+        setValue(row, "ranges.good.max", rng.good?.[1]);
+        setValue(row, "ranges.better.min", rng.better?.[0]);
+        setValue(row, "ranges.better.max", rng.better?.[1]);
+        setValue(row, "ranges.best.min", rng.best?.[0]);
+        setValue(row, "ranges.best.max", rng.best?.[1]);
+        setValue(row, "ranges.step", rng.step);
+      }
+      const pr = payload.analysis?.priceRange;
+      if (pr) {
+        setValue(row, "priceRange.good.min", pr.good?.min);
+        setValue(row, "priceRange.good.max", pr.good?.max);
+        setValue(row, "priceRange.better.min", pr.better?.min);
+        setValue(row, "priceRange.better.max", pr.better?.max);
+        setValue(row, "priceRange.best.min", pr.best?.min);
+        setValue(row, "priceRange.best.max", pr.best?.max);
+        setValue(row, "priceRange.source", payload.analysis?.priceRangeSource);
+      }
+      if (payload.channelMix?.length) {
+        setValue(row, "channelMix", JSON.stringify(payload.channelMix));
+      }
+      if (payload.uncertainty) {
+        setValue(row, "uncertainty", JSON.stringify(payload.uncertainty));
+      }
+      if (payload.analysis?.optimizerKind) {
+        setValue(row, "optimizerKind", payload.analysis.optimizerKind);
+      }
     }
     if (seg) {
       setValue(row, "name", seg.name ?? "");
@@ -147,6 +207,46 @@ export function buildScenarioCsv(payload: SharePayload, template: string = csvTe
     segs.forEach((seg, idx) => add(makeRow(seg, idx === 0)));
   } else {
     add(makeRow(null, true));
+  }
+
+  if (opts.includeMeta !== false) {
+    rows.push(""); // spacer
+    if (payload.channelMix && payload.channelMix.length) {
+      rows.push("# channelMix (preset: weight)");
+      payload.channelMix.forEach((m) => rows.push(`# ${m.preset}: ${m.w}`));
+    }
+    if (payload.uncertainty) {
+      rows.push("# uncertainty (JSON)");
+      rows.push(`# ${JSON.stringify(payload.uncertainty)}`);
+    }
+    if (payload.analysis?.optConstraints) {
+      rows.push("# constraints");
+      rows.push(
+        `# gapGB=${payload.analysis.optConstraints.gapGB ?? ""}, gapBB=${payload.analysis.optConstraints.gapBB ?? ""},` +
+          ` charm=${payload.analysis.optConstraints.charm ?? ""}, usePocketProfit=${payload.analysis.optConstraints.usePocketProfit ?? ""},` +
+          ` usePocketMargins=${payload.analysis.optConstraints.usePocketMargins ?? ""}, maxNoneShare=${payload.analysis.optConstraints.maxNoneShare ?? ""}, minTakeRate=${payload.analysis.optConstraints.minTakeRate ?? ""}`
+      );
+      if (payload.analysis.optConstraints.marginFloor) {
+        const mf = payload.analysis.optConstraints.marginFloor;
+        rows.push(`# marginFloor good=${mf.good ?? ""}, better=${mf.better ?? ""}, best=${mf.best ?? ""}`);
+      }
+    }
+    if (payload.analysis?.optRanges) {
+      const r = payload.analysis.optRanges;
+      const fmt = (t?: [number, number]) => (t ? `${t[0]}-${t[1]}` : "");
+      rows.push("# ranges");
+      rows.push(
+        `# good=${fmt(r.good)}, better=${fmt(r.better)}, best=${fmt(r.best)}, step=${r.step ?? ""}`
+      );
+    }
+    if (payload.analysis?.priceRange) {
+      rows.push("# priceRange (if provided)");
+      const pr = payload.analysis.priceRange;
+      rows.push(`# good=${JSON.stringify(pr.good ?? null)}, better=${JSON.stringify(pr.better ?? null)}, best=${JSON.stringify(pr.best ?? null)}, source=${payload.analysis.priceRangeSource ?? ""}`);
+    }
+    if (payload.analysis?.optimizerKind) {
+      rows.push(`# optimizerKind=${payload.analysis.optimizerKind}`);
+    }
   }
 
   const headerLine = header.join(",");
@@ -253,4 +353,157 @@ export async function copyToClipboard(
     opts?.onError?.(msg);
     return false;
   }
+}
+
+export function buildShortLinkUrl(args: { origin: string; pathname: string; id: string }) {
+  return `${args.origin}${args.pathname}?s=${encodeURIComponent(args.id)}`;
+}
+
+export function copyPageUrl(
+  loc: Location,
+  opts?: { onSuccess?: () => void; onError?: (msg: string) => void }
+) {
+  return copyToClipboard(loc.href, opts);
+}
+
+export function copyScenarioLongUrl(
+  args: {
+    origin: string;
+    pathname: string;
+    prices: Prices;
+    costs: Prices;
+    features: Features;
+  },
+  opts?: { onSuccess?: () => void; onError?: (msg: string) => void }
+) {
+  const longUrl = buildLongUrl({
+    origin: args.origin,
+    pathname: args.pathname,
+    prices: args.prices,
+    costs: args.costs,
+    features: args.features,
+  });
+  return copyToClipboard(longUrl, opts);
+}
+
+// Simple round-trip validation to catch missing fields after JSON serialization
+export function roundTripValidate(payload: SharePayload): { ok: boolean; issues: string[] } {
+  const parsed = JSON.parse(JSON.stringify(payload)) as SharePayload;
+  const issues: string[] = [];
+
+  const check = <K extends keyof SharePayload>(key: K) => {
+    const before = payload[key];
+    const after = parsed[key];
+    if (before === undefined && after === undefined) return;
+    if (Array.isArray(before)) {
+      if (!Array.isArray(after) || before.length !== after.length) {
+        issues.push(`Field ${String(key)} length changed`);
+      }
+      return;
+    }
+    if (before === undefined || after === undefined) {
+      issues.push(`Field ${String(key)} missing after round-trip`);
+    }
+  };
+
+  ["prices", "costs", "features", "refPrices", "leak", "segments", "channelMix", "uncertainty"].forEach((k) =>
+    check(k as keyof SharePayload)
+  );
+
+  const beforeAnalysis = payload.analysis;
+  const afterAnalysis = parsed.analysis;
+  if (beforeAnalysis || afterAnalysis) {
+    if (!afterAnalysis) issues.push("analysis missing after round-trip");
+    else {
+      if (beforeAnalysis?.optConstraints && !afterAnalysis.optConstraints)
+        issues.push("optConstraints missing after round-trip");
+      if (beforeAnalysis?.optRanges && !afterAnalysis.optRanges) issues.push("optRanges missing after round-trip");
+      if (beforeAnalysis?.priceRange && !afterAnalysis.priceRange)
+        issues.push("priceRange missing after round-trip");
+      if (beforeAnalysis?.priceRangeSource && !afterAnalysis.priceRangeSource)
+        issues.push("priceRangeSource missing after round-trip");
+      if (beforeAnalysis?.optimizerKind && !afterAnalysis.optimizerKind)
+        issues.push("optimizerKind missing after round-trip");
+    }
+  }
+
+  return { ok: issues.length === 0, issues };
+}
+
+export function roundTripValidateMany(
+  items: Array<{ label: string; payload: SharePayload }>
+): { ok: boolean; issues: Array<{ label: string; issues: string[] }> } {
+  const problems: Array<{ label: string; issues: string[] }> = [];
+  items.forEach((item) => {
+    const res = roundTripValidate(item.payload);
+    if (!res.ok) problems.push({ label: item.label, issues: res.issues });
+  });
+  return { ok: problems.length === 0, issues: problems };
+}
+
+// Helper to run a suite of round-trip checks and return a structured result; useful for dev scripts/tests.
+export function runRoundTripSuite(
+  items: Array<{ label: string; payload: SharePayload }>
+): { ok: boolean; issues: Array<{ label: string; issues: string[] }> } {
+  return roundTripValidateMany(items);
+}
+
+// Helper to build a payload from a Scenario with explicit fallbacks for missing fields.
+export function buildPayloadFromScenario(
+  scenario: Scenario,
+  fallback: {
+    prices: Prices;
+    costs: Prices;
+    refPrices: Prices;
+    features: Features;
+    leak: Leakages;
+    segments: Segment[];
+    optRanges: SearchRanges;
+    optConstraints: Constraints;
+    priceRange?: { map: TierRangeMap; source: PriceRangeSource } | null;
+    channelMix?: ChannelMix;
+    uncertainty?: ScenarioUncertainty | null;
+    retentionPct?: number;
+    retentionMonths?: number;
+    kpiFloorAdj?: number;
+    tornadoDefaults?: Partial<{
+      usePocket: boolean;
+      priceBump: number;
+      pctBump: number;
+      rangeMode: "symmetric" | "data";
+      metric: TornadoMetric;
+      valueMode: TornadoValueMode;
+    }>;
+    optimizerKind?: "grid-worker" | "grid-inline" | "future";
+  }
+): SharePayload {
+  const tor = scenario.tornado ?? {};
+  const tDef = fallback.tornadoDefaults ?? {};
+  const priceRange =
+    scenario.priceRange !== undefined
+      ? { map: scenario.priceRange, source: scenario.priceRangeSource ?? fallback.priceRange?.source ?? "shared" }
+      : fallback.priceRange ?? null;
+  return buildSharePayload({
+    prices: scenario.prices ?? fallback.prices,
+    costs: scenario.costs ?? fallback.costs,
+    features: scenario.features ?? fallback.features,
+    refPrices: scenario.refPrices ?? scenario.prices ?? fallback.refPrices,
+    leak: scenario.leak ?? fallback.leak,
+    segments: scenario.segments ?? fallback.segments,
+    tornadoPocket: tor.usePocket ?? tDef.usePocket ?? false,
+    tornadoPriceBump: tor.priceBump ?? tDef.priceBump ?? 0,
+    tornadoPctBump: tor.pctBump ?? tDef.pctBump ?? 0,
+    tornadoRangeMode: tor.rangeMode ?? tDef.rangeMode ?? "data",
+    tornadoMetric: tor.metric ?? tDef.metric ?? "profit",
+    tornadoValueMode: tor.valueMode ?? tDef.valueMode ?? "absolute",
+    retentionPct: scenario.retentionPct ?? fallback.retentionPct ?? 0,
+    retentionMonths: scenario.retentionMonths ?? fallback.retentionMonths ?? 12,
+    kpiFloorAdj: scenario.kpiFloorAdj ?? fallback.kpiFloorAdj ?? 0,
+    priceRange,
+    optRanges: scenario.optRanges ?? fallback.optRanges,
+    optConstraints: scenario.optConstraints ?? fallback.optConstraints,
+    channelMix: scenario.channelMix ?? fallback.channelMix ?? [],
+    optimizerKind: fallback.optimizerKind ?? "grid-inline",
+    uncertainty: scenario.uncertainty ?? fallback.uncertainty ?? null,
+  });
 }

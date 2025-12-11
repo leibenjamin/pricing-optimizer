@@ -28,6 +28,7 @@ type TakeRateSectionProps = {
   segmentBreakdownScenarios: TakeRateScenario[];
   segmentScenarioOptions: Array<{ key: string; label: string }>;
   selectedSegmentLabel: string | null;
+  riskNote?: string | null;
 };
 
 export function TakeRateSection({
@@ -46,6 +47,7 @@ export function TakeRateSection({
   segmentBreakdownScenarios,
   segmentScenarioOptions,
   selectedSegmentLabel,
+  riskNote,
 }: TakeRateSectionProps) {
   return (
     <Section
@@ -61,6 +63,11 @@ export function TakeRateSection({
             Baseline: {summary.baselineLabel}
           </span>
         )}
+        {riskNote ? (
+          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-700">
+            {riskNote}
+          </span>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-2 items-center text-[11px] text-slate-700">
