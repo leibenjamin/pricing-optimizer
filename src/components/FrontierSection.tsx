@@ -5,6 +5,7 @@ import type { FrontierViewModel } from "./FrontierChart";
 import { Section } from "./Section";
 import InfoTip from "./InfoTip";
 import ErrorBoundary from "./ErrorBoundary";
+import RiskBadge from "./RiskBadge";
 
 type FrontierSectionProps = {
   frontierViewModel: FrontierViewModel;
@@ -92,11 +93,7 @@ export function FrontierSection({
         Basis: {usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}; sweep {frontierTier} from ${frontierSweep.min.toFixed(2)} to ${frontierSweep.max.toFixed(2)} (step {frontierSweep.step >= 1 ? frontierSweep.step.toFixed(0) : frontierSweep.step.toFixed(2)}).
         Constraints (gaps/floors) are shown as feasible (green) vs infeasible (gray). If points are sparse, widen the scenario ranges or relax guardrails.
         <InfoTip id="frontier.overlay" ariaLabel="About frontier feasibility overlay" />
-        {riskNote ? (
-          <span className="ml-2 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-700">
-            {riskNote}
-          </span>
-        ) : null}
+        <RiskBadge note={riskNote} className="ml-2" />
       </div>
       <Suspense
         fallback={<div className="text-xs text-gray-500 p-2">Loading frontier...</div>}

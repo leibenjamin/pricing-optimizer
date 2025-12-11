@@ -2,7 +2,7 @@
 // Thin builders for chart view models to keep App.tsx lean.
 import type { FrontierComparison, FrontierMarker, FrontierPoint, FrontierViewModel } from "../components/FrontierChart";
 import type { TornadoDatum } from "../components/Tornado";
-import type { ScenarioRun } from "./domain";
+import type { ScenarioRun, ScenarioUncertainty } from "./domain";
 import type { SnapshotKPIs } from "./snapshots";
 import type { ScorecardDelta } from "./scorecard";
 import type { Prices } from "./segments";
@@ -170,6 +170,18 @@ export type CohortSummaryCard = {
   deltaTotal: number | null;
   deltaEnd: number | null;
 };
+
+export function formatRiskNote(uncertainty: ScenarioUncertainty | null): string | null {
+  if (!uncertainty) return null;
+  const parts: string[] = [];
+  const price = Math.round((uncertainty.priceScaleDelta ?? 0) * 100);
+  const leak = Math.round((uncertainty.leakDeltaPct ?? 0) * 100);
+  if (price) parts.push(`price +/-${price}%`);
+  if (leak) parts.push(`leak +/-${leak}%`);
+  const source = uncertainty.source ?? "preset";
+  const detail = parts.length ? `; ${parts.join(", ")}` : "";
+  return `Uncertainty: ${source}${detail}`;
+}
 
 export function buildCohortViewModel(args: {
   baseline: {

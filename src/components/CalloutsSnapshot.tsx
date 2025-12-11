@@ -1,4 +1,5 @@
 import type { ScorecardDelta } from "../lib/scorecard";
+import RiskBadge from "./RiskBadge";
 
 type GuardrailSummary = {
   gapLine: string;
@@ -75,11 +76,7 @@ export default function CalloutsSnapshot({
             {ladderLabel}
           </span>
         ) : null}
-        {riskNote ? (
-          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-700">
-            {riskNote}
-          </span>
-        ) : null}
+        <RiskBadge note={riskNote} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

@@ -278,10 +278,15 @@ export type SaveShortLinkDeps = {
   onToast?: (kind: "success" | "error" | "info", msg: string) => void;
 };
 
+export type SaveShortLinkResult = {
+  id: string | null;
+  url: string | null;
+};
+
 export async function saveShortLink(
   payload: SharePayload,
   deps: SaveShortLinkDeps
-): Promise<string | null> {
+): Promise<SaveShortLinkResult> {
   const { preflight, fetchWithRetry, onLog, onToast } = deps;
   try {
     const ok = await preflight("/api/get?s=ping");
@@ -295,21 +300,66 @@ export async function saveShortLink(
     if (!res.ok) {
       onLog?.(`Save failed: HTTP ${res.status}`);
       onToast?.("error", `Save failed (HTTP ${res.status})`);
-      return null;
+      return { id: null, url: null };
     }
     const body = (await res.json()) as { id?: string; error?: string };
     if (!body.id) {
       onToast?.("error", body.error ?? "Save failed: missing id");
-      return null;
+      return { id: null, url: null };
     }
+    const url = buildShortLinkUrl({
+      origin: window.location.origin,
+      pathname: window.location.pathname,
+      id: body.id,
+    });
     onToast?.("success", "Short link created");
-    return body.id;
+    return { id: body.id, url };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     onLog?.(`Save failed: ${msg}`);
     onToast?.("error", `Save failed: ${msg}`);
-    return null;
+    return { id: null, url: null };
   }
+}
+
+export type ShortLinkDeps = SaveShortLinkDeps & {
+  rememberId: (id: string) => void;
+  pushJournal?: (msg: string) => void;
+  toast: (kind: "success" | "error" | "info" | "warning", msg: string) => void;
+  buildUrl?: (id: string) => string;
+};
+
+export type ShortLinkFlowDeps = ShortLinkDeps & { location?: Location | null };
+
+export async function saveShortLinkWithUi(
+  payload: SharePayload,
+  deps: ShortLinkDeps
+): Promise<SaveShortLinkResult> {
+  const { pushJournal, rememberId, toast, buildUrl } = deps;
+  const { id, url } = await saveShortLink(payload, deps);
+  if (id && url) {
+    rememberId(id);
+    const finalUrl =
+      buildUrl?.(id) ?? url ?? buildShortLinkUrl({ origin: window.location.origin, pathname: window.location.pathname, id });
+    window.history.replaceState({}, "", finalUrl);
+    pushJournal?.(`[${new Date().toLocaleTimeString()}] Saved short link ${id}`);
+    toast("success", `Saved: ${id}`);
+    return { id, url: finalUrl };
+  }
+  return { id, url };
+}
+
+export async function saveShortLinkFlow(
+  payload: SharePayload,
+  deps: ShortLinkFlowDeps
+): Promise<SaveShortLinkResult> {
+  const loc = deps.location ?? (typeof window !== "undefined" ? window.location : null);
+  const buildUrl =
+    deps.buildUrl ??
+    (loc
+      ? (id: string) => buildShortLinkUrl({ origin: loc.origin, pathname: loc.pathname, id })
+      : undefined);
+  return saveShortLinkWithUi(payload, { ...deps, buildUrl });
 }
 
 export function buildLongUrl(args: {
@@ -359,11 +409,40 @@ export function buildShortLinkUrl(args: { origin: string; pathname: string; id: 
   return `${args.origin}${args.pathname}?s=${encodeURIComponent(args.id)}`;
 }
 
+export function buildShortLinkUrlFromLocation(
+  id: string,
+  loc?: Location | null
+): string | null {
+  const target = loc ?? (typeof window !== "undefined" ? window.location : null);
+  if (!target) return null;
+  return buildShortLinkUrl({ origin: target.origin, pathname: target.pathname, id });
+}
+
+export function navigateToShortLink(id: string, loc?: Location | null): string | null {
+  const url = buildShortLinkUrlFromLocation(id, loc);
+  if (!url) return null;
+  const target = loc ?? (typeof window !== "undefined" ? window.location : null);
+  target?.assign(url);
+  return url;
+}
+
 export function copyPageUrl(
   loc: Location,
   opts?: { onSuccess?: () => void; onError?: (msg: string) => void }
 ) {
   return copyToClipboard(loc.href, opts);
+}
+
+export function copyShortLinkUrl(
+  id: string,
+  opts?: { location?: Location | null; onSuccess?: () => void; onError?: (msg: string) => void }
+) {
+  const url = buildShortLinkUrlFromLocation(id, opts?.location);
+  if (!url) {
+    opts?.onError?.("No location available");
+    return Promise.resolve(false);
+  }
+  return copyToClipboard(url, opts);
 }
 
 export function copyScenarioLongUrl(

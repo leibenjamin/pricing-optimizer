@@ -4,6 +4,7 @@ import { Section } from "./Section";
 import ActionCluster from "./ActionCluster";
 import { TakeRateDeltaTable } from "./TakeRateDeltaTable";
 import TakeRateChart, { type TakeRateScenario } from "./TakeRateChart";
+import RiskBadge from "./RiskBadge";
 
 type TakeRateSummary = {
   headline: string;
@@ -63,11 +64,7 @@ export function TakeRateSection({
             Baseline: {summary.baselineLabel}
           </span>
         )}
-        {riskNote ? (
-          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-700">
-            {riskNote}
-          </span>
-        ) : null}
+        <RiskBadge note={riskNote} />
       </div>
 
       <div className="flex flex-wrap gap-2 items-center text-[11px] text-slate-700">

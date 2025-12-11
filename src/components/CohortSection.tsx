@@ -3,6 +3,7 @@ import InfoTip from "./InfoTip";
 import { Section } from "./Section";
 import MiniLine from "./MiniLine";
 import type { CohortScenarioVM, CohortSummaryCard } from "../lib/viewModels";
+import RiskBadge from "./RiskBadge";
 
 type CohortSectionProps = {
   retentionPct: number;
@@ -36,11 +37,7 @@ export function CohortSection({
         className="text-sm text-slate-700 leading-snug"
       >
         Cohort rehearsal simulates pocket margin on a shrinking cohort. Overlay Baseline/Current/Optimized to see whether lift holds past month 1; adjust retention/horizon to stress churn vs contribution.
-        {riskNote ? (
-          <span className="ml-2 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-700">
-            {riskNote}
-          </span>
-        ) : null}
+        <RiskBadge note={riskNote} className="ml-2" />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

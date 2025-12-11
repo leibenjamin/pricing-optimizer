@@ -1,4 +1,4 @@
-// src/App.tsx
+﻿// src/App.tsx
 
 import { Suspense, lazy, type ReactNode, type ChangeEvent } from "react";
 // replace direct imports:
@@ -76,6 +76,7 @@ import { CurrentVsOptimizedSection, type CurrentVsOptimizedVM } from "./componen
 import { ShareExportSection } from "./components/ShareExportSection";
 import { RecentLinksSection } from "./components/RecentLinksSection";
 import { ScenarioJournalSection } from "./components/ScenarioJournalSection";
+import RiskBadge from "./components/RiskBadge";
 import { kpisFromSnapshot, type SnapshotKPIs } from "./lib/snapshots";
 import { runRobustnessScenarios, type UncertaintyScenario } from "./lib/robustness";
 import { buildTornadoRows, tornadoSignalThreshold, type TornadoValueMode } from "./lib/tornadoView";
@@ -88,6 +89,7 @@ import {
   buildCohortViewModel,
   formatBaselineLabel,
   buildGuardrailSummary,
+  formatRiskNote,
 } from "./lib/viewModels";
 import {
   buildScenarioSnapshot,
@@ -102,14 +104,14 @@ import {
   downloadScenarioJson,
   downloadScenarioCsv,
   downloadJournal,
-  saveShortLink,
+  saveShortLinkFlow,
   roundTripValidate,
   runRoundTripSuite,
   buildPayloadFromScenario,
-  copyToClipboard,
-  buildShortLinkUrl,
   copyPageUrl,
   copyScenarioLongUrl,
+  copyShortLinkUrl,
+  navigateToShortLink,
   type SharePayload,
 } from "./lib/share";
 import { readSlot, writeSlot, clearSlot, type SlotId } from "./lib/slots";
@@ -290,14 +292,7 @@ export default function App() {
   const [baselineRun, setBaselineRun] = useStickyState<ScenarioRun | null>("po:baseline-run-v1", null);
   const [optimizedRun, setOptimizedRun] = useState<ScenarioRun | null>(null);
   const [scenarioUncertainty, setScenarioUncertainty] = useState<ScenarioUncertainty | null>(null);
-  const riskNote =
-    scenarioUncertainty && (scenarioUncertainty.priceScaleDelta || scenarioUncertainty.leakDeltaPct)
-      ? `Uncertainty: ${scenarioUncertainty.source ?? "preset"}; price ±${Math.round(
-          (scenarioUncertainty.priceScaleDelta ?? 0) * 100
-        )}%, leak ±${Math.round((scenarioUncertainty.leakDeltaPct ?? 0) * 100)}%`
-      : scenarioUncertainty?.source
-      ? `Uncertainty: ${scenarioUncertainty.source}`
-      : null;
+  const riskNote = formatRiskNote(scenarioUncertainty);
   const baselineMeta = baselineRun?.meta ?? null;
   const [scorecardView, setScorecardView] = useState<"current" | "optimized">("current");
   const [takeRateMode, setTakeRateMode] = useState<"mix" | "delta">("mix");
@@ -3382,24 +3377,17 @@ export default function App() {
   async function saveScenarioShortLink() {
     const payload = buildSharePayloadChecked("save short link");
 
-    const id = await saveShortLink(payload, {
+    await saveShortLinkFlow(payload, {
       preflight,
       fetchWithRetry: (input, init, cfg) =>
         fetchWithRetry(input, init ?? {}, cfg as RetryConfig | undefined),
       onLog: (msg) => pushJ?.(`[${now()}] ${msg}`),
-      onToast: toast,
+      onToast: (kind, msg) => toast(kind, msg),
+      toast,
+      rememberId,
+      pushJournal: pushJ ?? undefined,
+      location: typeof window !== "undefined" ? window.location : undefined,
     });
-    if (id) {
-      rememberId(id);
-      const url = buildShortLinkUrl({
-        origin: location.origin,
-        pathname: location.pathname,
-        id,
-      });
-      window.history.replaceState({}, "", url);
-      pushJ?.(`[${now()}] Saved short link ${id}`);
-      toast("success", `Saved: ${id}`);
-    }
   }
 
   function saveToSlot(id: SlotId) {
@@ -4396,7 +4384,7 @@ export default function App() {
                       <Explanation slot="refs.howUsed" className="text-[11px]">
                         <div className="font-semibold text-slate-700">How these are used</div>
                         <ul className="list-disc pl-4 space-y-1">
-                          <li>We treat these as customers&apos; remembered “fair” prices; prices above the ref get a loss penalty, prices below get a small gain.</li>
+                          <li>We treat these as customers&apos; remembered â€œfairâ€ prices; prices above the ref get a loss penalty, prices below get a small gain.</li>
                           <li>Impact is scaled by each segment&apos;s anchoring strength (`alphaAnchor`) and loss aversion (`lambdaLoss`) in the demand model that feeds the optimizer and charts.</li>
                           <li>Keep refs near today&apos;s street/list prices or survey anchors; presets and imports set them automatically but you can tune before running the optimizer.</li>
                         </ul>
@@ -4675,20 +4663,14 @@ export default function App() {
             <RecentLinksSection
               recents={readRecents()}
               onReload={(id) => {
-                const url = buildShortLinkUrl({
-                  origin: location.origin,
-                  pathname: location.pathname,
-                  id,
-                });
-                location.assign(url);
+                navigateToShortLink(id, typeof window !== "undefined" ? window.location : undefined);
               }}
               onCopy={(id) => {
-                const url = buildShortLinkUrl({
-                  origin: location.origin,
-                  pathname: location.pathname,
-                  id,
+                copyShortLinkUrl(id, {
+                  location: typeof window !== "undefined" ? window.location : undefined,
+                  onSuccess: () => toast("success", "Short link copied"),
+                  onError: (msg) => toast("error", msg ?? "Copy failed"),
                 });
-                copyToClipboard(url);
                 pushJ(`[${now()}] Copied short link ${id}`);
               }}
               onClearAll={() => {
@@ -5040,12 +5022,15 @@ export default function App() {
 
             <div className="flex items-center justify-between mb-2 text-xs text-slate-600">
               <span>Showing: {tornadoViewLabel} ladder • {tornadoMetricLabel} • {tornadoUnitLabel}</span>
-              <InfoTip
-                className="ml-1"
-                align="right"
-                id="chart.tornado"
-                ariaLabel="How should I use the tornado sensitivity chart?"
-              />
+              <div className="flex items-center gap-2">
+                <RiskBadge note={riskNote} />
+                <InfoTip
+                  className="ml-1"
+                  align="right"
+                  id="chart.tornado"
+                  ariaLabel="How should I use the tornado sensitivity chart?"
+                />
+              </div>
             </div>
 
             {!tornadoHasSignal && (
@@ -5065,6 +5050,7 @@ export default function App() {
                 <Tornado
                   chartId="tornado-main"
                   viewModel={tornadoViewModel}
+                  riskNote={riskNote}
                 />
               </ErrorBoundary>
             </Suspense>
