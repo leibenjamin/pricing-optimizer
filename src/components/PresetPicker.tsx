@@ -1,13 +1,10 @@
 ﻿// src/components/PresetPicker.tsx
 import InfoTip from "./InfoTip";
 import type { Preset } from "../lib/presets";
+import type { Prices } from "../lib/segments";
 
-function pct(n: number) {
-  return `${Math.round(n * 100)}%`;
-}
-function money(n: number) {
-  return `$${n.toFixed(2)}`;
-}
+const pct = (n: number) => `${Math.round(n * 100)}%`;
+const money = (n: number) => `$${n.toFixed(2)}`;
 
 function leakSummary(p: Preset) {
   const L = p.leak;
@@ -101,109 +98,105 @@ export default function PresetPicker({
             <div
               key={p.id}
               className={
-                "min-w-0 rounded-xl border bg-white shadow-sm p-3 flex flex-col gap-2 h-auto" +
+                "min-w-0 rounded-xl border bg-white shadow-sm p-3 flex flex-col gap-3 h-auto" +
                 (isActive ? "border-blue-500 ring-1 ring-blue-200" : "border-slate-200")
               }
             >
-              <div className="flex items-start justify-between gap-2">
-                <div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
                   <div className="text-sm font-semibold leading-tight wrap-break-word">{p.name}</div>
                   {p.note ? (
                     <div className="text-xs text-slate-600 whitespace-normal wrap-break-word leading-tight">{p.note}</div>
                   ) : null}
                   {isDirty ? (
-                    <div className="text-[11px] text-amber-700 flex items-center gap-2 mt-1">
+                    <div className="text-[11px] text-amber-700 flex flex-wrap items-center gap-2 mt-1 wrap-break-word">
                       <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 uppercase tracking-wide">Modified</span>
-                      <span className="truncate">Touched: {diffs.join(", ")}</span>
+                      <span className="whitespace-normal wrap-break-word">Touched: {diffs.join(", ")}</span>
                     </div>
                   ) : null}
                 </div>
-                <button
-                  className={
-                    "text-xs px-2 py-1 rounded border " +
-                    (isActive
-                      ? isDirty
-                        ? "border-blue-500 text-blue-700 bg-blue-50 hover:bg-blue-100"
-                        : "border-blue-500 text-blue-600 bg-blue-50 cursor-default"
-                      : "border-slate-300 text-slate-700 bg-white hover:bg-slate-50")
-                  }
-                  disabled={isActive && !isDirty}
-                  onClick={() => (isDirty && onReapply ? onReapply(p) : onApply(p))}
-                >
-                  {isActive ? (isDirty ? "Reapply" : "Active") : "Apply"}
-                </button>
-                {isActive && onResetActive ? (
+                <div className="flex flex-col items-end gap-1 shrink-0">
                   <button
-                    className="text-[11px] text-slate-600 underline"
-                    type="button"
-                    onClick={() => onResetActive(p)}
+                    className={
+                      "text-xs px-2 py-1 rounded border " +
+                      (isActive
+                        ? isDirty
+                          ? "border-blue-500 text-blue-700 bg-blue-50 hover:bg-blue-100"
+                          : "border-blue-500 text-blue-600 bg-blue-50 cursor-default"
+                        : "border-slate-300 text-slate-700 bg-white hover:bg-slate-50")
+                    }
+                    disabled={isActive && !isDirty}
+                    onClick={() => (isDirty && onReapply ? onReapply(p) : onApply(p))}
                   >
-                    Reset preset
+                    {isActive ? (isDirty ? "Reapply" : "Active") : "Apply"}
                   </button>
-                ) : null}
+                  {isActive && onResetActive ? (
+                    <button
+                      className="text-[11px] text-slate-600 underline"
+                      type="button"
+                      onClick={() => onResetActive(p)}
+                    >
+                      Reset preset
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
-              {/* mini credibility row */}
-              <div className="mt-2 text-[11px] text-slate-700">
-                <div className="truncate">
+              {/* key details */}
+              <ul className="mt-1 text-[11px] text-slate-700 space-y-1 whitespace-normal wrap-break-word leading-snug">
+                <li>
                   <span className="text-slate-500">Price ladder:</span>{" "}
-                  {["good","better","best"].map((t, i) => {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const val = (p.prices as any)[t];
-                    return <span key={t}>{money(val)}{i<2?" -> ":""}</span>;
+                  {(["good", "better", "best"] as Array<keyof Prices>).map((t, i) => {
+                    const val = p.prices[t];
+                    return (
+                      <span key={t}>
+                        {money(val)}
+                        {i < 2 ? " → " : ""}
+                      </span>
+                    );
                   })}
-                </div>
-                <div className="truncate">
+                </li>
+                <li>
                   <span className="text-slate-500">Costs:</span>{" "}
-                  {["good","better","best"].map((t, i) => {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const val = (p.costs as any)[t];
-                    return <span key={t}>{money(val)}{i<2?" -> ":""}</span>;
+                  {(["good", "better", "best"] as Array<keyof Prices>).map((t, i) => {
+                    const val = p.costs[t];
+                    return (
+                      <span key={t}>
+                        {money(val)}
+                        {i < 2 ? " → " : ""}
+                      </span>
+                    );
                   })}
-                </div>
-                <div className="truncate">
+                </li>
+                <li>
                   <span className="text-slate-500">Refs:</span>{" "}
-                  {["good","better","best"].map((t, i) => {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const val = (p.refPrices as any)[t];
-                    return <span key={t}>{money(val)}{i<2?" -> ":""}</span>;
+                  {(["good", "better", "best"] as Array<keyof Prices>).map((t, i) => {
+                    const val = p.refPrices[t];
+                    return (
+                      <span key={t}>
+                        {money(val)}
+                        {i < 2 ? " → " : ""}
+                      </span>
+                    );
                   })}
-                </div>
+                </li>
                 {featureSummary(p) ? (
-                  <div className="truncate">
-                    <span className="text-slate-500">Features:</span>{" "}
-                    {featureSummary(p)}
-                  </div>
+                  <li><span className="text-slate-500">Features:</span> {featureSummary(p)}</li>
                 ) : null}
-                <div className="truncate">
-                  <span className="text-slate-500">Leakages:</span>{" "}
-                  {leakSummary(p)}
-                </div>
+                <li><span className="text-slate-500">Leakages:</span> {leakSummary(p)}</li>
                 {optimizerSummary(p) ? (
-                  <div className="truncate">
-                    <span className="text-slate-500">Optimizer:</span>{" "}
-                    {optimizerSummary(p)}
-                  </div>
+                  <li><span className="text-slate-500">Optimizer:</span> {optimizerSummary(p)}</li>
                 ) : null}
                 {rangeSummary(p) ? (
-                  <div className="truncate">
-                    <span className="text-slate-500">Ranges:</span>{" "}
-                    {rangeSummary(p)}
-                  </div>
+                  <li><span className="text-slate-500">Ranges:</span> {rangeSummary(p)}</li>
                 ) : null}
                 {channelSummary(p) ? (
-                  <div className="truncate">
-                    <span className="text-slate-500">Channels:</span>{" "}
-                    {channelSummary(p)}
-                  </div>
+                  <li><span className="text-slate-500">Channels:</span> {channelSummary(p)}</li>
                 ) : null}
                 {sensitivitySummary(p) ? (
-                  <div className="truncate">
-                    <span className="text-slate-500">Sensitivity:</span>{" "}
-                    {sensitivitySummary(p)}
-                  </div>
+                  <li><span className="text-slate-500">Sensitivity:</span> {sensitivitySummary(p)}</li>
                 ) : null}
-              </div>
+              </ul>
             </div>
           );
         })}
