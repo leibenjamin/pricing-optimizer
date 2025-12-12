@@ -117,6 +117,77 @@ import {
 import { readSlot, writeSlot, clearSlot, type SlotId } from "./lib/slots";
 import { clearRecents, readRecents, rememberId } from "./lib/recents";
 
+// ---- Helpers (stable) for preset diffing ----
+const eqPrices = (a: Prices, b: Prices) =>
+  Math.abs(a.good - b.good) < 1e-6 &&
+  Math.abs(a.better - b.better) < 1e-6 &&
+  Math.abs(a.best - b.best) < 1e-6;
+
+const eqFeatures = (a: Features, b: Features) =>
+  eqPrices(a.featA as Prices, b.featA as Prices) && eqPrices(a.featB as Prices, b.featB as Prices);
+
+const eqSegments = (a: Segment[], b: Segment[]) => {
+  if (a.length !== b.length) return false;
+  return a.every((seg, idx) => {
+    const other = b[idx];
+    return (
+      Math.abs(seg.weight - other.weight) < 1e-6 &&
+      Math.abs(seg.betaPrice - other.betaPrice) < 1e-6 &&
+      Math.abs(seg.betaFeatA - other.betaFeatA) < 1e-6 &&
+      Math.abs(seg.betaFeatB - other.betaFeatB) < 1e-6 &&
+      Math.abs(seg.betaNone - other.betaNone) < 1e-6 &&
+      Math.abs((seg.alphaAnchor ?? 0) - (other.alphaAnchor ?? 0)) < 1e-6 &&
+      Math.abs((seg.lambdaLoss ?? 0) - (other.lambdaLoss ?? 0)) < 1e-6
+    );
+  });
+};
+
+const eqLeak = (a: Leakages, b: Leakages) =>
+  Math.abs(a.paymentPct - b.paymentPct) < 1e-6 &&
+  Math.abs(a.paymentFixed - b.paymentFixed) < 1e-6 &&
+  Math.abs(a.fxPct - b.fxPct) < 1e-6 &&
+  Math.abs(a.refundsPct - b.refundsPct) < 1e-6 &&
+  eqPrices(a.promo as Prices, b.promo as Prices) &&
+  eqPrices(a.volume as Prices, b.volume as Prices);
+
+const eqConstraints = (a: Constraints, b: Constraints) =>
+  Math.abs((a.gapGB ?? 0) - (b.gapGB ?? 0)) < 1e-6 &&
+  Math.abs((a.gapBB ?? 0) - (b.gapBB ?? 0)) < 1e-6 &&
+  Math.abs((a.maxNoneShare ?? 0) - (b.maxNoneShare ?? 0)) < 1e-6 &&
+  Math.abs((a.minTakeRate ?? 0) - (b.minTakeRate ?? 0)) < 1e-6 &&
+  Math.abs((a.marginFloor?.good ?? 0) - (b.marginFloor?.good ?? 0)) < 1e-6 &&
+  Math.abs((a.marginFloor?.better ?? 0) - (b.marginFloor?.better ?? 0)) < 1e-6 &&
+  Math.abs((a.marginFloor?.best ?? 0) - (b.marginFloor?.best ?? 0)) < 1e-6 &&
+  (a.charm ?? false) === (b.charm ?? false) &&
+  (a.usePocketMargins ?? false) === (b.usePocketMargins ?? false) &&
+  (a.usePocketProfit ?? false) === (b.usePocketProfit ?? false);
+
+const eqRanges = (a: SearchRanges, b: SearchRanges) =>
+  eqPrices(
+    { good: a.good?.[0] ?? 0, better: a.better?.[0] ?? 0, best: a.best?.[0] ?? 0 },
+    { good: b.good?.[0] ?? 0, better: b.better?.[0] ?? 0, best: b.best?.[0] ?? 0 }
+  ) &&
+  eqPrices(
+    { good: a.good?.[1] ?? 0, better: a.better?.[1] ?? 0, best: a.best?.[1] ?? 0 },
+    { good: b.good?.[1] ?? 0, better: b.better?.[1] ?? 0, best: b.best?.[1] ?? 0 }
+  ) &&
+  Math.abs((a.step ?? 0) - (b.step ?? 0)) < 1e-6;
+
+const eqUncertainty = (a: ScenarioUncertainty | null, b: ScenarioUncertainty | null) => {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return (
+    Math.abs((a.priceScaleDelta ?? 0) - (b.priceScaleDelta ?? 0)) < 1e-6 &&
+    Math.abs((a.leakDeltaPct ?? 0) - (b.leakDeltaPct ?? 0)) < 1e-6 &&
+    a.source === b.source
+  );
+};
+
+const eqChannelMix = (a: Array<{ preset: string; w: number }>, b: Array<{ preset: string; w: number }>) => {
+  if (a.length !== b.length) return false;
+  return a.every((r, idx) => r.preset === b[idx].preset && Math.abs(r.w - b[idx].w) < 1e-6);
+};
+
 const TIER_ORDER: readonly Tier[] = ["good", "better", "best"] as const;
 type OptimizerKind = "grid-worker" | "grid-inline" | "future";
 
@@ -127,6 +198,29 @@ type PriceRangeState = {
 type BaselineMeta = {
   label: string;
   savedAt: number;
+};
+type AppliedPresetSnapshot = {
+  id: string;
+  prices: Prices;
+  costs: Prices;
+  refPrices: Prices;
+  features: Features;
+  segments: Segment[];
+  leak: Leakages;
+  optConstraints: Constraints;
+  optRanges: SearchRanges;
+  tornado: {
+    usePocket: boolean;
+    priceBump: number;
+    pctBump: number;
+    rangeMode: "symmetric" | "data";
+    metric: TornadoMetric;
+    valueMode: TornadoValueMode;
+  };
+  retentionPct: number;
+  kpiFloorAdj: number;
+  channelMix: Array<{ preset: string; w: number }>;
+  uncertainty: ScenarioUncertainty | null;
 };
 const ROBUST_SCENARIOS: UncertaintyScenario[] = [
   { name: "Base", segmentScalePrice: 1 },
@@ -870,6 +964,7 @@ export default function App() {
 
   // Track which scenario preset is currently active (purely UI-affordance)
   const [scenarioPresetId, setScenarioPresetId] = useState<string | null>(null);
+  const [appliedPresetSnapshot, setAppliedPresetSnapshot] = useState<AppliedPresetSnapshot | null>(null);
 
   const [costs, setCosts] = useStickyState("po:costs", { good: 3, better: 5, best: 8 });
 
@@ -2422,6 +2517,55 @@ export default function App() {
   const [tornadoPctBump, setTornadoPctBump] = useState(TORNADO_DEFAULTS.pctBump); // pp
   const [tornadoMetric, setTornadoMetric] = useState<TornadoMetric>(TORNADO_DEFAULTS.metric);
   const [tornadoValueMode, setTornadoValueMode] = useState<TornadoValueMode>(TORNADO_DEFAULTS.valueMode);
+  const activePresetDiffs = useMemo(() => {
+    if (!appliedPresetSnapshot || appliedPresetSnapshot.id !== scenarioPresetId) return [];
+    const diffs: string[] = [];
+    if (!eqPrices(prices, appliedPresetSnapshot.prices)) diffs.push("Prices");
+    if (!eqPrices(costs, appliedPresetSnapshot.costs)) diffs.push("Costs");
+    if (!eqPrices(refPrices, appliedPresetSnapshot.refPrices)) diffs.push("Refs");
+    if (!eqFeatures(features, appliedPresetSnapshot.features)) diffs.push("Features");
+    if (!eqSegments(segments, appliedPresetSnapshot.segments)) diffs.push("Segments");
+    if (!eqLeak(leak, appliedPresetSnapshot.leak)) diffs.push("Leakages");
+    if (!eqConstraints(optConstraints, appliedPresetSnapshot.optConstraints)) diffs.push("Constraints");
+    if (!eqRanges(optRanges, appliedPresetSnapshot.optRanges)) diffs.push("Ranges");
+    if (
+      appliedPresetSnapshot.tornado.usePocket !== tornadoPocket ||
+      Math.abs(appliedPresetSnapshot.tornado.priceBump - tornadoPriceBump) >= 1e-6 ||
+      Math.abs(appliedPresetSnapshot.tornado.pctBump - tornadoPctBump) >= 1e-6 ||
+      appliedPresetSnapshot.tornado.rangeMode !== tornadoRangeMode ||
+      appliedPresetSnapshot.tornado.metric !== tornadoMetric ||
+      appliedPresetSnapshot.tornado.valueMode !== tornadoValueMode
+    ) {
+      diffs.push("Tornado");
+    }
+    if (Math.abs(appliedPresetSnapshot.retentionPct - retentionPct) >= 1e-6 || Math.abs(appliedPresetSnapshot.kpiFloorAdj - kpiFloorAdj) >= 1e-6) {
+      diffs.push("Retention/Floor adj");
+    }
+    if (!eqChannelMix(channelMix, appliedPresetSnapshot.channelMix)) diffs.push("Channel mix");
+    if (!eqUncertainty(scenarioUncertainty, appliedPresetSnapshot.uncertainty)) diffs.push("Uncertainty");
+    return diffs;
+  }, [
+    appliedPresetSnapshot,
+    scenarioPresetId,
+    prices,
+    costs,
+    refPrices,
+    features,
+    segments,
+    leak,
+    optConstraints,
+    optRanges,
+    tornadoPocket,
+    tornadoPriceBump,
+    tornadoPctBump,
+    tornadoRangeMode,
+    tornadoMetric,
+    tornadoValueMode,
+    retentionPct,
+    kpiFloorAdj,
+    channelMix,
+    scenarioUncertainty,
+  ]);
 
   const dataDrivenBumps = useMemo(() => {
     const ranges = priceRangeState?.map;
@@ -3801,6 +3945,29 @@ export default function App() {
       setTornadoView("current");
       setPresetSel("");
       setScenarioPresetId(p.id);
+      setAppliedPresetSnapshot({
+        id: p.id,
+        prices: p.prices,
+        costs: p.costs,
+        refPrices: p.refPrices,
+        features: p.features ?? defaults.features,
+        segments: appliedSegments,
+        leak: p.leak,
+        optConstraints: mergedConstraints,
+        optRanges: p.optRanges ?? defaults.optRanges,
+        tornado: {
+          usePocket: p.tornado?.usePocket ?? TORNADO_DEFAULTS.usePocket,
+          priceBump: p.tornado?.priceBump ?? TORNADO_DEFAULTS.priceBump,
+          pctBump: p.tornado?.pctBump ?? TORNADO_DEFAULTS.pctBump,
+          rangeMode: tornadoRangeModeNext,
+          metric: p.tornado?.metric ?? TORNADO_DEFAULTS.metric,
+          valueMode: p.tornado?.valueMode ?? TORNADO_DEFAULTS.valueMode,
+        },
+        retentionPct: retention,
+        kpiFloorAdj: floorAdj,
+        channelMix: mix,
+        uncertainty: p.uncertainty ?? null,
+      });
       pinBaseline(
         `Preset: ${p.name}`,
         {
@@ -4118,6 +4285,8 @@ export default function App() {
                           activeId={scenarioPresetId}
                           onApply={applyScenarioPreset}
                           onResetActive={resetActivePreset}
+                          onReapply={applyScenarioPreset}
+                          activeDiffs={activePresetDiffs}
                           infoId="presets.scenario"
                         className="mt-1"
                       />

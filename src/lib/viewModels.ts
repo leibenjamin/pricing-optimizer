@@ -176,7 +176,7 @@ export function formatRiskNote(uncertainty: ScenarioUncertainty | null): string 
   const price = Math.round(Math.abs((uncertainty.priceScaleDelta ?? 0) * 100));
   const leak = Math.round(Math.abs((uncertainty.leakDeltaPct ?? 0) * 100));
   const span = Math.max(price, leak);
-  const confidence = span <= 7 ? "High" : span <= 14 ? "Medium" : "Low";
+  const confidence = span <= 6 ? "High" : span <= 12 ? "Medium" : "Low";
   const parts: string[] = [];
   if (price) parts.push(`price +/-${price}%`);
   if (leak) parts.push(`leak +/-${leak}%`);

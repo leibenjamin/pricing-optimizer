@@ -69,6 +69,8 @@ export default function PresetPicker({
   activeId,
   onApply,
   onResetActive,
+  onReapply,
+  activeDiffs,
   className = "",
   infoId,
 }: {
@@ -76,6 +78,8 @@ export default function PresetPicker({
   activeId?: string | null;
   onApply: (p: Preset) => void;
   onResetActive?: (p: Preset) => void;
+  onReapply?: (p: Preset) => void;
+  activeDiffs?: string[] | null;
   className?: string;
   infoId?: string; // from explain("presets.scenario")
 }) {
@@ -91,6 +95,8 @@ export default function PresetPicker({
       <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
         {presets.map((p) => {
           const isActive = p.id === activeId;
+          const diffs = isActive ? activeDiffs ?? [] : [];
+          const isDirty = isActive && diffs.length > 0;
           return (
             <div
               key={p.id}
@@ -105,18 +111,26 @@ export default function PresetPicker({
                   {p.note ? (
                     <div className="text-xs text-slate-600 whitespace-normal wrap-break-word leading-tight">{p.note}</div>
                   ) : null}
+                  {isDirty ? (
+                    <div className="text-[11px] text-amber-700 flex items-center gap-2 mt-1">
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 uppercase tracking-wide">Modified</span>
+                      <span className="truncate">Touched: {diffs.join(", ")}</span>
+                    </div>
+                  ) : null}
                 </div>
                 <button
                   className={
                     "text-xs px-2 py-1 rounded border " +
                     (isActive
-                      ? "border-blue-500 text-blue-600 bg-blue-50 cursor-default"
+                      ? isDirty
+                        ? "border-blue-500 text-blue-700 bg-blue-50 hover:bg-blue-100"
+                        : "border-blue-500 text-blue-600 bg-blue-50 cursor-default"
                       : "border-slate-300 text-slate-700 bg-white hover:bg-slate-50")
                   }
-                  disabled={isActive}
-                  onClick={() => onApply(p)}
+                  disabled={isActive && !isDirty}
+                  onClick={() => (isDirty && onReapply ? onReapply(p) : onApply(p))}
                 >
-                  {isActive ? "Active" : "Apply"}
+                  {isActive ? (isDirty ? "Reapply" : "Active") : "Apply"}
                 </button>
                 {isActive && onResetActive ? (
                   <button
@@ -197,4 +211,3 @@ export default function PresetPicker({
     </section>
   );
 }
-
