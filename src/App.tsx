@@ -4292,66 +4292,78 @@ export default function App() {
                       />
                     </Section>
               <Section id="scenario-imports" title="Import & health checks">
-                <div className="flex flex-wrap gap-2 items-center text-xs">
-                  <label className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50 cursor-pointer">
-                    Import Scenario Parameters JSON
-                    <input
-                      type="file"
-                      accept="application/json"
-                      className="hidden"
-                      onChange={handleImportJson}
-                      title="Upload (refer to JSON export in Review & Export for format)"
-                    />
-                  </label>
-                  
-                  <DataImport
-                    onPaste={(obj) => {
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      applyScenarioPartial(obj as any);
-                      pushJ?.(`[${now()}] Imported scenario CSV`);
-                      toast("success", "Scenario parameters CSV applied");
-                    }}
-                    onToast={(kind, msg) => toast(kind, msg)}
-                  />
-
-                  <button
-                    id="sales-import-trigger"
-                    className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
-                    onClick={() => setShowSalesImport(true)}
-                    title="Upload sales logs CSV and estimate latent-class segments from sales data"
-                  >
-                    Import Sales Data CSV (estimate)
-                  </button>
-                  
+                <div className="space-y-3">
                   <div>
-                    <button
-                      className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
-                      onClick={resetAllSettings}
-                      title="Reset all fields to sensible defaults"
-                    >
-                      Reset all settings to defaults
-                    </button>
-                    <InfoTip id="import.resetAll" ariaLabel="Reset all settings to defaults" />
+                    <div className="text-[12px] font-semibold text-slate-800 mb-1">Load from file or paste</div>
+                    <div className="flex flex-wrap gap-2 items-center text-xs">
+                      <label className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50 cursor-pointer">
+                        Import Scenario JSON (full fidelity)
+                        <input
+                          type="file"
+                          accept="application/json"
+                          className="hidden"
+                          onChange={handleImportJson}
+                          title="Upload (refer to JSON export in Review & Export for format)"
+                        />
+                      </label>
+                      
+                      <DataImport
+                        onPaste={(obj) => {
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          applyScenarioPartial(obj as any);
+                          pushJ?.(`[${now()}] Imported scenario CSV`);
+                          toast("success", "Scenario parameters CSV applied");
+                        }}
+                        onToast={(kind, msg) => toast(kind, msg)}
+                      />
 
-                    <button
-                      className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
-                      onClick={clearAllSettings}
-                      title="Clear all fields (set to zero/blank)"
-                    >
-                      Clear all settings
-                    </button>
-                    <InfoTip id="import.clearAll" ariaLabel="Clear all settings to blank" />
+                      <button
+                        id="sales-import-trigger"
+                        className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                        onClick={() => setShowSalesImport(true)}
+                        title="Upload sales logs CSV and estimate latent-class segments from sales data"
+                      >
+                        Import Sales Data CSV (estimate)
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-slate-600 mt-1">
+                      JSON restores everything (ladder, leak, refs, features, segments, constraints, ranges, channel blend, uncertainty). Paste CSV for lightweight ladder/segments; Sales CSV estimates segments from logs.
+                    </div>
                   </div>
-                  
+
                   <div>
-                    <button
-                      className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
-                      onClick={handleTestBackend}
-                      aria-label="Test backend connectivity"
-                      title="Quick health check (HEAD /api/get?s=ping)"
-                    >
-                      Test backend
-                    </button>
+                    <div className="text-[12px] font-semibold text-slate-800 mb-1">Reset and health</div>
+                    <div className="flex flex-wrap gap-2 items-center text-xs">
+                      <button
+                        className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                        onClick={resetAllSettings}
+                        title="Reset all fields to sensible defaults"
+                      >
+                        Reset all settings to defaults
+                      </button>
+                      <InfoTip id="import.resetAll" ariaLabel="Reset all settings to defaults" />
+
+                      <button
+                        className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                        onClick={clearAllSettings}
+                        title="Clear all fields (set to zero/blank)"
+                      >
+                        Clear all settings
+                      </button>
+                      <InfoTip id="import.clearAll" ariaLabel="Clear all settings to blank" />
+
+                      <button
+                        className="text-xs border px-2 py-1 rounded bg-white hover:bg-gray-50"
+                        onClick={handleTestBackend}
+                        aria-label="Test backend connectivity"
+                        title="Quick health check (HEAD /api/get?s=ping)"
+                      >
+                        Test backend
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-slate-600 mt-1">
+                      Reset/clear affects all tabs; backend test pings the short-link API to confirm connectivity.
+                    </div>
                   </div>
                 </div>
               </Section>
