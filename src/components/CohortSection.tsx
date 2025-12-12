@@ -36,7 +36,7 @@ export function CohortSection({
         data-copy-slot="chart.cohort"
         className="text-sm text-slate-700 leading-snug"
       >
-        Cohort rehearsal simulates pocket margin on a shrinking cohort. Overlay Baseline/Current/Optimized to see whether lift holds past month 1; adjust retention/horizon to stress churn vs contribution.
+        Cohort rehearsal simulates pocket margin on a shrinking cohort. Overlay Baseline/Current/Optimized to see whether lift holds past month 1; adjust retention/horizon to stress churn vs contribution. <InfoTip id="cohort.basis" ariaLabel="About cohort basis" />
         <RiskBadge note={riskNote} className="ml-2" infoId="risk.badge" />
       </div>
 

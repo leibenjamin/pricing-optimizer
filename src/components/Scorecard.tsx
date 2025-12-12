@@ -349,11 +349,12 @@ export default function Scorecard({
                 Jump to Callouts
               </a>
           </div>
-          <div className="text-[11px] text-slate-500">
-            Baseline: {basis.baseline}. Pinned story: {basis.pinned}. View toggle sits above.
-          </div>
-          <RiskBadge note={riskNote} infoId="risk.badge" />
-        </div>
+      <div className="text-[11px] text-slate-500">
+        Baseline: {basis.baseline}. Pinned story: {basis.pinned}. View toggle sits above.{" "}
+        <InfoTip id="scorecard.basis" ariaLabel="About scorecard basis" />
+      </div>
+      <RiskBadge note={riskNote} infoId="risk.badge" />
+    </div>
           <div className="flex w-full flex-col gap-2 sm:w-72">
             <div className="flex items-center justify-between text-[11px] text-slate-600">
               <span className="font-semibold text-slate-800">Context</span>

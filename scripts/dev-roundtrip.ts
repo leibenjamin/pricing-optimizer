@@ -1,5 +1,5 @@
-import { devValidatePresetRoundTrips, buildPayloadFromScenario } from "../src/lib/share.js";
-import { PRESETS } from "../src/lib/presets.js";
+import { devValidatePresetRoundTrips, buildPayloadFromScenario } from "../src/lib/share";
+import { PRESETS } from "../src/lib/presets";
 import type { ScenarioUncertainty } from "../src/lib/domain";
 
 // Build payloads from presets with safe fallbacks; mirrors scripts/roundtrip.
@@ -47,4 +47,3 @@ if (!result.ok) {
   process.exit(1);
 }
 console.log("Round-trip validation passed for presets and edited uncertainty.");
-

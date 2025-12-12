@@ -59,6 +59,7 @@ export function TakeRateSection({
     >
       <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
         <span>Demand-only view: leakages and guardrails do not apply here. Use delta view or the table for small differences.</span>
+        <InfoTip id="takerate.scope" ariaLabel="About take-rate scope" />
         {summary?.baselineLabel && (
           <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
             Baseline: {summary.baselineLabel}

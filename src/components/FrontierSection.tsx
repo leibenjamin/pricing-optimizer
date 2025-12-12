@@ -90,7 +90,7 @@ export function FrontierSection({
         </div>
       )}
       <div className="text-[11px] text-slate-600">
-        Basis: {usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}; sweep {frontierTier} from ${frontierSweep.min.toFixed(2)} to ${frontierSweep.max.toFixed(2)} (step {frontierSweep.step >= 1 ? frontierSweep.step.toFixed(0) : frontierSweep.step.toFixed(2)}).
+        Basis: {usePocketProfit ? "Pocket profit (after leakages)" : "List profit"}; sweep {frontierTier} from ${frontierSweep.min.toFixed(2)} to ${frontierSweep.max.toFixed(2)} (step {frontierSweep.step >= 1 ? frontierSweep.step.toFixed(0) : frontierSweep.step.toFixed(2)}). <InfoTip id="frontier.basis" ariaLabel="About frontier basis" />
         Constraints (gaps/floors) are shown as feasible (green) vs infeasible (gray). If points are sparse, widen the scenario ranges or relax guardrails.
         <InfoTip id="frontier.overlay" ariaLabel="About frontier feasibility overlay" />
         <RiskBadge note={riskNote} className="ml-2" infoId="risk.badge" />
