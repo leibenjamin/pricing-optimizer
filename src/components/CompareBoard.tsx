@@ -87,6 +87,13 @@ function pct(n: number) {
 }
 
 function SnapshotCard({ kpis }: { kpis: SnapshotKPIs }) {
+  const gm = Number.isFinite(kpis.grossMarginPct)
+    ? (kpis.grossMarginPct as number)
+    : kpis.revenue > 0
+    ? (kpis.profit / kpis.revenue) * 100
+    : NaN;
+  const segs = kpis.segShares ?? [];
+  const prices = kpis.prices;
   return (
     <>
       {kpis.title && (
@@ -104,7 +111,7 @@ function SnapshotCard({ kpis }: { kpis: SnapshotKPIs }) {
         <Kpi label="Revenue" value={money(kpis.revenue)} />
         <Kpi label="Profit" value={money(kpis.profit)} />
         <Kpi label="ARPU (active)" value={money(kpis.arpuActive)} />
-        <Kpi label="Gross margin" value={pct(kpis.grossMarginPct)} />
+        <Kpi label="Gross margin" value={pct(gm)} />
       </div>
 
       {/* Tier shares mini bars */}
@@ -121,16 +128,16 @@ function SnapshotCard({ kpis }: { kpis: SnapshotKPIs }) {
       <div className="text-xs text-gray-600">
         <div className="font-medium mb-1">Segment mix (weights)</div>
         <div className="rounded border px-2 py-1">
-          {kpis.segShares.length
-            ? kpis.segShares.map((w, i) => `${i + 1}: ${(w * 100).toFixed(0)}%`).join("  •  ")
-            : "—"}
+          {segs.length ? segs.map((w, i) => `${i + 1}: ${(w * 100).toFixed(0)}%`).join("  •  ") : "—"}
         </div>
       </div>
 
       {/* Prices line */}
       <div className="mt-1 text-[11px] text-gray-500">
-        Prices: ${kpis.prices.good.toFixed(2)} / ${kpis.prices.better.toFixed(2)} / $
-        {kpis.prices.best.toFixed(2)}
+        Prices:{" "}
+        {prices
+          ? `$${prices.good.toFixed(2)} / $${prices.better.toFixed(2)} / $${prices.best.toFixed(2)}`
+          : "—"}
       </div>
     </>
   );

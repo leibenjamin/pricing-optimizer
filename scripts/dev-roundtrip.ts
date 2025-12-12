@@ -1,5 +1,5 @@
-import { devValidatePresetRoundTrips, buildPayloadFromScenario } from "../src/lib/share";
-import { PRESETS } from "../src/lib/presets";
+import { devValidatePresetRoundTrips, buildPayloadFromScenario } from "../src/lib/share.ts";
+import { PRESETS } from "../src/lib/presets.ts";
 import type { ScenarioUncertainty } from "../src/lib/domain";
 
 // Build payloads from presets with safe fallbacks; mirrors scripts/roundtrip.

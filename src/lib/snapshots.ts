@@ -17,6 +17,10 @@ export type SnapshotKPIs = {
   arpuActive: number;
   shares: { none: number; good: number; better: number; best: number };
   segShares?: number[];
+  prices?: Prices;
+  grossMarginPct?: number;
+  title?: string;
+  subtitle?: string;
 };
 
 export type ScenarioSnapshot = {
