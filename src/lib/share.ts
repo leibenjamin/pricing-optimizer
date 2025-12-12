@@ -507,15 +507,18 @@ export function roundTripValidate(payload: SharePayload): { ok: boolean; issues:
   }
 
   // Deep check for uncertainty.source if present
-  const beforeSource = payload.uncertainty?.source;
-  const afterSource = parsed.uncertainty?.source;
-  if (beforeSource && beforeSource !== afterSource) {
-    issues.push(`uncertainty.source changed (${beforeSource} -> ${afterSource ?? "missing"})`);
+  const beforeSource = (payload.uncertainty as ScenarioUncertainty | null | undefined)?.source;
+  const afterSource = (parsed.uncertainty as ScenarioUncertainty | null | undefined)?.source;
+  if (beforeSource !== undefined) {
+    if (beforeSource !== afterSource) {
+      issues.push(`uncertainty.source changed (${beforeSource ?? "missing"} -> ${afterSource ?? "missing"})`);
+    }
   }
 
   return { ok: issues.length === 0, issues };
 }
 
+// Dev-helper to validate one or more payloads and return a summary; safe to import in tests/scripts.
 export function roundTripValidateMany(
   items: Array<{ label: string; payload: SharePayload }>
 ): { ok: boolean; issues: Array<{ label: string; issues: string[] }> } {
@@ -525,6 +528,19 @@ export function roundTripValidateMany(
     if (!res.ok) problems.push({ label: item.label, issues: res.issues });
   });
   return { ok: problems.length === 0, issues: problems };
+}
+
+// Dev-helper: validate presets + a user-edited uncertainty delta.
+export function devValidatePresetRoundTrips(opts: {
+  presets: Array<{ id?: string; name?: string; payload: SharePayload }>;
+  edited?: SharePayload | null;
+}): { ok: boolean; issues: Array<{ label: string; issues: string[] }> } {
+  const items: Array<{ label: string; payload: SharePayload }> = opts.presets.map((p, idx) => ({
+    label: p.id ?? p.name ?? `preset-${idx}`,
+    payload: p.payload,
+  }));
+  if (opts.edited) items.push({ label: "edited-uncertainty", payload: opts.edited });
+  return roundTripValidateMany(items);
 }
 
 // Helper to run a suite of round-trip checks and return a structured result; useful for dev scripts/tests.
