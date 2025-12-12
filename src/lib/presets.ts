@@ -66,6 +66,7 @@ export const PRESETS: Preset[] = [
       featB: { good: 0, better: 1, best: 1 },
     },
     priceScale: 0.4,
+    uncertainty: { priceScaleDelta: 0.1, leakDeltaPct: 0.02 },
     segments: [
       { name: "Casual users", weight: 0.50, betaPrice: -0.48, betaFeatA: 0.25, betaFeatB: 0.15, betaNone: 0.70, alphaAnchor: 0.22, lambdaLoss: 1.8 },
       { name: "Hobbyist", weight: 0.30, betaPrice: -0.36, betaFeatA: 0.55, betaFeatB: 0.55, betaNone: 0.20, alphaAnchor: 0.26, lambdaLoss: 1.6 },
@@ -175,6 +176,7 @@ export const PRESETS: Preset[] = [
       featA: { good: 1, better: 1, best: 1 },
       featB: { good: 0, better: 1, best: 1 },
     },
+    uncertainty: { priceScaleDelta: 0.08, leakDeltaPct: 0.03 },
     segments: [
       { name: "Procurement guardrail", weight: 0.45, betaPrice: -0.0016, betaFeatA: 0.60, betaFeatB: 0.50, betaNone: 0.65, alphaAnchor: 0.00055, lambdaLoss: 1.35 },
       { name: "Ops lead", weight: 0.35, betaPrice: -0.0013, betaFeatA: 0.85, betaFeatB: 0.65, betaNone: 0.25, alphaAnchor: 0.0005, lambdaLoss: 1.28 },
@@ -221,6 +223,7 @@ export const PRESETS: Preset[] = [
       featB: { good: 0, better: 1, best: 1 },
     },
     priceScale: 0.35,
+    uncertainty: { priceScaleDelta: 0.14, leakDeltaPct: 0.04 },
     segments: [
       { name: "Free-first", weight: 0.55, betaPrice: -0.6, betaFeatA: 0.25, betaFeatB: 0.2, betaNone: 0.8, alphaAnchor: 0.2, lambdaLoss: 1.9 },
       { name: "Upgrade curious", weight: 0.30, betaPrice: -0.4, betaFeatA: 0.65, betaFeatB: 0.55, betaNone: 0.2, alphaAnchor: 0.3, lambdaLoss: 1.7 },

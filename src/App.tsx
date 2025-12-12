@@ -299,6 +299,18 @@ export default function App() {
   const [takeRateSegmentKey, setTakeRateSegmentKey] = useState<"all" | string>("all");
   const [showSegmentBreakdown, setShowSegmentBreakdown] = useState(false);
   const [segmentBreakdownScenarioKey, setSegmentBreakdownScenarioKey] = useState<string | undefined>(undefined);
+  const uncPriceDelta = scenarioUncertainty?.priceScaleDelta ?? 0;
+  const uncLeakDelta = scenarioUncertainty?.leakDeltaPct ?? 0;
+
+  const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+  const updateUncertainty = (field: "priceScaleDelta" | "leakDeltaPct", valuePct: number) => {
+    const val = clamp(valuePct, 0, 50) / 100; // stored as fraction, input is %
+    setScenarioUncertainty((prev) => ({
+      priceScaleDelta: field === "priceScaleDelta" ? val : prev?.priceScaleDelta ?? 0,
+      leakDeltaPct: field === "leakDeltaPct" ? val : prev?.leakDeltaPct ?? 0,
+      source: prev?.source ?? "user",
+    }));
+  };
 
   // --- Toasts ---
   type Toast = {
@@ -4352,6 +4364,41 @@ export default function App() {
                             FeatB {tier}
                           </label>
                         ))}
+                      </div>
+                      <div className="mt-3 rounded border border-amber-200 bg-amber-50/60 px-3 py-2 space-y-2">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-amber-800">
+                          Uncertainty heuristics
+                          <RiskBadge note={riskNote} infoId="risk.badge" />
+                        </div>
+                        <div className="text-[11px] text-amber-800">
+                          Tweak how wide preset bands are for charts and badges. Higher deltas = wider confidence ranges; defaults come from each preset.
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-amber-900">
+                          <label className="flex items-center gap-2">
+                            Price scale delta (+/- %)
+                            <input
+                              type="number"
+                              className="border rounded px-2 py-1 w-20"
+                              min={0}
+                              max={50}
+                              step={0.5}
+                              value={Math.round(uncPriceDelta * 1000) / 10}
+                              onChange={(e) => updateUncertainty("priceScaleDelta", Number(e.target.value) || 0)}
+                            />
+                          </label>
+                          <label className="flex items-center gap-2">
+                            Leak delta (+/- pp)
+                            <input
+                              type="number"
+                              className="border rounded px-2 py-1 w-20"
+                              min={0}
+                              max={50}
+                              step={0.5}
+                              value={Math.round(uncLeakDelta * 1000) / 10}
+                              onChange={(e) => updateUncertainty("leakDeltaPct", Number(e.target.value) || 0)}
+                            />
+                          </label>
+                        </div>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button

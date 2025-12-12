@@ -31,7 +31,7 @@ export type ScenarioUncertainty = {
     pocketMargin?: MetricRange;
   };
   probBelowBaseline?: number;
-  source?: "preset" | "heuristic" | "precomputed" | "simulated";
+  source?: "preset" | "heuristic" | "precomputed" | "simulated" | "user";
   note?: string;
 };
 
