@@ -22,7 +22,7 @@ export default function CompareBoard({
     { key: "C", label: "Saved C" },
   ];
 
-  // Horizontal scroll container on small viewports; cards won’t get squished.
+  // Horizontal scroll container on small viewports; cards won't get squished.
   return (
     <div className="overflow-x-auto">
       <div className="flex gap-3 md:grid md:grid-cols-[repeat(4,minmax(280px,1fr))]">
@@ -35,9 +35,9 @@ export default function CompareBoard({
             <div
               key={col.key}
               className={[
-                "shrink-0",                 // don’t let flex squeeze below min width
+                "shrink-0", // don't let flex squeeze below min width
                 "min-w-[280px] max-w-[360px] md:max-w-none", // sane card width
-                "w-[300px] md:w-auto",      // pleasant default width in scroll view
+                "w-[300px] md:w-auto", // pleasant default width in scroll view
                 "rounded-xl border bg-white shadow-sm",
                 "p-3 flex flex-col gap-2",
               ].join(" ")}
@@ -78,11 +78,13 @@ export default function CompareBoard({
 }
 
 function money(n: number) {
-  return `$${Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"}`;
+  return Number.isFinite(n)
+    ? `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+    : "-";
 }
 function pct(n: number) {
   // n is already a percent 0..100 (2dp in KPIs). Show with one decimal if needed.
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   return `${n.toFixed(n % 1 ? 1 : 0)}%`;
 }
 
@@ -128,7 +130,7 @@ function SnapshotCard({ kpis }: { kpis: SnapshotKPIs }) {
       <div className="text-xs text-gray-600">
         <div className="font-medium mb-1">Segment mix (weights)</div>
         <div className="rounded border px-2 py-1">
-          {segs.length ? segs.map((w, i) => `${i + 1}: ${(w * 100).toFixed(0)}%`).join("  •  ") : "—"}
+          {segs.length ? segs.map((w, i) => `${i + 1}: ${(w * 100).toFixed(0)}%`).join("  |  ") : "-"}
         </div>
       </div>
 
@@ -137,7 +139,7 @@ function SnapshotCard({ kpis }: { kpis: SnapshotKPIs }) {
         Prices:{" "}
         {prices
           ? `$${prices.good.toFixed(2)} / $${prices.better.toFixed(2)} / $${prices.best.toFixed(2)}`
-          : "—"}
+          : "-"}
       </div>
     </>
   );

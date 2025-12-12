@@ -226,6 +226,7 @@ export function kpisFromSnapshot(
   const profit = revenue - costTotal;
   const activeCustomers = N * (1 - shares.none);
   const arpuActive = activeCustomers > 0 ? revenue / activeCustomers : 0;
+  const grossMarginPct = revenue > 0 ? (profit / revenue) * 100 : NaN;
 
   return {
     profit,
@@ -233,5 +234,7 @@ export function kpisFromSnapshot(
     arpuActive,
     shares,
     segShares,
+    prices: args.prices,
+    grossMarginPct,
   };
 }
