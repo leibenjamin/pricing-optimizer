@@ -64,7 +64,7 @@ export function ShareExportSection({
         </button>
       </div>
       <div className="text-[11px] text-slate-600 mt-1">
-        JSON/short link includes prices/costs/features/refs/leak/segments + optimizer ranges/constraints, tornado/retention (with KPI/unit), price ranges, channel blend, and optimizer engine. CSV/long URL are lighter: CSV carries ladder/leak/segments only (no constraints/features/analysis), long URL carries ladder + feature flags only.
+        JSON/short link includes prices/costs/features/refs/leak/segments + optimizer ranges/constraints, tornado/retention (with KPI/unit), price ranges, channel blend, uncertainty (preset or user-edited), and optimizer engine. CSV/long URL are lighter: CSV carries ladder/leak/segments only (no constraints/features/analysis), long URL carries ladder + feature flags only.
       </div>
       <div className="text-[11px] text-slate-600 mt-2 flex items-center gap-1">
         <InfoTip id="save.share" ariaLabel="What do exports include?" />

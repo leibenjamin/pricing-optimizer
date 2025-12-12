@@ -506,6 +506,13 @@ export function roundTripValidate(payload: SharePayload): { ok: boolean; issues:
     }
   }
 
+  // Deep check for uncertainty.source if present
+  const beforeSource = payload.uncertainty?.source;
+  const afterSource = parsed.uncertainty?.source;
+  if (beforeSource && beforeSource !== afterSource) {
+    issues.push(`uncertainty.source changed (${beforeSource} -> ${afterSource ?? "missing"})`);
+  }
+
   return { ok: issues.length === 0, issues };
 }
 

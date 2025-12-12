@@ -4369,6 +4369,7 @@ export default function App() {
                         <div className="flex items-center gap-2 text-xs font-semibold text-amber-800">
                           Uncertainty heuristics
                           <RiskBadge note={riskNote} infoId="risk.badge" />
+                          <InfoTip id="risk.sliders" ariaLabel="How do uncertainty sliders work?" />
                         </div>
                         <div className="text-[11px] text-amber-800">
                           Tweak how wide preset bands are for charts and badges. Higher deltas = wider confidence ranges; defaults come from each preset.

@@ -132,6 +132,8 @@ export const EXPLAIN: Record<string, string> = {
   // --- Uncertainty / risk ---
   "risk.badge": `
     <b>Confidence badge</b> is a quick read on preset uncertainty inputs (price and leakage deltas). High/Med/Low is a heuristic; bands widen as uncertainty grows. Use it to remind readers that ranges, not points, matter. See the Uncertainty & Risk notes for bands/whiskers guidance.`,
+  "risk.sliders": `
+    <b>Uncertainty heuristics</b> let you widen/narrow the preset bands that drive badges and chart ranges. Price delta adjusts sensitivity to price-scale shifts; leak delta adjusts downstream leakage variability. Changes mark source=user and travel in JSON/short links. Use higher deltas for thin data or volatile segments.`,
 
   // --- Presets ---
   "presets.scenario": `
@@ -288,4 +290,3 @@ export function explainOptimizerResult(args: {
 
   return bullets;
 }
-
