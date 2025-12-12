@@ -16,6 +16,7 @@ export type SnapshotKPIs = {
   revenue: number;
   arpuActive: number;
   shares: { none: number; good: number; better: number; best: number };
+  segShares?: number[];
 };
 
 export type ScenarioSnapshot = {
@@ -185,6 +186,11 @@ export function kpisFromSnapshot(
   usePocketMargins: boolean
 ): SnapshotKPIs {
   const shares = choiceShares(args.prices, args.features, args.segments, args.refPrices);
+  const totalWeight = args.segments.reduce((s, seg) => s + (seg.weight ?? 0), 0);
+  const segShares =
+    totalWeight > 0
+      ? args.segments.map((seg) => (seg.weight ?? 0) / totalWeight)
+      : [];
   const units = {
     good: N * shares.good,
     better: N * shares.better,
@@ -222,5 +228,6 @@ export function kpisFromSnapshot(
     revenue,
     arpuActive,
     shares,
+    segShares,
   };
 }
