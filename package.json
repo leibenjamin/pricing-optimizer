@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "roundtrip": "npx ts-node scripts/roundtrip.ts",
-    "csv:roundtrip": "npx ts-node scripts/csv-roundtrip.ts"
+    "csv:roundtrip": "npx ts-node scripts/csv-roundtrip.ts",
+    "dev:roundtrip": "npx ts-node scripts/dev-roundtrip.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.5",
