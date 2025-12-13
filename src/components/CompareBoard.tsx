@@ -83,7 +83,6 @@ function money(n: number) {
     : "-";
 }
 function pct(n: number) {
-  // n is already a percent 0..100 (2dp in KPIs). Show with one decimal if needed.
   if (!Number.isFinite(n)) return "-";
   return `${n.toFixed(n % 1 ? 1 : 0)}%`;
 }

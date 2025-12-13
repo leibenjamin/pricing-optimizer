@@ -268,6 +268,43 @@ export default function Scorecard({
         </div>
       )
       : null;
+  const priceDeltaBar =
+    priceDeltas && priceDeltas.length
+      ? (() => {
+          const maxAbs = Math.max(...priceDeltas.map((p) => Math.abs(p.delta ?? 0)), 0.01);
+          return (
+            <div className="text-[11px] text-slate-600">
+              <div className="mb-1 font-semibold text-slate-700">Mixed move bar (∆ vs baseline)</div>
+              <div className="space-y-1">
+                {priceDeltas.map((p) => {
+                  const label = p.tier === "good" ? "Good" : p.tier === "better" ? "Better" : "Best";
+                  const delta = p.delta ?? 0;
+                  const isUp = delta > 0;
+                  const widthPct = Math.min(100, (Math.abs(delta) / maxAbs) * 100);
+                  return (
+                    <div key={p.tier} className="flex items-center gap-2">
+                      <span className="w-14 text-slate-700">{label}</span>
+                      <div className="flex-1 h-3 rounded-full bg-slate-100 border border-slate-200 relative overflow-hidden">
+                        <div
+                          className={`absolute top-0 h-full ${isUp ? "bg-emerald-400" : "bg-amber-400"}`}
+                          style={{
+                            width: `${widthPct}%`,
+                            left: isUp ? "50%" : `${50 - widthPct}%`,
+                          }}
+                        />
+                        <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-300" />
+                      </div>
+                      <span className={`w-16 text-right font-semibold ${isUp ? "text-emerald-700" : delta < 0 ? "text-amber-700" : "text-slate-700"}`}>
+                        {delta === 0 ? "$0.00" : `${delta > 0 ? "+" : "-"}$${Math.abs(delta).toFixed(2)}`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()
+      : null;
 
   const summaryPills =
     baselineKpis && baselineActiveCustomers !== null
@@ -378,6 +415,18 @@ export default function Scorecard({
     (baselineKpis
       ? "Narrate which segment is winning or losing once deltas are available."
       : "Apply a preset and pin baseline to populate change stories.");
+  const mixShift =
+    shareTiles.length && baselineKpis
+      ? (() => {
+          const withDelta = shareTiles
+            .filter((t) => t.deltaPP !== null)
+            .map((t) => ({ tier: TIER_LABEL[t.tier], delta: t.deltaPP as number }));
+          if (!withDelta.length) return null;
+          withDelta.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+          const top = withDelta[0];
+          return `Mix shift: ${top.tier} ${top.delta >= 0 ? "+" : ""}${top.delta.toFixed(1)}pp vs baseline.`;
+        })()
+      : null;
 
   return (
     <div className="space-y-3">
@@ -395,6 +444,7 @@ export default function Scorecard({
             </div>
             <div className="text-sm font-semibold text-slate-900 leading-snug">{headline}</div>
             <p className="text-[11px] text-slate-600 leading-snug">{segmentLine}</p>
+            {mixShift ? <p className="text-[11px] text-slate-600 leading-snug">{mixShift}</p> : null}
             {explain?.suggestion ? (
               <p className="text-[11px] text-slate-600 leading-snug">{explain.suggestion}</p>
             ) : null}
@@ -420,6 +470,7 @@ export default function Scorecard({
               </div>
             ) : null}
             {priceDeltaTable}
+            {priceDeltaBar}
             <div className="text-[11px] text-slate-500">
               Baseline: {basis.baseline}. Pinned story: {basis.pinned}. View toggle sits above.{" "}
               <InfoTip id="scorecard.basis" ariaLabel="About scorecard basis" />

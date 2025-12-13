@@ -56,9 +56,9 @@ export function ScorecardCallouts({
           guardrails={scorecardVM.guardrails}
           explain={scorecardVM.explain}
           band={scorecardBand}
-          riskNote={callouts.riskNote}
-          priceDeltas={priceDeltas}
-        />
+            riskNote={callouts.riskNote}
+            priceDeltas={priceDeltas}
+          />
       </Section>
 
       <Section id="callouts" title="Callouts snapshot">

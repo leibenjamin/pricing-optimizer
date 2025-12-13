@@ -10,6 +10,7 @@ type Props = {
   grossMarginPct: number;
   onClear: () => void;
   onDownload: () => void;
+  riskNote?: string | null;
 };
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
@@ -25,6 +26,7 @@ export function ScenarioJournalSection({
   grossMarginPct,
   onClear,
   onDownload,
+  riskNote,
 }: Props) {
   return (
     <Section id="scenario-journal" title="Scenario Journal" className="order-4">
@@ -57,6 +59,11 @@ export function ScenarioJournalSection({
           Gross margin: <strong>{fmtPct(grossMarginPct)}</strong>
         </li>
       </ul>
+      {riskNote ? (
+        <div className="mt-2 text-[11px] text-amber-700">
+          Confidence: {riskNote}. Wide bands? Test mixed moves before rollout.
+        </div>
+      ) : null}
       <div className="mt-2 flex gap-2">
         <button
           className="text-xs border px-2 py-1 rounded"
