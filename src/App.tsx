@@ -1,5 +1,6 @@
 ﻿// src/App.tsx
 
+import React from "react";
 import { Suspense, lazy, type ReactNode, type ChangeEvent } from "react";
 // replace direct imports:
 const FrontierChartReal = lazy(() => import("./components/FrontierChart"));
@@ -269,6 +270,8 @@ const ADJUST_SEGMENTS_SECTION_IDS = ["customer-segments"] as const;
 const ADJUST_LEAKAGES_SECTION_IDS = ["pocket-price-waterfall"] as const;
   const SAVE_TAB_SECTION_IDS = [
     "scenario-baseline",
+    "export-summary",
+    "export-narrative",
     "price-moves",
     "compare-board",
     "share-links",
@@ -4856,13 +4859,113 @@ export default function App() {
                   </div>
                   <p className="basis-full text-[11px] text-slate-600">
                     Baselines auto-save when you apply a preset and right before you run Optimize. Use this button after manual tweaks to set a new anchor.
-                  </p>
+                    </p>
                   </div>
                 </Section>
               <Section
+                id="export-summary"
+                title="Export-ready summary"
+                className="order-2"
+              >
+                {baselineKpis ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-slate-800">
+                      <div>
+                        {(optimizedKpis ?? currentKPIs) && baselineKpis ? (
+                          (() => {
+                            const target = optimizedKpis ?? currentKPIs;
+                            const label = optimizedKpis ? "Optimized" : "Current";
+                            const profitDelta = target!.profit - baselineKpis.profit;
+                            const activeBase = Math.round(N * (1 - baselineKpis.shares.none));
+                            const activeNow = Math.round(N * (1 - target!.shares.none));
+                            const activeDelta = activeNow - activeBase;
+                            const fmtMoney = (n: number) => `$${Math.round(n).toLocaleString()}`;
+                            const fmtSign = (n: number) => `${n >= 0 ? "+" : "-"}${fmtMoney(Math.abs(n))}`;
+                            const fmtActive = (n: number) =>
+                              `${n >= 0 ? "+" : "-"}${Math.abs(n).toLocaleString()} active`;
+                            return (
+                              <>
+                                <span className="font-semibold">
+                                  {label} vs baseline: {fmtSign(profitDelta)} profit, {fmtActive(activeDelta)}
+                                </span>
+                                <span className="text-[12px] text-slate-600">
+                                  ARPU (active): {fmtSign(target!.arpuActive - baselineKpis.arpuActive)}
+                                </span>
+                              </>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-[12px] text-slate-600">Baseline present; run optimizer or adjust scenario to populate deltas.</span>
+                        )}
+                      </div>
+                      <RiskBadge note={riskNote} infoId="risk.badge" />
+                    </div>
+                    <ul className="list-disc pl-4 text-[13px] text-slate-700 space-y-1">
+                      <li>
+                        Executive headline: profit and active deltas above, basis follows the active pocket/list toggle in Optimize.
+                      </li>
+                      <li>
+                        Price moves table below shows which tiers went up/down vs. pinned baseline; pair with the Compare Board for branches.
+                      </li>
+                      <li>
+                        Confidence badge reflects uncertainty inputs; wide bands mean mixed moves warrant caution before rollout.
+                      </li>
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-600">
+                    No baseline pinned yet. Apply a preset or use “Re-pin baseline now” to capture a reference ladder, then summary stats will appear here.
+                  </div>
+                )}
+              </Section>
+              <Section
+                id="export-narrative"
+                title="Narrative (copy-ready)"
+                className="order-3"
+              >
+                {baselineKpis ? (
+                  (() => {
+                    const target = optimizedKpis ?? currentKPIs;
+                    if (!target) {
+                      return (
+                        <div className="text-[11px] text-slate-600">
+                          Baseline present; run optimizer or adjust scenario to populate narrative deltas.
+                        </div>
+                      );
+                    }
+                    const profitDelta = target.profit - baselineKpis.profit;
+                    const revenueDelta = target.revenue - baselineKpis.revenue;
+                    const activeBase = Math.round(N * (1 - baselineKpis.shares.none));
+                    const activeNow = Math.round(N * (1 - target.shares.none));
+                    const activeDelta = activeNow - activeBase;
+                    const arpuDelta = target.arpuActive - baselineKpis.arpuActive;
+                    const fmtSign = (n: number, money = true) =>
+                      `${n >= 0 ? "+" : "-"}${money ? `$${Math.round(Math.abs(n)).toLocaleString()}` : Math.abs(n).toLocaleString()}`;
+                    const driverLine = currentVsOptimizedVM?.topDriverLine;
+                    return (
+                      <ul className="list-disc pl-4 text-[13px] text-slate-700 space-y-1">
+                        <li>
+                          Executive: {optimizedKpis ? "Optimized" : "Current"} vs baseline = {fmtSign(profitDelta)} profit, {fmtSign(revenueDelta)} revenue, {fmtSign(activeDelta, false)} active, ARPU {fmtSign(arpuDelta)} (basis follows Optimize toggle).
+                        </li>
+                        <li>
+                          Risk/confidence: <span className="inline-block align-middle"><RiskBadge note={riskNote} infoId="risk.badge" /></span> — wide bands mean mixed moves deserve caution before rollout.
+                        </li>
+                        <li>
+                          Drivers: {driverLine ?? "Tornado top driver pending"}; check guardrails in Pocket coverage and leak assumptions in Waterfall.
+                        </li>
+                      </ul>
+                    );
+                  })()
+                ) : (
+                  <div className="text-[11px] text-slate-600">
+                    No baseline pinned yet. Apply a preset or use “Re-pin baseline now” to capture a reference ladder, then narrative bullets will appear here.
+                  </div>
+                )}
+              </Section>
+              <Section
                 id="price-moves"
                 title="Price moves vs baseline"
-                className="order-2"
+                className="order-4"
               >
                 {baselineRun ? (
                   <div className="space-y-2 text-sm text-slate-800">
@@ -4906,7 +5009,7 @@ export default function App() {
                 )}
               </Section>
               <CompareBoardSection
-                className="order-3"
+                className="order-4"
                 explanation={
                   <Explanation slot="chart.compareBoard">
                     Save the current ladder into A/B/C, branch your changes, then reload slots while narrating differences. KPIs auto-recompute; use the toggles to control whether saved or current segments/leak/refs are used so you know exactly what's being compared.

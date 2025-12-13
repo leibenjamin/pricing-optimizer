@@ -37,12 +37,11 @@ export const EXPLAIN: Record<string, string> = {
   "chart.frontier": `
     <b>Profit frontier</b> sweeps one tier's price (x) while holding others fixed,
     plotting projected profit (y). Markers show Baseline/Current/Optimized prices on this axis; feasible
-    dots clear gaps/floors. Hover to compare profit and sanity-check before/after running the optimizer.
-    When to use: narrate how far you are from peak profit and whether charm endings help or hurt.`,
+    dots clear gaps/floors. Basis toggle switches list vs pocket. Use to narrate distance to peak and how gaps/floors bind.`,
 
   "chart.takeRate": `
     <b>Take-rate bars</b> show segment-mixed shares {None, Good, Better, Best} for baseline/current/optimized.
-    Toggle the delta view to see percentage-point shifts vs. the pinned baseline; anchoring/loss-aversion still apply if reference prices are set. When to use: show mix shifts and active movement alongside optimizer runs.`,
+    Toggle the delta view to see percentage-point shifts vs. the pinned baseline; basis toggle does not apply (demand-only). Use to show mix shifts and active movement alongside optimizer runs.`,
 
   "chart.waterfall": `
     <b>Pocket price waterfall</b> starts from list price and subtracts leakages
@@ -77,8 +76,7 @@ export const EXPLAIN: Record<string, string> = {
   "chart.tornado": `
     <b>Tornado sensitivity</b> varies one factor at a time around the base ladder and
     shows profit or revenue deltas (low/high) on list or pocket basis. Use $ for absolute moves and % of base for relative lift.
-    Price bump nudges each tier, while leak bump tweaks FX/refunds/payment fees to stress downstream take-rate.
-    Toggle metric/units to match the story, then sanity-check the spans with operators.`,
+    Price bump nudges each tier, leak bump tweaks FX/refunds/payment fees. Toggle metric/units to match the story; wide spans pair with the confidence badge.`,
   "optimizer.pocketMargins": `
     Check floors on <b>pocket</b> prices (after promo/payment/FX/refunds). Disable if you want floors on list prices instead.`,
   "optimizer.pocketProfit": `
@@ -114,7 +112,7 @@ export const EXPLAIN: Record<string, string> = {
   "chart.cohort": `
     <b>Cohort rehearsal</b> simulates pocket margin on a shrinking cohort across 6-24 months.
     Overlay Baseline/Current/Optimized to see if lift is front-loaded or durable; adjust retention
-    to stress churn vs contribution. Pocket basis uses leakages (promo/fees/FX/refunds).
+    to stress churn vs contribution. Pocket basis uses leakages (promo/fees/FX/refunds); list basis ignores leakages.
     When to use: answer whether optimized pricing holds up after churn instead of peaking in month one.`,
   "cohort.retention": `
     <b>Monthly retention</b> drives cohort rehearsal. We apply pocket margins per cohort month and decay by the retention slider over the selected horizon. Try 6m for short campaigns and 18-24m for durable subs.`,
