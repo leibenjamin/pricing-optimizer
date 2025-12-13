@@ -3736,6 +3736,20 @@ export default function App() {
     scenarioUncertainty,
   ]);
 
+  const scorecardPriceDeltas = useMemo(
+    () => {
+      if (!baselineRun?.ladder) return null;
+      const targetPrices = scorecardView === "optimized" && optResult ? optResult.prices : prices;
+      return (["good", "better", "best"] as const).map((tier) => {
+        const base = baselineRun.ladder[tier];
+        const current = targetPrices[tier];
+        const delta = current - base;
+        return { tier, base, current, delta };
+      });
+    },
+    [baselineRun, optResult, prices, scorecardView]
+  );
+
   type SnapshotInput = Parameters<typeof buildScenarioSnapshot>[0];
 
   const pinBaseline = useCallback(
@@ -4942,6 +4956,10 @@ export default function App() {
                     const fmtSign = (n: number, money = true) =>
                       `${n >= 0 ? "+" : "-"}${money ? `$${Math.round(Math.abs(n)).toLocaleString()}` : Math.abs(n).toLocaleString()}`;
                     const driverLine = currentVsOptimizedVM?.topDriverLine;
+                    const guardrailNote =
+                      currentVsOptimizedVM?.binds && currentVsOptimizedVM.binds.length
+                        ? `Guardrails binding: ${currentVsOptimizedVM.binds.join(", ")}.`
+                        : "Guardrails slack in this run.";
                     return (
                       <ul className="list-disc pl-4 text-[13px] text-slate-700 space-y-1">
                         <li>
@@ -4951,7 +4969,10 @@ export default function App() {
                           Risk/confidence: <span className="inline-block align-middle"><RiskBadge note={riskNote} infoId="risk.badge" /></span> — wide bands mean mixed moves deserve caution before rollout.
                         </li>
                         <li>
-                          Drivers: {driverLine ?? "Run optimizer or refresh tornado to populate top driver"}; check guardrails in Pocket coverage and leak assumptions in Waterfall.
+                          Drivers: {driverLine ?? "Run optimizer or refresh tornado to populate top driver"}; {guardrailNote} Check leak assumptions in Waterfall.
+                        </li>
+                        <li>
+                          Customer impact: see take-rate deltas and price moves for who pays more/less; branch in Compare Board if you need multiple scenarios. Wide bands? Test in-market before rollout.
                         </li>
                       </ul>
                     );
@@ -4968,10 +4989,41 @@ export default function App() {
                 className="order-4"
               >
                 {baselineRun ? (
-                  <div className="space-y-2 text-sm text-slate-800">
+                  <div className="space-y-3 text-sm text-slate-800">
                     <div className="text-[11px] text-slate-600">
                       Compares current ladder to the pinned baseline. Use to narrate which tiers moved up/down before exporting.
                     </div>
+
+                    {/* Quick mixed-move read */}
+                    {baselineKpis && (optimizedKpis ?? currentKPIs) ? (
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        {(["good", "better", "best"] as const).map((tier) => {
+                          const basePrice = baselineRun.ladder?.[tier];
+                          const curPrice = prices[tier];
+                          const deltaPrice = basePrice !== undefined ? curPrice - basePrice : null;
+                          const baseShare = baselineKpis.shares[tier];
+                          const target = optimizedKpis ?? currentKPIs!;
+                          const shareDelta = target.shares[tier] - baseShare;
+                          const tone =
+                            deltaPrice === null
+                              ? "bg-slate-100 text-slate-700 border-slate-200"
+                              : deltaPrice > 0
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                              : deltaPrice < 0
+                              ? "bg-amber-50 text-amber-800 border-amber-200"
+                              : "bg-slate-50 text-slate-700 border-slate-200";
+                          const label = tier === "good" ? "Good" : tier === "better" ? "Better" : "Best";
+                          return (
+                            <div key={tier} className={`rounded-full border px-3 py-1 ${tone}`}>
+                              <span className="font-semibold">{label}</span>: {deltaPrice !== null ? (deltaPrice >= 0 ? "+" : "-") : ""}
+                              {deltaPrice !== null ? `$${Math.abs(deltaPrice).toFixed(2)}` : "—"}; share {shareDelta >= 0 ? "+" : ""}
+                              {(shareDelta * 100).toFixed(1)}pp
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+
                     <div className="grid grid-cols-[1.4fr,1fr,1fr,1fr] gap-2 text-xs items-center">
                       <div className="font-semibold text-slate-700">Tier</div>
                       <div className="font-semibold text-slate-700">Baseline</div>
@@ -4982,8 +5034,7 @@ export default function App() {
                         const cur = prices[tier];
                         const delta = base !== undefined ? cur - base : null;
                         const label = tier === "good" ? "Good" : tier === "better" ? "Better" : "Best";
-                        const fmt = (n: number | undefined) =>
-                          n === undefined ? "-" : `$${n.toFixed(2)}`;
+                        const fmt = (n: number | undefined) => (n === undefined ? "-" : `$${n.toFixed(2)}`);
                         const fmtDelta = (d: number | null) =>
                           d === null ? "-" : `${d >= 0 ? "+" : "-"}$${Math.abs(d).toFixed(2)}`;
                         return (
@@ -4991,7 +5042,17 @@ export default function App() {
                             <div className="text-slate-800">{label}</div>
                             <div className="text-slate-700">{fmt(base)}</div>
                             <div className="text-slate-700">{fmt(cur)}</div>
-                            <div className={`font-semibold ${delta !== null && delta !== undefined ? (delta > 0 ? "text-green-700" : delta < 0 ? "text-amber-700" : "text-slate-700") : "text-slate-500"}`}>
+                            <div
+                              className={`font-semibold ${
+                                delta !== null && delta !== undefined
+                                  ? delta > 0
+                                    ? "text-green-700"
+                                    : delta < 0
+                                    ? "text-amber-700"
+                                    : "text-slate-700"
+                                  : "text-slate-500"
+                              }`}
+                            >
                               {fmtDelta(delta)}
                             </div>
                           </React.Fragment>
@@ -5193,12 +5254,27 @@ export default function App() {
             onPinBaseline={pinBaselineNow}
             scorecardVM={scorecardVM}
             scorecardBand={scorecardBand}
-            callouts={{
-              hasResult: !!optResult,
-              basisLabel: optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit",
-              ladderLabel: optResult
-                ? `Ladder ${optResult.prices.good}/${optResult.prices.better}/${optResult.prices.best}`
-                : "",
+            priceDeltas={scorecardPriceDeltas ?? undefined}
+              callouts={{
+                hasResult: !!optResult,
+                basisLabel: optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit",
+                ladderLabel: (() => {
+                  if (!optResult) return "";
+                  const ladderStr = `${optResult.prices.good}/${optResult.prices.better}/${optResult.prices.best}`;
+                  if (baselineRun?.ladder) {
+                    const deltas = (["good", "better", "best"] as const)
+                      .map((tier) => {
+                        const base = baselineRun.ladder![tier];
+                        const cur = optResult.prices[tier];
+                        const delta = cur - base;
+                        const sign = delta >= 0 ? "+" : "-";
+                        return `${tier[0].toUpperCase()}: ${sign}$${Math.abs(delta).toFixed(2)}`;
+                      })
+                      .join(" | ");
+                    return `Ladder ${ladderStr} (vs baseline: ${deltas})`;
+                  }
+                  return `Ladder ${ladderStr}`;
+                })(),
               delta: explainDeltaOptimized,
               fallbackNarrative: scorecardVM.explain,
               guardrails: guardrailsForOptimized,

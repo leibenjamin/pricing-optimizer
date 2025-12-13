@@ -11,6 +11,7 @@ type ScorecardCalloutsProps = {
   onPinBaseline: () => void;
   scorecardVM: ScorecardViewModel;
   scorecardBand: ScorecardBand | null;
+  priceDeltas?: Array<{ tier: "good" | "better" | "best"; base: number; current: number; delta: number | null }>;
   callouts: {
     hasResult: boolean;
     basisLabel: string;
@@ -34,6 +35,7 @@ export function ScorecardCallouts({
   onPinBaseline,
   scorecardVM,
   scorecardBand,
+  priceDeltas,
   callouts,
 }: ScorecardCalloutsProps) {
   return (
@@ -55,6 +57,7 @@ export function ScorecardCallouts({
           explain={scorecardVM.explain}
           band={scorecardBand}
           riskNote={callouts.riskNote}
+          priceDeltas={priceDeltas}
         />
       </Section>
 

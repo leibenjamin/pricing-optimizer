@@ -1,3 +1,4 @@
+import React from "react";
 import InfoTip from "./InfoTip";
 import {
   shareTilesFromKPIs,
@@ -37,6 +38,7 @@ type ScorecardProps = {
   explain: ScorecardDelta | null;
   band?: ScorecardBand | null;
   riskNote?: string | null;
+  priceDeltas?: Array<{ tier: "good" | "better" | "best"; base: number; current: number; delta: number | null }>;
 };
 
 const TIER_LABEL: Record<ScorecardShareTile["tier"], string> = {
@@ -47,6 +49,7 @@ const TIER_LABEL: Record<ScorecardShareTile["tier"], string> = {
 
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const fmtPct = (n: number) => `${(Math.round(n * 10) / 10).toFixed(1)}%`;
+const fmtPrice = (n: number) => `$${n.toFixed(2)}`;
 
 function toneClasses(value: number | null) {
   if (value === null) return "border-slate-200 bg-slate-50 text-slate-700";
@@ -202,10 +205,69 @@ export default function Scorecard({
   explain,
   band,
   riskNote,
+  priceDeltas,
 }: ScorecardProps) {
   const activeKpis = run?.kpis ?? kpis;
   const baselineKpis = baselineRun?.kpis ?? null;
   const baselineFallback = "Baseline auto-saves when you apply a preset or run Optimize.";
+  const priceDeltaPills =
+    priceDeltas && priceDeltas.length
+      ? priceDeltas.map((p) => {
+          const tone =
+            p.delta === null
+              ? "bg-slate-100 text-slate-700 border-slate-200"
+              : p.delta > 0
+              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+              : p.delta < 0
+              ? "bg-amber-50 text-amber-800 border-amber-200"
+              : "bg-slate-50 text-slate-700 border-slate-200";
+          const label = p.tier === "good" ? "Good" : p.tier === "better" ? "Better" : "Best";
+          const fmt = (n: number | null) =>
+            n === null ? "—" : `${n >= 0 ? "+" : "-"}$${Math.abs(n).toFixed(2)}`;
+          return (
+            <div key={p.tier} className={`rounded-full border px-3 py-1 ${tone}`}>
+              <span className="font-semibold">{label}</span>: {fmt(p.delta)} vs baseline
+            </div>
+          );
+        })
+      : null;
+  const priceDeltaTable =
+    priceDeltas && priceDeltas.length
+      ? (
+        <div className="text-[11px] text-slate-600">
+          <div className="flex flex-wrap gap-3 items-center mb-1">
+            <span className="font-semibold text-slate-800">Price ladder vs baseline</span>
+          </div>
+          <div className="grid grid-cols-[1.2fr,1fr,1fr,1fr] gap-2 items-center">
+            <div className="font-semibold text-slate-700">Tier</div>
+            <div className="font-semibold text-slate-700">Baseline</div>
+            <div className="font-semibold text-slate-700">Active</div>
+            <div className="font-semibold text-slate-700">Δ</div>
+            {priceDeltas.map((p) => {
+              const label = p.tier === "good" ? "Good" : p.tier === "better" ? "Better" : "Best";
+              const tone =
+                p.delta === null
+                  ? "text-slate-500"
+                  : p.delta > 0
+                  ? "text-emerald-700"
+                  : p.delta < 0
+                  ? "text-amber-700"
+                  : "text-slate-700";
+              return (
+                <React.Fragment key={p.tier}>
+                  <div className="text-slate-800">{label}</div>
+                  <div className="text-slate-700">{fmtPrice(p.base)}</div>
+                  <div className="text-slate-700">{fmtPrice(p.current)}</div>
+                  <div className={`font-semibold ${tone}`}>
+                    {p.delta === null ? "-" : `${p.delta >= 0 ? "+" : "-"}$${Math.abs(p.delta).toFixed(2)}`}
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+      )
+      : null;
 
   const summaryPills =
     baselineKpis && baselineActiveCustomers !== null
@@ -231,6 +293,8 @@ export default function Scorecard({
   const marginPct = activeKpis.revenue > 0 ? (activeKpis.profit / activeKpis.revenue) * 100 : 0;
   const baselineMarginPct =
     baselineKpis && baselineKpis.revenue > 0 ? (baselineKpis.profit / baselineKpis.revenue) * 100 : null;
+  const wideBand =
+    band && ((band.priceDelta ?? 0) > 0.12 || (band.leakDelta ?? 0) > 0.12);
 
   const metrics = [
     {
@@ -349,13 +413,26 @@ export default function Scorecard({
               <a className="text-sky-600 text-xs hover:underline ml-auto" href="#callouts">
                 Jump to Callouts
               </a>
+            </div>
+            {priceDeltaPills ? (
+              <div className="flex flex-wrap gap-2 text-[11px] text-slate-800">
+                {priceDeltaPills}
+              </div>
+            ) : null}
+            {priceDeltaTable}
+            <div className="text-[11px] text-slate-500">
+              Baseline: {basis.baseline}. Pinned story: {basis.pinned}. View toggle sits above.{" "}
+              <InfoTip id="scorecard.basis" ariaLabel="About scorecard basis" />
+            </div>
+            <div className="flex items-center gap-2">
+              <RiskBadge note={riskNote} infoId="risk.badge" />
+              {wideBand ? (
+                <span className="text-[11px] text-amber-700">
+                  Bands are wide; test mixed moves before rollout.
+                </span>
+              ) : null}
+            </div>
           </div>
-      <div className="text-[11px] text-slate-500">
-        Baseline: {basis.baseline}. Pinned story: {basis.pinned}. View toggle sits above.{" "}
-        <InfoTip id="scorecard.basis" ariaLabel="About scorecard basis" />
-      </div>
-      <RiskBadge note={riskNote} infoId="risk.badge" />
-    </div>
           <div className="flex w-full flex-col gap-2 sm:w-72">
             <div className="flex items-center justify-between text-[11px] text-slate-600">
               <span className="font-semibold text-slate-800">Context</span>
