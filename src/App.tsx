@@ -272,7 +272,6 @@ const ADJUST_LEAKAGES_SECTION_IDS = ["pocket-price-waterfall"] as const;
     "scenario-baseline",
     "export-summary",
     "export-narrative",
-    "price-moves",
     "compare-board",
     "share-links",
     "recent-short-links",
@@ -5006,131 +5005,6 @@ export default function App() {
                   </div>
                 )}
               </Section>
-              <Section
-                id="price-moves"
-                title="Price moves vs baseline"
-                className="order-4"
-              >
-                {baselineRun ? (
-                  <div className="space-y-3 text-sm text-slate-800">
-                    <div className="text-[11px] text-slate-600">
-                      Compares current ladder to the pinned baseline. Use to narrate which tiers moved up/down before exporting.
-                    </div>
-
-                    {/* Quick mixed-move read */}
-                    {baselineKpis && (optimizedKpis ?? currentKPIs) ? (
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        {(["good", "better", "best"] as const).map((tier) => {
-                          const basePrice = baselineRun.ladder?.[tier];
-                          const curPrice = prices[tier];
-                          const deltaPrice = basePrice !== undefined ? curPrice - basePrice : null;
-                          const baseShare = baselineKpis.shares[tier];
-                          const target = optimizedKpis ?? currentKPIs!;
-                          const shareDelta = target.shares[tier] - baseShare;
-                          const tone =
-                            deltaPrice === null
-                              ? "bg-slate-100 text-slate-700 border-slate-200"
-                              : deltaPrice > 0
-                              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                              : deltaPrice < 0
-                              ? "bg-amber-50 text-amber-800 border-amber-200"
-                              : "bg-slate-50 text-slate-700 border-slate-200";
-                          const label = tier === "good" ? "Good" : tier === "better" ? "Better" : "Best";
-                          return (
-                            <div key={tier} className={`rounded-full border px-3 py-1 ${tone}`}>
-                              <span className="font-semibold">{label}</span>: {deltaPrice !== null ? (deltaPrice >= 0 ? "+" : "-") : ""}
-                              {deltaPrice !== null ? `$${Math.abs(deltaPrice).toFixed(2)}` : "—"}; share {shareDelta >= 0 ? "+" : ""}
-                              {(shareDelta * 100).toFixed(1)}pp
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-
-{/* Divergent bar for quick visual */}
-                    <div className="text-[11px] text-slate-600">
-                      <div className="mb-1 font-semibold text-slate-700">Mixed move bar (Delta vs baseline)</div>
-                      <div className="space-y-1">
-                        {(["good", "better", "best"] as const).map((tier) => {
-                          const base = baselineRun.ladder?.[tier];
-                          if (base === undefined) return null;
-                          const cur = prices[tier];
-                          const delta = cur - base;
-                          const maxAbs = Math.max(
-                            ...(["good", "better", "best"] as const).map((t) =>
-                              Math.abs((prices[t] ?? 0) - (baselineRun.ladder?.[t] ?? 0))
-                            ),
-                            0.01
-                          );
-                          const isUp = delta > 0;
-                          const widthPct = Math.min(100, (Math.abs(delta) / maxAbs) * 100);
-                          const label = tier === "good" ? "Good" : tier === "better" ? "Better" : "Best";
-                          return (
-                            <div key={tier} className="flex items-center gap-2">
-                              <span className="w-14 text-slate-700">{label}</span>
-                              <div className="flex-1 h-3 rounded-full bg-slate-100 border border-slate-200 relative overflow-hidden">
-                                <div
-                                  className={`absolute top-0 h-full ${isUp ? "bg-emerald-400" : "bg-amber-400"}`}
-                                  style={{
-                                    width: `${widthPct}%`,
-                                    left: isUp ? "50%" : `${50 - widthPct}%`,
-                                  }}
-                                />
-                                <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-300" />
-                              </div>
-                              <span className={`w-16 text-right font-semibold ${isUp ? "text-emerald-700" : delta < 0 ? "text-amber-700" : "text-slate-700"}`}>
-                                {delta === 0 ? "$0.00" : `${delta > 0 ? "+" : "-"}$${Math.abs(delta).toFixed(2)}`}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-[1.4fr,1fr,1fr,1fr] gap-2 text-xs items-center">
-                      <div className="font-semibold text-slate-700">Tier</div>
-                      <div className="font-semibold text-slate-700">Baseline</div>
-                      <div className="font-semibold text-slate-700">Current</div>
-                      <div className="font-semibold text-slate-700">Delta vs baseline</div>
-                      {(["good", "better", "best"] as const).map((tier) => {
-                        const base = baselineRun.ladder?.[tier];
-                        const cur = prices[tier];
-                        const delta = base !== undefined ? cur - base : null;
-                        const label = tier === "good" ? "Good" : tier === "better" ? "Better" : "Best";
-                        const fmt = (n: number | undefined) => (n === undefined ? "-" : `$${n.toFixed(2)}`);
-                        const fmtDelta = (d: number | null) =>
-                          d === null ? "-" : `${d >= 0 ? "+" : "-"}$${Math.abs(d).toFixed(2)}`;
-                        return (
-                          <React.Fragment key={tier}>
-                            <div className="text-slate-800">{label}</div>
-                            <div className="text-slate-700">{fmt(base)}</div>
-                            <div className="text-slate-700">{fmt(cur)}</div>
-                            <div
-                              className={`font-semibold ${
-                                delta !== null && delta !== undefined
-                                  ? delta > 0
-                                    ? "text-green-700"
-                                    : delta < 0
-                                    ? "text-amber-700"
-                                    : "text-slate-700"
-                                  : "text-slate-500"
-                              }`}
-                            >
-                              {fmtDelta(delta)}
-                            </div>
-                          </React.Fragment>
-                        );
-                      })}
-                    </div>
-                    <div className="text-[11px] text-slate-600">
-                      Tip: pair this with the Compare Board slots if you branch multiple ladders. Confidence badges reflect uncertainty settings; wide bands mean mixed moves warrant caution.
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-[11px] text-slate-600">
-                    No baseline pinned yet. Apply a preset or use “Re-pin baseline now” to capture a reference ladder, then price deltas will appear here.
-                  </div>
-                )}
-              </Section>
               <CompareBoardSection
                 className="order-4"
                 explanation={
@@ -5593,4 +5467,3 @@ export default function App() {
     </div>
   );
 }
-

@@ -238,16 +238,16 @@ export default function Scorecard({
   const priceDeltaTable =
     priceDeltas && priceDeltas.length
       ? (
-        <div className="rounded-lg border border-slate-200 bg-white/80 p-3 shadow-sm space-y-2">
-          <div className="flex items-center justify-between text-[11px] text-slate-700">
+        <div className="rounded-lg border border-slate-200 bg-white/80 p-2 shadow-sm space-y-1">
+          <div className="flex items-center justify-between text-[10px] text-slate-700">
             <span className="font-semibold text-slate-800">Price ladder vs baseline</span>
             <span className="text-slate-500">{view === "optimized" ? "Optimized vs baseline" : "Current vs baseline"}</span>
           </div>
-          <div className="grid grid-cols-[1fr,1fr,1fr,1fr] gap-1 text-[11px] text-slate-600">
+          <div className="grid grid-cols-[1fr,1fr,1fr,1fr] gap-x-1 gap-y-0.5 text-[11px] text-slate-600">
             <div className="font-semibold text-slate-700">Tier</div>
             <div className="font-semibold text-slate-700">Baseline</div>
             <div className="font-semibold text-slate-700">Active</div>
-            <div className="font-semibold text-slate-700">Delta vs baseline</div>
+            <div className="font-semibold text-slate-700">Delta</div>
             {priceDeltas.map((p) => {
               const label = p.tier === "good" ? "Good" : p.tier === "better" ? "Better" : "Best";
               const tone =
@@ -274,12 +274,12 @@ export default function Scorecard({
   const priceDeltaBar =
     priceDeltas && priceDeltas.length
       ? (
-        <div className="rounded-lg border border-slate-200 bg-white/80 p-3 shadow-sm space-y-2">
-          <div className="flex items-center justify-between text-[11px] text-slate-700">
+        <div className="rounded-lg border border-slate-200 bg-white/80 p-2 shadow-sm space-y-1">
+          <div className="flex items-center justify-between text-[10px] text-slate-700">
             <span className="font-semibold text-slate-800">Mixed move bar (Delta vs baseline)</span>
             <span className="text-slate-500">Centered at baseline</span>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {priceDeltas.map((p) => {
               const label = p.tier === "good" ? "Good" : p.tier === "better" ? "Better" : "Best";
               const delta = p.delta ?? 0;
@@ -302,7 +302,7 @@ export default function Scorecard({
                   ? "text-amber-700"
                   : "text-slate-700";
               return (
-                <div key={p.tier} className="space-y-1">
+                <div key={p.tier} className="space-y-0.5">
                   <div className="flex items-center justify-between text-[11px] text-slate-700">
                     <span className="font-semibold text-slate-800">{label}</span>
                     <span className={`font-semibold ${labelTone}`}>{fmtDelta(p.delta)}</span>
@@ -324,6 +324,12 @@ export default function Scorecard({
         </div>
       )
       : null;
+  const priceDeltaCluster =
+    priceDeltaTable && priceDeltaBar ? (
+      <div className="grid gap-2 md:grid-cols-2">{priceDeltaTable}{priceDeltaBar}</div>
+    ) : (
+      priceDeltaTable ?? priceDeltaBar
+    );
 
   const summaryPills =
     baselineKpis && baselineActiveCustomers !== null
@@ -488,8 +494,7 @@ export default function Scorecard({
                 {priceDeltaPills}
               </div>
             ) : null}
-            {priceDeltaTable}
-            {priceDeltaBar}
+            {priceDeltaCluster}
             <div className="text-[11px] text-slate-500">
               Baseline: {basis.baseline}. Pinned story: {basis.pinned}. View toggle sits above.{" "}
               <InfoTip id="scorecard.basis" ariaLabel="About scorecard basis" />
