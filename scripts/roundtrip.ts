@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // Lightweight round-trip validation script for presets and defaults.
 import { PRESETS } from "../src/lib/presets";
 import { defaultSegments, type Features, type Prices } from "../src/lib/segments";
