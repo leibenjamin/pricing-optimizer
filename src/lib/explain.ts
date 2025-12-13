@@ -133,13 +133,13 @@ export const EXPLAIN: Record<string, string> = {
   "risk.sliders": `
     <b>Uncertainty heuristics</b> let you widen/narrow the preset bands that drive badges and chart ranges. Price delta adjusts sensitivity to price-scale shifts; leak delta adjusts downstream leakage variability. Changes mark source=user and travel in JSON/short links. Use higher deltas for thin data or volatile segments.`,
   "scorecard.basis": `
-    <b>Scorecard basis</b> shows whether KPIs use list or pocket (after leakages). Pocket applies leakages before checking margins/guardrails; list ignores leakages. Badge/pills and callouts reflect the active basis.`,
+    <b>Scorecard basis</b> shows whether KPIs use list or pocket (after leakages). Pocket applies leakages before checking margins/guardrails; list ignores leakages. Badges, pills, bands, and callouts reflect the active basis.`,
   "frontier.basis": `
     <b>Frontier basis</b> mirrors the basis toggle: pocket (after leakages) vs list. Infeasible points fail gaps/floors for the chosen basis. Markers use Baseline/Current/Optimized ladder.`,
   "takerate.scope": `
     <b>Take-rate bars</b> show demand-only shares (None/Good/Better/Best). Leakages/constraints do not apply here. Use delta view vs pinned baseline for mix shifts; basis toggles do not affect this chart.`,
   "cohort.basis": `
-    <b>Cohort rehearsal</b> uses pocket margin for each month of the cohort. Adjust retention/horizon to stress churn vs contribution. Baseline/Current/Optimized overlays reflect the active ladders.`,
+    <b>Cohort rehearsal</b> uses pocket margin for each month of the cohort (list ignores leakages). Adjust retention/horizon to stress churn vs contribution. Baseline/Current/Optimized overlays reflect the active ladders.`,
 
   // --- Presets ---
   "presets.scenario": `

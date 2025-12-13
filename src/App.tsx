@@ -4951,7 +4951,7 @@ export default function App() {
                           Risk/confidence: <span className="inline-block align-middle"><RiskBadge note={riskNote} infoId="risk.badge" /></span> — wide bands mean mixed moves deserve caution before rollout.
                         </li>
                         <li>
-                          Drivers: {driverLine ?? "Tornado top driver pending"}; check guardrails in Pocket coverage and leak assumptions in Waterfall.
+                          Drivers: {driverLine ?? "Run optimizer or refresh tornado to populate top driver"}; check guardrails in Pocket coverage and leak assumptions in Waterfall.
                         </li>
                       </ul>
                     );

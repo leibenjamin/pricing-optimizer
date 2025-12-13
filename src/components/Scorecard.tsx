@@ -180,6 +180,7 @@ function BandCard({ band }: { band: ScorecardBand }) {
         <span>
           Profit {fmtUSD(band.low.profit)} - {fmtUSD(band.high.profit)}
         </span>
+        <span className="text-slate-500">(Basis follows Optimize toggle; pocket includes leakages, list ignores them.)</span>
       </div>
     </div>
   );
