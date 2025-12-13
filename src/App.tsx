@@ -3862,7 +3862,11 @@ export default function App() {
 
   // Quick guardrail check to see if a ladder is feasible under given constraints
   const checkFeasible = useCallback(
-    (ladder: Prices, constraints: Constraints, ctx?: { costs?: Prices; features?: Features; segments?: Segment[]; refPrices?: Prices; leak?: Leakages }) => {
+    (
+      ladder: Prices,
+      constraints: Constraints,
+      ctx?: { costs?: Prices; features?: Features; segments?: Segment[]; refPrices?: Prices; leak?: Leakages; skipMarginCheck?: boolean }
+    ) => {
       const ctxCosts = ctx?.costs ?? costs;
       const ctxFeatures = ctx?.features ?? features;
       const ctxSegments = ctx?.segments ?? segments;
@@ -3881,9 +3885,11 @@ export default function App() {
       const mH = (effH - ctxCosts.best) / Math.max(effH, 1e-6);
 
       const reasons: string[] = [];
-      if (mG < constraints.marginFloor.good) reasons.push("Good margin below floor");
-      if (mB < constraints.marginFloor.better) reasons.push("Better margin below floor");
-      if (mH < constraints.marginFloor.best) reasons.push("Best margin below floor");
+      if (!ctx?.skipMarginCheck) {
+        if (mG < constraints.marginFloor.good) reasons.push("Good margin below floor");
+        if (mB < constraints.marginFloor.better) reasons.push("Better margin below floor");
+        if (mH < constraints.marginFloor.best) reasons.push("Best margin below floor");
+      }
       if (ladder.better < ladder.good + constraints.gapGB) reasons.push("Gap G/B below floor");
       if (ladder.best < ladder.better + constraints.gapBB) reasons.push("Gap B/Best below floor");
       if (probs.none > maxNone) reasons.push("None share above guardrail");
@@ -3929,6 +3935,7 @@ export default function App() {
         segments: appliedSegments,
         refPrices: p.refPrices,
         leak: p.leak,
+        skipMarginCheck: true, // allow negative-start baselines; optimization still enforces floors
       });
       if (!feas.ok) {
         mergedConstraints = {
