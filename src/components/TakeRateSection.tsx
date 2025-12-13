@@ -59,7 +59,9 @@ export function TakeRateSection({
       actions={<ActionCluster chart="takerate" id="takerate-main" csv />}
     >
       <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-        <span>Demand-only view: leakages and guardrails do not apply here. Use delta view or the table for small differences.</span>
+        <span>
+          Demand-only view: leakages and optimizer guardrails do not apply here. Use delta view or the table for small differences; use Scorecard for pocket/list KPI impact.
+        </span>
         <InfoTip id="takerate.scope" ariaLabel="About take-rate scope" />
         {summary?.baselineLabel && (
           <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">

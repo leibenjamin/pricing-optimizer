@@ -238,12 +238,12 @@ export default function Scorecard({
   const priceDeltaTable =
     priceDeltas && priceDeltas.length
       ? (
-        <div className="rounded-lg border border-slate-200 bg-white/80 p-2 shadow-sm space-y-1">
+        <div className="rounded-lg border border-slate-200 bg-white/80 p-2 shadow-sm space-y-1.5">
           <div className="flex items-center justify-between text-[10px] text-slate-700">
             <span className="font-semibold text-slate-800">Price ladder vs baseline</span>
             <span className="text-slate-500">{view === "optimized" ? "Optimized vs baseline" : "Current vs baseline"}</span>
           </div>
-          <div className="grid grid-cols-[1fr,1fr,1fr,1fr] gap-x-1 gap-y-0.5 text-[11px] text-slate-600">
+          <div className="grid grid-cols-[1fr,1fr,1fr,1fr] gap-x-1 gap-y-[3px] text-[10px] text-slate-600">
             <div className="font-semibold text-slate-700">Tier</div>
             <div className="font-semibold text-slate-700">Baseline</div>
             <div className="font-semibold text-slate-700">Active</div>
@@ -274,12 +274,12 @@ export default function Scorecard({
   const priceDeltaBar =
     priceDeltas && priceDeltas.length
       ? (
-        <div className="rounded-lg border border-slate-200 bg-white/80 p-2 shadow-sm space-y-1">
+        <div className="rounded-lg border border-slate-200 bg-white/80 p-2 shadow-sm space-y-1.5">
           <div className="flex items-center justify-between text-[10px] text-slate-700">
             <span className="font-semibold text-slate-800">Mixed move bar (Delta vs baseline)</span>
             <span className="text-slate-500">Centered at baseline</span>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {priceDeltas.map((p) => {
               const label = p.tier === "good" ? "Good" : p.tier === "better" ? "Better" : "Best";
               const delta = p.delta ?? 0;
@@ -455,8 +455,8 @@ export default function Scorecard({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-slate-200 bg-white/90 p-3 shadow-sm">
-        <div className="flex flex-wrap items-start gap-3">
+      <div className="rounded-xl border border-slate-200 bg-white/90 p-2 sm:p-3 shadow-sm">
+        <div className="flex flex-wrap items-start gap-2">
           <div className="flex-1 min-w-[260px] space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[10px] uppercase tracking-wide text-slate-600">Quick story</span>
@@ -494,7 +494,6 @@ export default function Scorecard({
                 {priceDeltaPills}
               </div>
             ) : null}
-            {priceDeltaCluster}
             <div className="text-[11px] text-slate-500">
               Baseline: {basis.baseline}. Pinned story: {basis.pinned}. View toggle sits above.{" "}
               <InfoTip id="scorecard.basis" ariaLabel="About scorecard basis" />
@@ -535,6 +534,7 @@ export default function Scorecard({
             </div>
             <GuardrailCard guardrails={guardrails} />
             {band ? <BandCard band={band} /> : null}
+            {priceDeltaCluster}
             <button
               type="button"
               className="whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 print:hidden"
