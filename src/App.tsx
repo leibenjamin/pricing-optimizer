@@ -4327,7 +4327,7 @@ export default function App() {
                       </button>
                     </div>
                     <div className="text-[11px] text-slate-600 mt-1">
-                      JSON restores everything (ladder, leak, refs, features, segments, constraints, ranges, channel blend, uncertainty). Paste CSV for lightweight ladder/segments; Sales CSV estimates segments from logs.
+                      JSON restores everything (ladder, leak, refs, features, segments, constraints, ranges, channel blend, uncertainty) and round-trips with Export JSON/short link. Paste CSV for lightweight ladder/segments (matches the Export CSV format); Sales CSV estimates segments from logs.
                     </div>
                   </div>
 

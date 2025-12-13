@@ -47,7 +47,7 @@ export function ShareExportSection({
             </button>
           </div>
           <div className="text-[11px] text-slate-600 mt-1">
-            Short link and JSON carry full fidelity; long URL is a lightweight share of ladder + toggles only.
+            Short link and JSON carry full fidelity. Long URL stays lightweight (ladder + toggles) to keep links short, shareable, and avoid leaking detailed model settings.
           </div>
         </div>
 
@@ -76,7 +76,7 @@ export function ShareExportSection({
             </button>
           </div>
           <div className="text-[11px] text-slate-600 mt-1">
-            JSON includes prices/costs/features/refs/leak/segments + optimizer ranges/constraints, tornado/retention (with KPI/unit), price ranges, channel blend, uncertainty, and optimizer engine. CSV is lighter: ladder/leak/segments only (no constraints/features/analysis).
+            JSON includes prices/costs/features/refs/leak/segments + optimizer ranges/constraints, tornado/retention (with KPI/unit), price ranges, channel blend, uncertainty, and optimizer engine. CSV stays light on purpose (ladder/leak/segments only) so it’s clean for spreadsheets and doesn’t embed app-specific knobs.
           </div>
         </div>
       </div>
