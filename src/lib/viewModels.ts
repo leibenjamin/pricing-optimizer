@@ -52,6 +52,7 @@ export type ScorecardGuardrails = {
   gapLine: string;
   floorLine: string;
   optimizerLine: string;
+  optimizerHint?: string;
 };
 
 export function buildGuardrailSummary(args: {
@@ -86,7 +87,8 @@ export function buildGuardrailSummary(args: {
   const optimizerLine = optimizerReady
     ? `Optimizer ready - ranges ${ranges.good[0]}-${ranges.good[1]} / ${ranges.better[0]}-${ranges.better[1]} / ${ranges.best[0]}-${ranges.best[1]}`
     : "Set ranges and floors, then run the optimizer";
-  return { gapLine, floorLine, optimizerLine };
+  const optimizerHint = optimizerReady ? "Tighten ranges for faster runs; widen to explore more." : undefined;
+  return { gapLine, floorLine, optimizerLine, optimizerHint };
 }
 
 export type ScorecardViewModel = {

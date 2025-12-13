@@ -14,6 +14,7 @@ type GuardrailSummary = {
   gapLine: string;
   floorLine: string;
   optimizerLine: string;
+  optimizerHint?: string;
 };
 
 type BasisLabels = {
@@ -50,6 +51,7 @@ const TIER_LABEL: Record<ScorecardShareTile["tier"], string> = {
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const fmtPct = (n: number) => `${(Math.round(n * 10) / 10).toFixed(1)}%`;
 const fmtPrice = (n: number) => `$${n.toFixed(2)}`;
+const fmtDelta = (n: number | null) => (n === null ? "-" : `${n >= 0 ? "+" : "-"}$${Math.abs(n).toFixed(2)}`);
 
 function toneClasses(value: number | null) {
   if (value === null) return "border-slate-200 bg-slate-50 text-slate-700";
@@ -163,7 +165,9 @@ function GuardrailCard({ guardrails }: { guardrails: GuardrailSummary }) {
       <div className="text-[10px] uppercase tracking-wide text-slate-600">Guardrails & optimizer</div>
       <div className="mt-1 text-sm font-semibold text-slate-900 leading-snug">{guardrails.gapLine}</div>
       <p className="text-[11px] text-slate-600 mt-1 leading-snug">{guardrails.floorLine}</p>
-      <p className="text-[11px] text-slate-600 mt-1 leading-snug">{guardrails.optimizerLine}</p>
+      <p className="text-[11px] text-slate-600 mt-1 leading-snug">
+        {guardrails.optimizerLine} {guardrails.optimizerHint ? `· ${guardrails.optimizerHint}` : ""}
+      </p>
     </div>
   );
 }
@@ -222,27 +226,28 @@ export default function Scorecard({
               ? "bg-amber-50 text-amber-800 border-amber-200"
               : "bg-slate-50 text-slate-700 border-slate-200";
           const label = p.tier === "good" ? "Good" : p.tier === "better" ? "Better" : "Best";
-          const fmt = (n: number | null) =>
-            n === null ? "—" : `${n >= 0 ? "+" : "-"}$${Math.abs(n).toFixed(2)}`;
           return (
             <div key={p.tier} className={`rounded-full border px-3 py-1 ${tone}`}>
-              <span className="font-semibold">{label}</span>: {fmt(p.delta)} vs baseline
+              <span className="font-semibold">{label}</span>: {fmtDelta(p.delta)} vs baseline
             </div>
           );
         })
       : null;
+  const maxPriceDelta =
+    priceDeltas && priceDeltas.length ? Math.max(...priceDeltas.map((p) => Math.abs(p.delta ?? 0)), 0.01) : 0;
   const priceDeltaTable =
     priceDeltas && priceDeltas.length
       ? (
-        <div className="text-[11px] text-slate-600">
-          <div className="flex flex-wrap gap-3 items-center mb-1">
+        <div className="rounded-lg border border-slate-200 bg-white/80 p-3 shadow-sm space-y-2">
+          <div className="flex items-center justify-between text-[11px] text-slate-700">
             <span className="font-semibold text-slate-800">Price ladder vs baseline</span>
+            <span className="text-slate-500">{view === "optimized" ? "Optimized vs baseline" : "Current vs baseline"}</span>
           </div>
-          <div className="grid grid-cols-[1.2fr,1fr,1fr,1fr] gap-2 items-center">
+          <div className="grid grid-cols-[1fr,1fr,1fr,1fr] gap-1 text-[11px] text-slate-600">
             <div className="font-semibold text-slate-700">Tier</div>
             <div className="font-semibold text-slate-700">Baseline</div>
             <div className="font-semibold text-slate-700">Active</div>
-            <div className="font-semibold text-slate-700">Δ</div>
+            <div className="font-semibold text-slate-700">Delta vs baseline</div>
             {priceDeltas.map((p) => {
               const label = p.tier === "good" ? "Good" : p.tier === "better" ? "Better" : "Best";
               const tone =
@@ -255,12 +260,10 @@ export default function Scorecard({
                   : "text-slate-700";
               return (
                 <React.Fragment key={p.tier}>
-                  <div className="text-slate-800">{label}</div>
+                  <div className="font-semibold text-slate-800">{label}</div>
                   <div className="text-slate-700">{fmtPrice(p.base)}</div>
                   <div className="text-slate-700">{fmtPrice(p.current)}</div>
-                  <div className={`font-semibold ${tone}`}>
-                    {p.delta === null ? "-" : `${p.delta >= 0 ? "+" : "-"}$${Math.abs(p.delta).toFixed(2)}`}
-                  </div>
+                  <div className={`font-semibold ${tone}`}>{fmtDelta(p.delta)}</div>
                 </React.Fragment>
               );
             })}
@@ -270,40 +273,56 @@ export default function Scorecard({
       : null;
   const priceDeltaBar =
     priceDeltas && priceDeltas.length
-      ? (() => {
-          const maxAbs = Math.max(...priceDeltas.map((p) => Math.abs(p.delta ?? 0)), 0.01);
-          return (
-            <div className="text-[11px] text-slate-600">
-              <div className="mb-1 font-semibold text-slate-700">Mixed move bar (∆ vs baseline)</div>
-              <div className="space-y-1">
-                {priceDeltas.map((p) => {
-                  const label = p.tier === "good" ? "Good" : p.tier === "better" ? "Better" : "Best";
-                  const delta = p.delta ?? 0;
-                  const isUp = delta > 0;
-                  const widthPct = Math.min(100, (Math.abs(delta) / maxAbs) * 100);
-                  return (
-                    <div key={p.tier} className="flex items-center gap-2">
-                      <span className="w-14 text-slate-700">{label}</span>
-                      <div className="flex-1 h-3 rounded-full bg-slate-100 border border-slate-200 relative overflow-hidden">
-                        <div
-                          className={`absolute top-0 h-full ${isUp ? "bg-emerald-400" : "bg-amber-400"}`}
-                          style={{
-                            width: `${widthPct}%`,
-                            left: isUp ? "50%" : `${50 - widthPct}%`,
-                          }}
-                        />
-                        <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-300" />
-                      </div>
-                      <span className={`w-16 text-right font-semibold ${isUp ? "text-emerald-700" : delta < 0 ? "text-amber-700" : "text-slate-700"}`}>
-                        {delta === 0 ? "$0.00" : `${delta > 0 ? "+" : "-"}$${Math.abs(delta).toFixed(2)}`}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })()
+      ? (
+        <div className="rounded-lg border border-slate-200 bg-white/80 p-3 shadow-sm space-y-2">
+          <div className="flex items-center justify-between text-[11px] text-slate-700">
+            <span className="font-semibold text-slate-800">Mixed move bar (Delta vs baseline)</span>
+            <span className="text-slate-500">Centered at baseline</span>
+          </div>
+          <div className="space-y-2">
+            {priceDeltas.map((p) => {
+              const label = p.tier === "good" ? "Good" : p.tier === "better" ? "Better" : "Best";
+              const delta = p.delta ?? 0;
+              const isUp = delta > 0;
+              const tone =
+                p.delta === null
+                  ? "bg-slate-300"
+                  : p.delta > 0
+                  ? "bg-emerald-400"
+                  : p.delta < 0
+                  ? "bg-amber-400"
+                  : "bg-slate-300";
+              const widthPct = Math.min(100, (Math.abs(delta) / maxPriceDelta) * 100);
+              const labelTone =
+                p.delta === null
+                  ? "text-slate-500"
+                  : p.delta > 0
+                  ? "text-emerald-700"
+                  : p.delta < 0
+                  ? "text-amber-700"
+                  : "text-slate-700";
+              return (
+                <div key={p.tier} className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-slate-700">
+                    <span className="font-semibold text-slate-800">{label}</span>
+                    <span className={`font-semibold ${labelTone}`}>{fmtDelta(p.delta)}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-100 border border-slate-200 overflow-hidden relative">
+                    <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-300" />
+                    <div
+                      className={`${tone} h-full`}
+                      style={{
+                        width: `${widthPct}%`,
+                        marginLeft: isUp ? "50%" : `${Math.max(0, 50 - widthPct)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )
       : null;
 
   const summaryPills =

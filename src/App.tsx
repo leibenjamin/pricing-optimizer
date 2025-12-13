@@ -2178,11 +2178,11 @@ export default function App() {
     ? "baseline"
     : takeRateScenarios[0]?.key;
 
-  const takeRateSummary = useMemo(() => {
-    if (!takeRateScenarios.length) return null;
-    const base =
-      takeRateScenarios.find((s) => s.key === takeRateBaselineKey) ??
-      takeRateScenarios[0];
+    const takeRateSummary = useMemo(() => {
+      if (!takeRateScenarios.length) return null;
+      const base =
+        takeRateScenarios.find((s) => s.key === takeRateBaselineKey) ??
+        takeRateScenarios[0];
     const target =
       takeRateScenarios.find((s) => s.kind === "optimized") ??
       takeRateScenarios.find((s) => s.kind === "current") ??
@@ -2200,41 +2200,49 @@ export default function App() {
     const fmtActive =
       activeDelta === 0 ? "+/-0" : `${activeDelta > 0 ? "+" : ""}${activeDelta.toLocaleString()}`;
 
-    const labels: Record<keyof typeof delta, string> = {
-      none: "None",
-      good: "Good",
-      better: "Better",
-      best: "Best",
-    };
-    const order: Array<keyof typeof delta> = ["best", "better", "good", "none"];
-    const biggest = order.reduce<{ key: keyof typeof delta; mag: number }>(
-      (acc, key) => {
-        const mag = Math.abs(delta[key]);
-        if (mag > acc.mag) return { key, mag };
-        return acc;
-      },
-      { key: "best", mag: Math.abs(delta.best) }
-    );
+      const labels: Record<keyof typeof delta, string> = {
+        none: "None",
+        good: "Good",
+        better: "Better",
+        best: "Best",
+      };
+      const order: Array<keyof typeof delta> = ["best", "better", "good", "none"];
+      const biggest = order.reduce<{ key: keyof typeof delta; mag: number }>(
+        (acc, key) => {
+          const mag = Math.abs(delta[key]);
+          if (mag > acc.mag) return { key, mag };
+          return acc;
+        },
+        { key: "best", mag: Math.abs(delta.best) }
+      );
 
-    const segmentPrefix = selectedSegmentLabel ? `${selectedSegmentLabel}: ` : "";
-    const baselineLabel =
-      base.kind === "baseline"
-        ? baselineMeta
-          ? formatBaselineLabel(baselineMeta)
-          : base.label
-        : null;
+      const segmentPrefix = selectedSegmentLabel ? `${selectedSegmentLabel}: ` : "";
+      const baselineLabel =
+        base.kind === "baseline"
+          ? baselineMeta
+            ? formatBaselineLabel(baselineMeta)
+            : base.label
+          : null;
 
-    return {
-      headline: `${segmentPrefix}${target.label} vs ${base.label}: Best ${fmt(
-        delta.best
-      )}, None ${fmt(delta.none)}; Active ${fmtActive}.`,
-      detail: `Biggest mover: ${labels[biggest.key]} ${fmt(delta[biggest.key])}. Better ${fmt(
-        delta.better
-      )}, Good ${fmt(delta.good)}.`,
-      baselineLabel,
-      targetLabel: target.label,
-    };
-  }, [baselineMeta, selectedSegmentLabel, takeRateBaselineKey, takeRateScenarios]);
+      const customerImpact =
+        delta.best > 0
+          ? "Best gaining; watch for premium skew."
+          : delta.good < 0 && delta.none < 0
+          ? "Lower tiers losing; check accessibility."
+          : "Mix shifting; validate with customers.";
+
+      return {
+        headline: `${segmentPrefix}${target.label} vs ${base.label}: Best ${fmt(
+          delta.best
+        )}, None ${fmt(delta.none)}; Active ${fmtActive}.`,
+        detail: `Biggest mover: ${labels[biggest.key]} ${fmt(delta[biggest.key])}. Better ${fmt(
+          delta.better
+        )}, Good ${fmt(delta.good)}.`,
+        baselineLabel,
+        targetLabel: target.label,
+        customerImpact,
+      };
+    }, [baselineMeta, selectedSegmentLabel, takeRateBaselineKey, takeRateScenarios]);
   const segmentBreakdownScenarios = useMemo(() => {
     if (!showSegmentBreakdown || !segmentBreakdownScenarioKey) return [];
     const ctx = takeRateContexts.find((c) => c.key === segmentBreakdownScenarioKey);
@@ -2964,11 +2972,26 @@ export default function App() {
     [hasOptimizedTornado, tornadoRowsCurrent, tornadoRowsOptim, tornadoView, trimTornadoRows]
   );
   const tornadoViewLabel =
-    tornadoView === "optimized" && hasOptimizedTornado ? "Optimized" : "Current";
-  const tornadoHasSignal = useMemo(() => {
-    const minSignal = tornadoSignalThreshold(tornadoValueMode);
-    return activeTornadoRows.some((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh)) >= minSignal);
-  }, [activeTornadoRows, tornadoValueMode]);
+      tornadoView === "optimized" && hasOptimizedTornado ? "Optimized" : "Current";
+    const tornadoHasSignal = useMemo(() => {
+      const minSignal = tornadoSignalThreshold(tornadoValueMode);
+      return activeTornadoRows.some((r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh)) >= minSignal);
+    }, [activeTornadoRows, tornadoValueMode]);
+    const tornadoTopDriver = useMemo(() => {
+      const top = activeTornadoRows.find(
+        (r) => Math.max(Math.abs(r.deltaLow), Math.abs(r.deltaHigh)) >= tornadoSignalThreshold(tornadoValueMode)
+      );
+      if (!top) return null;
+      const dir =
+        Math.abs(top.deltaHigh) >= Math.abs(top.deltaLow)
+          ? `${top.name} up`
+          : `${top.name} down`;
+      const mag =
+        tornadoValueMode === "percent"
+          ? `${Math.max(Math.abs(top.deltaLow), Math.abs(top.deltaHigh)).toFixed(1)}%`
+          : `$${Math.round(Math.max(Math.abs(top.deltaLow), Math.abs(top.deltaHigh))).toLocaleString()}`;
+      return `${dir}: ${mag}`;
+    }, [activeTornadoRows, tornadoValueMode]);
 
   const tornadoMetricLabel = tornadoMetric === "revenue" ? "Revenue" : "Profit";
   const tornadoUnitLabel = tornadoValueMode === "percent" ? "% delta" : "$ delta";
@@ -4969,7 +4992,7 @@ export default function App() {
                           Risk/confidence: <span className="inline-block align-middle"><RiskBadge note={riskNote} infoId="risk.badge" /></span> — wide bands mean mixed moves deserve caution before rollout.
                         </li>
                         <li>
-                          Drivers: {driverLine ?? "Run optimizer or refresh tornado to populate top driver"}; {guardrailNote} Check leak assumptions in Waterfall.
+                          Drivers: {driverLine ?? tornadoTopDriver ?? "Run optimizer or refresh tornado to populate top driver"}; {guardrailNote} Check leak assumptions in Waterfall. If bands are wide, test in-market first.
                         </li>
                         <li>
                           Customer impact: see take-rate deltas and price moves for who pays more/less; branch in Compare Board if you need multiple scenarios. Wide bands? Test in-market before rollout.
@@ -5024,11 +5047,50 @@ export default function App() {
                       </div>
                     ) : null}
 
+{/* Divergent bar for quick visual */}
+                    <div className="text-[11px] text-slate-600">
+                      <div className="mb-1 font-semibold text-slate-700">Mixed move bar (Delta vs baseline)</div>
+                      <div className="space-y-1">
+                        {(["good", "better", "best"] as const).map((tier) => {
+                          const base = baselineRun.ladder?.[tier];
+                          if (base === undefined) return null;
+                          const cur = prices[tier];
+                          const delta = cur - base;
+                          const maxAbs = Math.max(
+                            ...(["good", "better", "best"] as const).map((t) =>
+                              Math.abs((prices[t] ?? 0) - (baselineRun.ladder?.[t] ?? 0))
+                            ),
+                            0.01
+                          );
+                          const isUp = delta > 0;
+                          const widthPct = Math.min(100, (Math.abs(delta) / maxAbs) * 100);
+                          const label = tier === "good" ? "Good" : tier === "better" ? "Better" : "Best";
+                          return (
+                            <div key={tier} className="flex items-center gap-2">
+                              <span className="w-14 text-slate-700">{label}</span>
+                              <div className="flex-1 h-3 rounded-full bg-slate-100 border border-slate-200 relative overflow-hidden">
+                                <div
+                                  className={`absolute top-0 h-full ${isUp ? "bg-emerald-400" : "bg-amber-400"}`}
+                                  style={{
+                                    width: `${widthPct}%`,
+                                    left: isUp ? "50%" : `${50 - widthPct}%`,
+                                  }}
+                                />
+                                <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-300" />
+                              </div>
+                              <span className={`w-16 text-right font-semibold ${isUp ? "text-emerald-700" : delta < 0 ? "text-amber-700" : "text-slate-700"}`}>
+                                {delta === 0 ? "$0.00" : `${delta > 0 ? "+" : "-"}$${Math.abs(delta).toFixed(2)}`}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                     <div className="grid grid-cols-[1.4fr,1fr,1fr,1fr] gap-2 text-xs items-center">
                       <div className="font-semibold text-slate-700">Tier</div>
                       <div className="font-semibold text-slate-700">Baseline</div>
                       <div className="font-semibold text-slate-700">Current</div>
-                      <div className="font-semibold text-slate-700">Δ vs baseline</div>
+                      <div className="font-semibold text-slate-700">Delta vs baseline</div>
                       {(["good", "better", "best"] as const).map((tier) => {
                         const base = baselineRun.ladder?.[tier];
                         const cur = prices[tier];
@@ -5132,6 +5194,7 @@ export default function App() {
                 downloadJournal(journal);
                 pushJ?.(`[${now()}] Downloaded journal`);
               }}
+              riskNote={riskNote ?? undefined}
             />
               </div>
             )}
@@ -5530,3 +5593,4 @@ export default function App() {
     </div>
   );
 }
+

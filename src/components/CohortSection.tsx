@@ -37,7 +37,10 @@ export function CohortSection({
         className="text-sm text-slate-700 leading-snug"
       >
         Cohort rehearsal simulates pocket margin on a shrinking cohort. Overlay Baseline/Current/Optimized to see whether lift holds past month 1; adjust retention/horizon to stress churn vs contribution. <InfoTip id="cohort.basis" ariaLabel="About cohort basis" />
-        <RiskBadge note={riskNote} className="ml-2" infoId="risk.badge" />
+        <div className="inline-flex items-center gap-2 ml-2">
+          <RiskBadge note={riskNote} className="ml-0" infoId="risk.badge" />
+          <span className="text-[11px] text-amber-700">Wide bands? Treat cohort lift as a hypothesis; test before rollout.</span>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

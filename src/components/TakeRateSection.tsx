@@ -11,6 +11,7 @@ type TakeRateSummary = {
   detail: string;
   baselineLabel: string | null;
   targetLabel: string;
+  customerImpact?: string | null;
 };
 
 type TakeRateSectionProps = {
@@ -65,7 +66,17 @@ export function TakeRateSection({
             Baseline: {summary.baselineLabel}
           </span>
         )}
-        <RiskBadge note={riskNote} infoId="risk.badge" />
+        <div className="flex items-center gap-2">
+          <RiskBadge note={riskNote} infoId="risk.badge" />
+          <span className="text-[10px] text-amber-700">
+            Wide bands? Treat mix deltas as exploratory—validate with customers.
+          </span>
+        </div>
+        {summary?.customerImpact ? (
+          <span className="text-[11px] text-slate-700 font-medium">
+            Customer impact: {summary.customerImpact}
+          </span>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-2 items-center text-[11px] text-slate-700">
