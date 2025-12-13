@@ -8,9 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "roundtrip": "npx ts-node scripts/roundtrip.ts",
-    "csv:roundtrip": "npx ts-node scripts/csv-roundtrip.ts",
-    "dev:roundtrip": "node --loader ts-node/esm scripts/dev-roundtrip.ts"
+    "roundtrip": "npx tsx scripts/roundtrip.ts",
+    "csv:roundtrip": "npx tsx scripts/csv-roundtrip.ts",
+    "dev:roundtrip": "npx tsx scripts/dev-roundtrip.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.5",
@@ -39,7 +39,9 @@
     "puppeteer": "^24.30.0",
     "tailwindcss": "^4.1.16",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "~5.9.3",
+    "tsx": "^4.21.0",
     "typescript-eslint": "^8.45.0",
     "vite": "npm:rolldown-vite@7.1.14",
     "vite-plugin-pwa": "^1.1.0",

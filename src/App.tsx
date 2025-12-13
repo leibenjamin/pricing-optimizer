@@ -267,13 +267,14 @@ const ADJUST_TAB_SECTION_IDS = [
 const ADJUST_SLIDERS_SECTION_IDS = ["scenario"] as const;
 const ADJUST_SEGMENTS_SECTION_IDS = ["customer-segments"] as const;
 const ADJUST_LEAKAGES_SECTION_IDS = ["pocket-price-waterfall"] as const;
-const SAVE_TAB_SECTION_IDS = [
-  "scenario-baseline",
-  "compare-board",
-  "share-links",
-  "recent-short-links",
-  "scenario-journal",
-] as const;
+  const SAVE_TAB_SECTION_IDS = [
+    "scenario-baseline",
+    "price-moves",
+    "compare-board",
+    "share-links",
+    "recent-short-links",
+    "scenario-journal",
+  ] as const;
 const OPTIMIZE_TAB_SECTION_IDS = [
   "global-optimizer",
   "reference-prices",
@@ -4856,13 +4857,59 @@ export default function App() {
                   <p className="basis-full text-[11px] text-slate-600">
                     Baselines auto-save when you apply a preset and right before you run Optimize. Use this button after manual tweaks to set a new anchor.
                   </p>
-                </div>
+                  </div>
+                </Section>
+              <Section
+                id="price-moves"
+                title="Price moves vs baseline"
+                className="order-2"
+              >
+                {baselineRun ? (
+                  <div className="space-y-2 text-sm text-slate-800">
+                    <div className="text-[11px] text-slate-600">
+                      Compares current ladder to the pinned baseline. Use to narrate which tiers moved up/down before exporting.
+                    </div>
+                    <div className="grid grid-cols-[1.4fr,1fr,1fr,1fr] gap-2 text-xs items-center">
+                      <div className="font-semibold text-slate-700">Tier</div>
+                      <div className="font-semibold text-slate-700">Baseline</div>
+                      <div className="font-semibold text-slate-700">Current</div>
+                      <div className="font-semibold text-slate-700">Δ vs baseline</div>
+                      {(["good", "better", "best"] as const).map((tier) => {
+                        const base = baselineRun.ladder?.[tier];
+                        const cur = prices[tier];
+                        const delta = base !== undefined ? cur - base : null;
+                        const label = tier === "good" ? "Good" : tier === "better" ? "Better" : "Best";
+                        const fmt = (n: number | undefined) =>
+                          n === undefined ? "-" : `$${n.toFixed(2)}`;
+                        const fmtDelta = (d: number | null) =>
+                          d === null ? "-" : `${d >= 0 ? "+" : "-"}$${Math.abs(d).toFixed(2)}`;
+                        return (
+                          <React.Fragment key={tier}>
+                            <div className="text-slate-800">{label}</div>
+                            <div className="text-slate-700">{fmt(base)}</div>
+                            <div className="text-slate-700">{fmt(cur)}</div>
+                            <div className={`font-semibold ${delta !== null && delta !== undefined ? (delta > 0 ? "text-green-700" : delta < 0 ? "text-amber-700" : "text-slate-700") : "text-slate-500"}`}>
+                              {fmtDelta(delta)}
+                            </div>
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                    <div className="text-[11px] text-slate-600">
+                      Tip: pair this with the Compare Board slots if you branch multiple ladders. Confidence badges reflect uncertainty settings; wide bands mean mixed moves warrant caution.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-600">
+                    No baseline pinned yet. Apply a preset or use “Re-pin baseline now” to capture a reference ladder, then price deltas will appear here.
+                  </div>
+                )}
               </Section>
-            <CompareBoardSection
-              className="order-3"
-              explanation={
-                <Explanation slot="chart.compareBoard">
-                  Save the current ladder into A/B/C, branch your changes, then reload slots while narrating differences. KPIs auto-recompute; use the toggles to control whether saved or current segments/leak/refs are used so you know exactly what's being compared.
+              <CompareBoardSection
+                className="order-3"
+                explanation={
+                  <Explanation slot="chart.compareBoard">
+                    Save the current ladder into A/B/C, branch your changes, then reload slots while narrating differences. KPIs auto-recompute; use the toggles to control whether saved or current segments/leak/refs are used so you know exactly what's being compared.
                 </Explanation>
               }
               compareUseSavedSegments={compareUseSavedSegments}
