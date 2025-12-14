@@ -43,8 +43,6 @@ export function PWARegisterSafe() {
 //  return null
 // }
 
-console.log("[main] Booting React root…");
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary title="App crashed">
@@ -53,5 +51,4 @@ createRoot(document.getElementById('root')!).render(
     <PWARegisterSafe />
   </StrictMode>,
 )
-
 

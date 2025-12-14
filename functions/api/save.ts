@@ -6,6 +6,8 @@ export interface Env {
   SCENARIOS: KVNamespace
 }
 
+const MAX_BODY_BYTES = 120_000; // keep KV payloads small; prevents abuse
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST,OPTIONS",
@@ -56,6 +58,14 @@ const PriceRange = z.object({
 
 const ChannelMix = z.array(z.object({ preset: z.string(), w: Num })).optional()
 
+const Uncertainty = z
+  .object({
+    priceScaleDelta: Num.optional(),
+    leakDeltaPct: Num.optional(),
+    source: z.enum(["preset", "heuristic", "precomputed", "simulated", "user"]).optional(),
+  })
+  .passthrough();
+
 const OptConstraints = z.object({
   gapGB: Num.optional(),
   gapBB: Num.optional(),
@@ -89,7 +99,7 @@ const Analysis = z.object({
   optRanges: SearchRanges.optional(),
   optConstraints: OptConstraints.optional(),
   channelMix: ChannelMix,
-  uncertainty: z.any().optional(),
+  uncertainty: Uncertainty.optional(),
   optimizerKind: z.enum(["grid-worker", "grid-inline", "future"]).optional(),
 }).passthrough() // allow future keys
 
@@ -101,7 +111,7 @@ const ScenarioSchema = z.object({
   leak: Leakages,
   segments: z.array(Segment).optional(),
   channelMix: ChannelMix,
-  uncertainty: z.any().optional(),
+  uncertainty: Uncertainty.optional(),
   analysis: Analysis.optional(),
 }).passthrough() // allow extra keys so future expansions don't break
 
@@ -117,7 +127,37 @@ function shortId(len = 7) {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
-    const json = await request.json().catch(() => null)
+    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    if (contentLength && contentLength > MAX_BODY_BYTES) {
+      return new Response(JSON.stringify({ error: "Body too large" }), {
+        status: 413,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    const raw = await request.text().catch(() => "");
+    if (!raw) {
+      return new Response(JSON.stringify({ error: "Missing body" }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+    if (raw.length > MAX_BODY_BYTES) {
+      return new Response(JSON.stringify({ error: "Body too large" }), {
+        status: 413,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    let json: unknown = null;
+    try {
+      json = JSON.parse(raw) as unknown;
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON" }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
     const parsed = ScenarioSchema.safeParse(json)
     if (!parsed.success) {
       return new Response(
@@ -126,6 +166,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       )
     }
     const scenario: Scenario = parsed.data
+    const scenarioJson = JSON.stringify(scenario);
+    if (scenarioJson.length > MAX_BODY_BYTES) {
+      return new Response(JSON.stringify({ error: "Body too large" }), {
+        status: 413,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
 
     // Try a few random ids to avoid collisions
     for (let i = 0; i < 5; i++) {
@@ -134,7 +181,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (exists) continue
 
       // Save ~180 days
-      await env.SCENARIOS.put(id, JSON.stringify(scenario), {
+      await env.SCENARIOS.put(id, scenarioJson, {
         expirationTtl: 60 * 60 * 24 * 180,
       })
       return new Response(JSON.stringify({ id }), { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } })

@@ -246,7 +246,7 @@ const ONBOARDING_STEPS = [
   {
     id: "results-overview",
     title: "Read the results",
-    body: "Use Results Overview on the right: Summary shows KPI deltas and ladder moves; Insights explains drivers, guardrails, and next steps.",
+    body: "Use Results Overview on the right: Summary shows results at a glance; Insights explains why it moved and what to do next.",
     targetId: "results-overview",
     helper: "Switch Current/Optimized to compare the ladder and mix.",
   },
@@ -2837,15 +2837,14 @@ export default function App() {
   const optimizerInputDrift = useMemo(() => {
     if (!optResult) return [];
     const ctx = optResult.context;
-    const changed = (a: unknown, b: unknown) => JSON.stringify(a) !== JSON.stringify(b);
     const notes: string[] = [];
-    if (changed(ctx.pricesAtRun, prices)) notes.push("ladder");
-    if (changed(ctx.costs, costs)) notes.push("costs");
-    if (changed(ctx.leak, leak)) notes.push("leakages");
-    if (changed(ctx.refPrices, refPrices)) notes.push("ref prices");
-    if (changed(ctx.features, features)) notes.push("features");
-    if (changed(ctx.segments, segments)) notes.push("segments");
-    if (changed(ctx.constraints, optConstraints)) notes.push("constraints");
+    if (!eqPrices(ctx.pricesAtRun, prices)) notes.push("ladder");
+    if (!eqPrices(ctx.costs, costs)) notes.push("costs");
+    if (!eqLeak(ctx.leak, leak)) notes.push("leakages");
+    if (!eqPrices(ctx.refPrices, refPrices)) notes.push("ref prices");
+    if (!eqFeatures(ctx.features, features)) notes.push("features");
+    if (!eqSegments(ctx.segments, segments)) notes.push("segments");
+    if (!eqConstraints(ctx.constraints, optConstraints)) notes.push("constraints");
     return notes;
   }, [optResult, prices, costs, leak, refPrices, features, segments, optConstraints]);
   const optimizerWhyLines = useMemo(() => {
@@ -3513,7 +3512,9 @@ export default function App() {
           `[${now()}] Round-trip preset check (${issue.label}): ${issue.issues.join("; ")}`
         );
       });
-      console.warn("Round-trip preset issues", suite.issues);
+      if (import.meta.env.DEV) {
+        console.warn("Round-trip preset issues", suite.issues);
+      }
     }
   }, [
     buildSharePayloadChecked,

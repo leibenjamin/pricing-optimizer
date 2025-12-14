@@ -8,18 +8,17 @@ export type InfoTipProps = {
   id: string;
   /** Optional extra classes for the trigger button */
   className?: string;
+  /** Accessible label for the trigger button */
+  ariaLabel?: string;
   /**
    * Optional preferred alignment.
    * "right" = align left edge of tooltip with button (default)
    * "left"  = align right edge of tooltip with button
    */
   align?: "left" | "right";
-  /** Allow legacy/extra props without breaking TS */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any;
 };
 
-function InfoTipImpl({ id, className, align = "right" }: InfoTipProps) {
+function InfoTipImpl({ id, className, ariaLabel, align = "right" }: InfoTipProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -100,6 +99,7 @@ function InfoTipImpl({ id, className, align = "right" }: InfoTipProps) {
   }, [open]);
 
   const contentHTML = explain(id);
+  const tooltipId = `infotip-${id}`;
 
   const popover =
     mounted && open && pos
@@ -113,6 +113,7 @@ function InfoTipImpl({ id, className, align = "right" }: InfoTipProps) {
               maxWidth: pos.width,
             }}
             role="tooltip"
+            id={tooltipId}
           >
             <div className="rounded-lg shadow-xl bg-white border border-gray-200 text-xs leading-snug p-3">
               <div
@@ -138,8 +139,13 @@ function InfoTipImpl({ id, className, align = "right" }: InfoTipProps) {
           "focus:ring-blue-500 " +
           (className ?? "")
         }
-        aria-label="More info"
+        aria-label={ariaLabel ?? "More info"}
+        aria-expanded={open}
+        aria-controls={open ? tooltipId : undefined}
         onClick={() => setOpen((v) => !v)}
+        onKeyDown={(ev) => {
+          if (ev.key === "Escape") setOpen(false);
+        }}
       >
         ?
       </button>
