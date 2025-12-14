@@ -64,7 +64,7 @@ export function ResultsOverviewSection({
           {tabButton("insights", "Insights")}
         </div>
         <span className="text-slate-600">
-          Summary = KPI deltas and ladders. Insights = drivers, guardrails, and next steps.
+          Summary = results at a glance. Insights = why it moved + what to do next.
         </span>
       </div>
 

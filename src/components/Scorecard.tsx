@@ -1,4 +1,3 @@
-import React from "react";
 import InfoTip from "./InfoTip";
 import {
   shareTilesFromKPIs,
@@ -52,7 +51,6 @@ const TIER_LABEL: Record<ScorecardShareTile["tier"], string> = {
 const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const fmtPct = (n: number) => `${(Math.round(n * 10) / 10).toFixed(1)}%`;
 const fmtPrice = (n: number) => `$${n.toFixed(2)}`;
-const fmtDelta = (n: number | null) => (n === null ? "-" : `${n >= 0 ? "+" : "-"}$${Math.abs(n).toFixed(2)}`);
 
 function toneClasses(value: number | null) {
   if (value === null) return "border-slate-200 bg-slate-50 text-slate-700";
@@ -61,28 +59,120 @@ function toneClasses(value: number | null) {
     : "border-rose-200 bg-rose-50 text-rose-700";
 }
 
-function DeltaPill({
-  label,
-  value,
-  formatter,
+function priceToneClasses(value: number | null) {
+  if (value === null) return "border-slate-200 bg-slate-50 text-slate-700";
+  return value > 0
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : value < 0
+    ? "border-amber-200 bg-amber-50 text-amber-700"
+    : "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function pctLabel(args: { base: number | null; delta: number | null; pct: number | null }): string | null {
+  const { base, delta, pct } = args;
+  if (delta === null || base === null) return null;
+  if (Math.abs(base) < 1e-9) return Math.abs(delta) < 1e-9 ? "0%" : "new";
+  if (pct === null) return null;
+  return `${pct >= 0 ? "+" : "-"}${Math.abs(pct).toFixed(1)}%`;
+}
+
+function DeltaBadge({
+  delta,
+  deltaPctLabel,
+  formatAbs,
+  tone,
 }: {
-  label: string;
-  value: number | null;
-  formatter: (n: number) => string;
+  delta: number | null;
+  deltaPctLabel: string | null;
+  formatAbs: (n: number) => string;
+  tone: string;
 }) {
-  if (value === null) {
-    return (
-      <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-        {label}: baseline needed
-      </div>
-    );
-  }
-  const tone = toneClasses(value);
-  const sign = value >= 0 ? "+" : "-";
+  if (delta === null) return null;
+  const sign = delta >= 0 ? "+" : "-";
   return (
-    <div className={`rounded-full border px-3 py-1 text-xs font-semibold ${tone}`}>
-      {label}: {sign}
-      {formatter(Math.abs(value))}
+    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tone}`}>
+      {sign}
+      {formatAbs(Math.abs(delta))}
+      {deltaPctLabel ? ` (${deltaPctLabel})` : ""}
+    </span>
+  );
+}
+
+type TierComparison = {
+  tier: ScorecardShareTile["tier"];
+  sharePct: number;
+  shareDeltaPP: number | null;
+  activePrice: number | null;
+  baselinePrice: number | null;
+  priceDelta: number | null;
+  priceDeltaPct: number | null;
+  activeCustomers: number | null;
+  baselineCustomers: number | null;
+  customerDelta: number | null;
+  customerDeltaPct: number | null;
+};
+
+function TierComparisonCard({
+  data,
+}: {
+  data: TierComparison;
+}) {
+  const shareTone =
+    data.shareDeltaPP === null
+      ? "text-slate-500"
+      : data.shareDeltaPP >= 0
+      ? "text-emerald-700"
+      : "text-rose-700";
+
+  const fmtCount = (n: number) => Math.round(n).toLocaleString();
+  const baselinePriceText = data.baselinePrice === null ? "—" : fmtPrice(data.baselinePrice);
+  const activePriceText = data.activePrice === null ? "—" : fmtPrice(data.activePrice);
+  const baselineCustomersText = data.baselineCustomers === null ? "—" : fmtCount(data.baselineCustomers);
+  const activeCustomersText = data.activeCustomers === null ? "—" : fmtCount(data.activeCustomers);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-sm font-semibold text-slate-900">{TIER_LABEL[data.tier]}</div>
+        <div className={`text-[11px] ${shareTone}`}>
+          {data.sharePct.toFixed(1)}%
+          {data.shareDeltaPP !== null ? ` (${data.shareDeltaPP >= 0 ? "+" : ""}${data.shareDeltaPP.toFixed(1)}pp)` : ""}
+        </div>
+      </div>
+
+      <div className="mt-2 space-y-2 text-[11px] text-slate-700">
+        <div className="grid grid-cols-[76px,1fr] items-center gap-2">
+          <div className="text-slate-600">Price</div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 truncate">
+              <span className="font-semibold text-slate-900">{activePriceText}</span>
+              <span className="ml-2 text-slate-500">base {baselinePriceText}</span>
+            </div>
+            <DeltaBadge
+              delta={data.priceDelta}
+              deltaPctLabel={pctLabel({ base: data.baselinePrice, delta: data.priceDelta, pct: data.priceDeltaPct })}
+              formatAbs={(n) => `$${n.toFixed(2)}`}
+              tone={priceToneClasses(data.priceDelta)}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-[76px,1fr] items-center gap-2">
+          <div className="text-slate-600">Customers</div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 truncate">
+              <span className="font-semibold text-slate-900">{activeCustomersText}</span>
+              <span className="ml-2 text-slate-500">base {baselineCustomersText}</span>
+            </div>
+            <DeltaBadge
+              delta={data.customerDelta}
+              deltaPctLabel={pctLabel({ base: data.baselineCustomers, delta: data.customerDelta, pct: data.customerDeltaPct })}
+              formatAbs={(n) => fmtCount(n)}
+              tone={toneClasses(data.customerDelta)}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -109,7 +199,7 @@ function MetricCard({
   const sign = delta === null ? "" : delta >= 0 ? "+" : "-";
   const showDelta = delta !== null;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/80 p-3 shadow-sm flex flex-col gap-1">
+    <div className="rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm flex flex-col gap-1">
       <div className="flex items-center justify-between text-[11px] text-slate-600">
         <span className="flex items-center gap-1">
           {label}
@@ -123,39 +213,8 @@ function MetricCard({
           </span>
         ) : null}
       </div>
-      <div className="text-xl font-semibold text-slate-900">{value}</div>
-      <div className="text-[11px] text-slate-500">{baselineLabel}</div>
-    </div>
-  );
-}
-
-function ShareTile({ tile }: { tile: ScorecardShareTile }) {
-  const barWidth = Math.min(100, Math.max(4, tile.sharePct));
-  const tone =
-    tile.deltaPP === null
-      ? "text-slate-500"
-      : tile.deltaPP >= 0
-      ? "text-emerald-700"
-      : "text-rose-700";
-  const deltaText =
-    tile.deltaPP === null
-      ? "Pin a baseline to see mix deltas."
-      : `${tile.deltaPP >= 0 ? "+" : ""}${tile.deltaPP.toFixed(1)}pp vs baseline`;
-  const tierColor: Record<ScorecardShareTile["tier"], string> = {
-    good: "bg-sky-500",
-    better: "bg-indigo-500",
-    best: "bg-fuchsia-500",
-  };
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white/70 p-3">
-      <div className="flex items-center justify-between text-[11px] text-slate-600">
-        <span className="font-medium text-slate-800">{TIER_LABEL[tile.tier]}</span>
-        <span className="font-semibold text-slate-900">{tile.sharePct}%</span>
-      </div>
-      <div className="mt-1 h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
-        <div className={`h-full rounded-full ${tierColor[tile.tier]}`} style={{ width: `${barWidth}%` }} />
-      </div>
-      <div className={`mt-1 text-[11px] ${tone}`}>{deltaText}</div>
+      <div className="text-lg font-semibold text-slate-900 leading-snug">{value}</div>
+      <div className="text-[10px] text-slate-500 leading-tight">{baselineLabel}</div>
     </div>
   );
 }
@@ -167,7 +226,8 @@ function GuardrailCard({ guardrails }: { guardrails: GuardrailSummary }) {
       <div className="mt-1 text-sm font-semibold text-slate-900 leading-snug">{guardrails.gapLine}</div>
       <p className="text-[11px] text-slate-600 mt-1 leading-snug">{guardrails.floorLine}</p>
       <p className="text-[11px] text-slate-600 mt-1 leading-snug">
-        {guardrails.optimizerLine} {guardrails.optimizerHint ? `· ${guardrails.optimizerHint}` : ""}
+        {guardrails.optimizerLine}
+        {guardrails.optimizerHint ? ` Tip: ${guardrails.optimizerHint}` : ""}
       </p>
     </div>
   );
@@ -215,144 +275,65 @@ export default function Scorecard({
 }: ScorecardProps) {
   const activeKpis = run?.kpis ?? kpis;
   const baselineKpis = baselineRun?.kpis ?? null;
-  const baselineFallback = "Baseline auto-saves when you apply a preset or run Optimize.";
-  const priceDeltaPills =
-    priceDeltas && priceDeltas.length
-      ? priceDeltas.map((p) => {
-          const tone =
-            p.delta === null
-              ? "bg-slate-100 text-slate-700 border-slate-200"
-              : p.delta > 0
-              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-              : p.delta < 0
-              ? "bg-amber-50 text-amber-800 border-amber-200"
-              : "bg-slate-50 text-slate-700 border-slate-200";
-          const label = p.tier === "good" ? "Good" : p.tier === "better" ? "Better" : "Best";
-          return (
-            <div key={p.tier} className={`rounded-full border px-3 py-1 ${tone}`}>
-              <span className="font-semibold">{label}</span>: {fmtDelta(p.delta)} vs baseline
-            </div>
-          );
-        })
-      : null;
-  const maxPriceDelta =
-    priceDeltas && priceDeltas.length ? Math.max(...priceDeltas.map((p) => Math.abs(p.delta ?? 0)), 0.01) : 0;
-  const priceDeltaTable =
-    priceDeltas && priceDeltas.length
-      ? (
-        <div className="rounded-lg border border-slate-200 bg-white/80 p-2 shadow-sm space-y-1.5">
-          <div className="flex items-center justify-between text-[10px] text-slate-700">
-            <span className="font-semibold text-slate-800">Price ladder vs baseline</span>
-            <span className="text-slate-500">{view === "optimized" ? "Optimized vs baseline" : "Current vs baseline"}</span>
-          </div>
-          <div className="grid grid-cols-[1fr,1fr,1fr,1fr] gap-x-1 gap-y-[3px] text-[10px] text-slate-600">
-            <div className="font-semibold text-slate-700">Tier</div>
-            <div className="font-semibold text-slate-700">Baseline</div>
-            <div className="font-semibold text-slate-700">Active</div>
-            <div className="font-semibold text-slate-700">Delta</div>
-            {priceDeltas.map((p) => {
-              const label = p.tier === "good" ? "Good" : p.tier === "better" ? "Better" : "Best";
-              const tone =
-                p.delta === null
-                  ? "text-slate-500"
-                  : p.delta > 0
-                  ? "text-emerald-700"
-                  : p.delta < 0
-                  ? "text-amber-700"
-                  : "text-slate-700";
-              return (
-                <React.Fragment key={p.tier}>
-                  <div className="font-semibold text-slate-800">{label}</div>
-                  <div className="text-slate-700">{fmtPrice(p.base)}</div>
-                  <div className="text-slate-700">{fmtPrice(p.current)}</div>
-                  <div className={`font-semibold ${tone}`}>{fmtDelta(p.delta)}</div>
-                </React.Fragment>
-              );
-            })}
-          </div>
-        </div>
-      )
-      : null;
-  const priceDeltaBar =
-    priceDeltas && priceDeltas.length
-      ? (
-        <div className="rounded-lg border border-slate-200 bg-white/80 p-2 shadow-sm space-y-1.5">
-          <div className="flex items-center justify-between text-[10px] text-slate-700">
-            <span className="font-semibold text-slate-800">Mixed move bar (Delta vs baseline)</span>
-            <span className="text-slate-500">Centered at baseline</span>
-          </div>
-          <div className="space-y-1">
-            {priceDeltas.map((p) => {
-              const label = p.tier === "good" ? "Good" : p.tier === "better" ? "Better" : "Best";
-              const delta = p.delta ?? 0;
-              const isUp = delta > 0;
-              const tone =
-                p.delta === null
-                  ? "bg-slate-300"
-                  : p.delta > 0
-                  ? "bg-emerald-400"
-                  : p.delta < 0
-                  ? "bg-amber-400"
-                  : "bg-slate-300";
-              const widthPct = Math.min(100, (Math.abs(delta) / maxPriceDelta) * 100);
-              const labelTone =
-                p.delta === null
-                  ? "text-slate-500"
-                  : p.delta > 0
-                  ? "text-emerald-700"
-                  : p.delta < 0
-                  ? "text-amber-700"
-                  : "text-slate-700";
-              return (
-                <div key={p.tier} className="space-y-0.5">
-                  <div className="flex items-center justify-between text-[11px] text-slate-700">
-                    <span className="font-semibold text-slate-800">{label}</span>
-                    <span className={`font-semibold ${labelTone}`}>{fmtDelta(p.delta)}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-100 border border-slate-200 overflow-hidden relative">
-                    <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-300" />
-                    <div
-                      className={`${tone} h-full`}
-                      style={{
-                        width: `${widthPct}%`,
-                        marginLeft: isUp ? "50%" : `${Math.max(0, 50 - widthPct)}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )
-      : null;
-  const priceDeltaCluster =
-    priceDeltaTable && priceDeltaBar ? (
-      <div className="grid gap-2 md:grid-cols-2">{priceDeltaTable}{priceDeltaBar}</div>
-    ) : (
-      priceDeltaTable ?? priceDeltaBar
-    );
+  const baselineFallback = "No pinned baseline yet.";
+  const shareTiles = shareTilesFromKPIs(activeKpis, baselineKpis);
+  const activeLabel = view === "optimized" ? "Optimized" : "Current";
 
-  const summaryPills =
-    baselineKpis && baselineActiveCustomers !== null
-      ? [
-          {
-            label: "Profit vs baseline",
-            value: activeKpis.profit - baselineKpis.profit,
-            formatter: fmtUSD,
-          },
-          {
-            label: "Active vs baseline",
-            value: activeCustomers - baselineActiveCustomers,
-            formatter: (v: number) => Math.round(v).toLocaleString(),
-          },
-          {
-            label: "Gross margin delta",
-            value: marginDeltaPP,
-            formatter: (v: number) => `${v.toFixed(1)} pp`,
-          },
-        ]
-      : [];
+  const tierComparisons: TierComparison[] = (() => {
+    const tiers: TierComparison["tier"][] = ["good", "better", "best"];
+    const activeDenom = 1 - (activeKpis.shares.none ?? 0);
+    const activeN = activeDenom > 1e-9 ? activeCustomers / activeDenom : null;
+
+    const baselineDenom =
+      baselineKpis && typeof baselineKpis.shares.none === "number" ? 1 - baselineKpis.shares.none : null;
+    const baselineN =
+      baselineKpis && baselineActiveCustomers !== null && baselineDenom !== null && baselineDenom > 1e-9
+        ? baselineActiveCustomers / baselineDenom
+        : null;
+
+    const priceByTier = new Map<TierComparison["tier"], { base: number; current: number }>();
+    if (priceDeltas && priceDeltas.length) {
+      priceDeltas.forEach((p) => {
+        priceByTier.set(p.tier, { base: p.base, current: p.current });
+      });
+    }
+
+    return tiers.map((tier) => {
+      const tile = shareTiles.find((t) => t.tier === tier);
+      const baselinePrice = priceByTier.get(tier)?.base ?? baselineRun?.ladder?.[tier] ?? null;
+      const activePrice = priceByTier.get(tier)?.current ?? activeKpis.prices?.[tier] ?? run?.ladder?.[tier] ?? null;
+      const priceDelta = baselinePrice !== null && activePrice !== null ? activePrice - baselinePrice : null;
+      const priceDeltaPct =
+        priceDelta !== null && baselinePrice !== null && Math.abs(baselinePrice) > 1e-9
+          ? (priceDelta / baselinePrice) * 100
+          : null;
+
+      const activeTierCustomers =
+        activeN !== null ? Math.round(activeN * (activeKpis.shares[tier] ?? 0)) : null;
+      const baselineTierCustomers =
+        baselineN !== null && baselineKpis ? Math.round(baselineN * (baselineKpis.shares[tier] ?? 0)) : null;
+      const customerDelta =
+        baselineTierCustomers !== null && activeTierCustomers !== null ? activeTierCustomers - baselineTierCustomers : null;
+      const customerDeltaPct =
+        customerDelta !== null && baselineTierCustomers !== null && baselineTierCustomers > 0
+          ? (customerDelta / baselineTierCustomers) * 100
+          : null;
+
+      return {
+        tier,
+        sharePct: tile?.sharePct ?? 0,
+        shareDeltaPP: tile?.deltaPP ?? null,
+        activePrice,
+        baselinePrice,
+        priceDelta,
+        priceDeltaPct,
+        activeCustomers: activeTierCustomers,
+        baselineCustomers: baselineTierCustomers,
+        customerDelta,
+        customerDeltaPct,
+      };
+    });
+  })();
 
   const marginPct = activeKpis.revenue > 0 ? (activeKpis.profit / activeKpis.revenue) * 100 : 0;
   const baselineMarginPct =
@@ -430,14 +411,11 @@ export default function Scorecard({
       formatter: (v: number) => `${v.toFixed(1)} pp`,
     },
   ];
-
-  const shareTiles = shareTilesFromKPIs(activeKpis, baselineKpis);
   const headline = explain?.mainDriver
     ? explain.mainDriver
     : baselineKpis
     ? "Driver story appears once optimizer runs with a pinned baseline."
     : "Pin a baseline to unlock driver and lift narratives.";
-  const [showLadderDetails, setShowLadderDetails] = React.useState(false);
   const mixShift =
     shareTiles.length && baselineKpis
       ? (() => {
@@ -452,118 +430,60 @@ export default function Scorecard({
       : null;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="rounded-xl border border-slate-200 bg-white/90 p-2 sm:p-3 shadow-sm">
-        <div className="flex flex-wrap items-start gap-2">
-          <div className="flex-1 min-w-[260px] space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] uppercase tracking-wide text-slate-600">Quick story</span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
-                View: {view === "current" ? "Current ladder" : "Optimized ladder"}
-              </span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
-                Basis: {basis.active}
-              </span>
-            </div>
-            <div className="text-sm font-semibold text-slate-900 leading-snug">{headline}</div>
-            {mixShift ? <p className="text-[11px] text-slate-600 leading-snug">{mixShift}</p> : null}
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              {summaryPills.length > 0 ? (
-                summaryPills.map((pill) =>
-                  pill.value === null ? null : (
-                    <DeltaPill key={pill.label} label={pill.label} value={pill.value} formatter={pill.formatter} />
-                  )
-                )
-              ) : (
-                <div className="text-[11px] text-slate-600">
-                  Baseline auto-saves on preset or Optimize; pin anytime to compare lifts.
-                </div>
-              )}
-              {onViewInsights ? (
-                <button
-                  type="button"
-                  className="ml-auto text-sky-700 text-xs font-semibold hover:underline print:hidden"
-                  onClick={onViewInsights}
-                >
-                  See insights
-                </button>
-              ) : null}
-            </div>
-            {priceDeltaPills ? (
-              <div className="flex flex-wrap gap-2 text-[11px] text-slate-800">
-                {priceDeltaPills}
-              </div>
-            ) : null}
-            <div className="text-[11px] text-slate-500">
-              Baseline: {basis.baseline}. Pinned story: {basis.pinned}. View toggle sits above.{" "}
-              <InfoTip id="scorecard.basis" ariaLabel="About scorecard basis" />
-            </div>
-            <div className="flex items-center gap-2">
-              <RiskBadge note={riskNote} infoId="risk.badge" />
-              {wideBand ? (
-                <span className="text-[11px] text-amber-700">
-                  Bands are wide; test mixed moves before rollout.
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex w-full flex-col gap-2 sm:w-72">
-            <div className="flex items-center justify-between text-[11px] text-slate-600">
-              <span className="font-semibold text-slate-800">Context</span>
-              <div className="inline-flex overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
-                <button
-                  type="button"
-                  className={`px-2 py-1 text-[11px] font-semibold ${
-                    view === "current" ? "bg-gray-900 text-white" : "bg-white text-slate-700"
-                  }`}
-                  onClick={() => onChangeView("current")}
-                >
-                  Current
-                </button>
-                <button
-                  type="button"
-                  className={`px-2 py-1 text-[11px] font-semibold ${
-                    view === "optimized" ? "bg-gray-900 text-white" : "bg-white text-slate-700"
-                  } ${!hasOptimized ? "opacity-50 cursor-not-allowed" : ""}`}
-                  onClick={() => hasOptimized && onChangeView("optimized")}
-                  disabled={!hasOptimized}
-                >
-                  Optimized
-                </button>
-              </div>
-            </div>
-            <GuardrailCard guardrails={guardrails} />
-            {band ? <BandCard band={band} /> : null}
-            {priceDeltaCluster ? (
-              <div className="rounded-lg border border-slate-200 bg-white/80 p-2 shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[10px] uppercase tracking-wide text-slate-600">Ladder deltas</div>
-                  <button
-                    type="button"
-                    className="text-xs font-semibold text-sky-700 hover:underline print:hidden"
-                    onClick={() => setShowLadderDetails((v) => !v)}
-                    aria-expanded={showLadderDetails}
-                  >
-                    {showLadderDetails ? "Hide" : "Show"}
-                  </button>
-                </div>
-                <div className={`${showLadderDetails ? "block" : "hidden"} mt-2 print:block`}>
-                  {priceDeltaCluster}
-                </div>
-              </div>
-            ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wide text-slate-600">Quick story</span>
+          <span className="hidden print:inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+            View: {view === "current" ? "Current ladder" : "Optimized ladder"}
+          </span>
+          <div className="inline-flex overflow-hidden rounded border border-slate-200 bg-white shadow-sm print:hidden">
             <button
               type="button"
-              className="whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 print:hidden"
-              onClick={onPinBaseline}
+              className={`px-2 py-1 text-[11px] font-semibold ${
+                view === "current" ? "bg-gray-900 text-white" : "bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+              onClick={() => onChangeView("current")}
             >
-              Pin current as baseline
+              Current
+            </button>
+            <button
+              type="button"
+              className={`px-2 py-1 text-[11px] font-semibold ${
+                view === "optimized" ? "bg-gray-900 text-white" : "bg-white text-slate-700 hover:bg-slate-50"
+              } ${!hasOptimized ? "opacity-50 cursor-not-allowed" : ""}`}
+              onClick={() => hasOptimized && onChangeView("optimized")}
+              disabled={!hasOptimized}
+            >
+              Optimized
             </button>
           </div>
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+            Basis: {basis.active}
+          </span>
+          {onViewInsights ? (
+            <button
+              type="button"
+              className="ml-auto text-sky-700 text-xs font-semibold hover:underline print:hidden"
+              onClick={onViewInsights}
+            >
+              See insights
+            </button>
+          ) : null}
+        </div>
+
+        <div className="mt-2 text-sm font-semibold text-slate-900 leading-snug">{headline}</div>
+        {mixShift ? <p className="mt-1 text-[11px] text-slate-600 leading-snug">{mixShift}</p> : null}
+
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <RiskBadge note={riskNote} infoId="risk.badge" />
+          {wideBand ? (
+            <span className="text-[11px] text-amber-700">Bands are wide; test mixed moves before rollout.</span>
+          ) : null}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
         {metrics.map((card) => (
           <MetricCard
             key={card.key}
@@ -579,17 +499,36 @@ export default function Scorecard({
         ))}
       </div>
 
-      <div className="grid gap-3 md:grid-cols-5">
-        <div className="md:col-span-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
-            <span>Choice mix at this ladder</span>
-            <span className="text-slate-500">Pair with Insights to narrate who is buying and why.</span>
-          </div>
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {shareTiles.map((tile) => (
-              <ShareTile key={tile.tier} tile={tile} />
-            ))}
-          </div>
+      <div className="rounded-xl border border-slate-200 bg-white/90 p-2 sm:p-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
+          <span className="font-semibold text-slate-800">Tier ladder and mix vs baseline</span>
+          <span className="text-slate-500">{activeLabel} vs baseline</span>
+        </div>
+        <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+          {tierComparisons.map((t) => (
+            <TierComparisonCard key={t.tier} data={t} />
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white/90 p-2 sm:p-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
+          <span className="font-semibold text-slate-800">Context</span>
+          <button
+            type="button"
+            className="whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 print:hidden"
+            onClick={onPinBaseline}
+          >
+            Pin current as baseline
+          </button>
+        </div>
+        <div className="mt-1 text-[11px] text-slate-500">
+          Baseline: {basis.baseline}. Pinned story: {basis.pinned}.{" "}
+          <InfoTip id="scorecard.basis" ariaLabel="About scorecard basis" />
+        </div>
+        <div className="mt-2 grid gap-2 md:grid-cols-2">
+          <GuardrailCard guardrails={guardrails} />
+          {band ? <BandCard band={band} /> : null}
         </div>
       </div>
     </div>
