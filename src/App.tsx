@@ -65,7 +65,7 @@ import { useStickyState } from "./lib/useStickyState";
 import { preflight, fetchWithRetry, apiUrl, type RetryConfig } from "./lib/net";
 
 import { CompareBoardSection } from "./components/CompareBoardSection";
-import { ScorecardCallouts } from "./components/ScorecardCallouts";
+import { ResultsOverviewSection } from "./components/ResultsOverviewSection";
 import { TakeRateSection } from "./components/TakeRateSection";
 import { CohortSection } from "./components/CohortSection";
 import { FrontierSection } from "./components/FrontierSection";
@@ -244,11 +244,11 @@ const ONBOARDING_STEPS = [
     helper: "Pocket/list basis, gaps, and floors sit here. Charm endings are optional.",
   },
   {
-    id: "callouts",
-    title: "Read what changed",
-    body: "Scorecard and callouts summarize lift, drivers, and guardrails. Use them to narrate before/after in the right column.",
-    targetId: "callouts",
-    helper: "Switch Current/Optimized to see mix shifts and KPI deltas.",
+    id: "results-overview",
+    title: "Read the results",
+    body: "Use Results Overview on the right: Summary shows KPI deltas and ladder moves; Insights explains drivers, guardrails, and next steps.",
+    targetId: "results-overview",
+    helper: "Switch Current/Optimized to compare the ladder and mix.",
   },
   {
     id: "compare",
@@ -640,8 +640,7 @@ export default function App() {
 
   const NAV_SECTIONS = useMemo(
     () => [
-      "scorecard",
-      "callouts",
+      "results-overview",
       "profit-frontier",
       "pocket-price-waterfall",
       "compare-board",
@@ -714,10 +713,8 @@ export default function App() {
 
   function labelFor(id: string) {
     switch (id) {
-      case "scorecard":
-        return "Scorecard";
-      case "callouts":
-        return "Callouts";
+      case "results-overview":
+        return "Results";
       case "profit-frontier":
         return "Profit Frontier";
       case "pocket-price-waterfall":
@@ -4257,7 +4254,7 @@ export default function App() {
                 }`}
                 onClick={() => setLeftColumnTab("save")}
               >
-                Review & Export
+                Share & Export
               </button>
             </div>
           </div>
@@ -4350,7 +4347,7 @@ export default function App() {
                           accept="application/json"
                           className="hidden"
                           onChange={handleImportJson}
-                          title="Upload (refer to JSON export in Review & Export for format)"
+                          title="Upload (refer to JSON export in Share & Export for format)"
                         />
                       </label>
                       
@@ -4834,7 +4831,7 @@ export default function App() {
           {leftColumnTab === "save" && (
             <div role="tabpanel" id="tab-save-scenario" aria-labelledby="tab-btn-save" className="space-y-3 md:space-y-4 min-w-0">
               <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-700">
-                <div className="text-sm font-semibold text-slate-800">Review & export after an optimizer run</div>
+                <div className="text-sm font-semibold text-slate-800">Share & export after an optimizer run</div>
                 <div className="mt-1">
                   Freeze the latest ladder as a baseline, compare A/B/C saves, and share print/export links. Baselines auto-save on preset apply and before Optimize runs.
                 </div>
@@ -5199,7 +5196,7 @@ export default function App() {
 
       {/* Right: Charts */}
       <div className="col-span-12 lg:col-span-6 space-y-4 min-w-0">
-          <ScorecardCallouts
+          <ResultsOverviewSection
             scorecardView={scorecardView}
             hasOptimized={!!optimizedKpis}
             onChangeView={setScorecardView}
@@ -5207,7 +5204,7 @@ export default function App() {
             scorecardVM={scorecardVM}
             scorecardBand={scorecardBand}
             priceDeltas={scorecardPriceDeltas ?? undefined}
-              callouts={{
+              insights={{
                 hasResult: !!optResult,
                 basisLabel: optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit",
                 ladderLabel: (() => {

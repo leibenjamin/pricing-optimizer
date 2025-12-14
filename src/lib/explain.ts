@@ -133,7 +133,7 @@ export const EXPLAIN: Record<string, string> = {
   "risk.sliders": `
     <b>Uncertainty heuristics</b> let you widen/narrow the preset bands that drive badges and chart ranges. Price delta adjusts sensitivity to price-scale shifts; leak delta adjusts downstream leakage variability. Changes mark source=user and travel in JSON/short links. Use higher deltas for thin data or volatile segments.`,
   "scorecard.basis": `
-    <b>Scorecard basis</b> shows whether KPIs use list or pocket (after leakages). Pocket applies leakages before checking margins/guardrails; list ignores leakages. Badges, pills, bands, and callouts reflect the active basis.`,
+    <b>Scorecard basis</b> shows whether KPIs use list or pocket (after leakages). Pocket applies leakages before checking margins/guardrails; list ignores leakages. Badges, pills, bands, and the Insights tab reflect the active basis.`,
   "frontier.basis": `
     <b>Frontier basis</b> mirrors the basis toggle: pocket (after leakages) vs list. Infeasible points fail gaps/floors for the chosen basis. Markers use Baseline/Current/Optimized ladder.`,
   "takerate.scope": `

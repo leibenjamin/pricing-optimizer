@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "roundtrip": "npx tsx scripts/roundtrip.ts",
     "csv:roundtrip": "npx tsx scripts/csv-roundtrip.ts",
-    "dev:roundtrip": "npx tsx scripts/dev-roundtrip.ts"
+    "dev:roundtrip": "npx tsx scripts/dev-roundtrip.ts",
+    "dev:results": "npx tsx scripts/dev-results-overview.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.5",

@@ -3,9 +3,9 @@ import type { ScorecardGuardrails, ScorecardViewModel } from "../lib/viewModels"
 import { useState } from "react";
 import { Section } from "./Section";
 import Scorecard from "./Scorecard";
-import CalloutsSnapshot from "./CalloutsSnapshot";
+import InsightsPanel from "./InsightsPanel";
 
-type ScorecardCalloutsProps = {
+type ResultsOverviewSectionProps = {
   scorecardView: "current" | "optimized";
   hasOptimized: boolean;
   onChangeView: (view: "current" | "optimized") => void;
@@ -13,7 +13,7 @@ type ScorecardCalloutsProps = {
   scorecardVM: ScorecardViewModel;
   scorecardBand: ScorecardBand | null;
   priceDeltas?: Array<{ tier: "good" | "better" | "best"; base: number; current: number; delta: number | null }>;
-  callouts: {
+  insights: {
     hasResult: boolean;
     basisLabel: string;
     ladderLabel: string;
@@ -29,7 +29,7 @@ type ScorecardCalloutsProps = {
   };
 };
 
-export function ScorecardCallouts({
+export function ResultsOverviewSection({
   scorecardView,
   hasOptimized,
   onChangeView,
@@ -37,8 +37,8 @@ export function ScorecardCallouts({
   scorecardVM,
   scorecardBand,
   priceDeltas,
-  callouts,
-}: ScorecardCalloutsProps) {
+  insights,
+}: ResultsOverviewSectionProps) {
   const [tab, setTab] = useState<"summary" | "insights">("summary");
   const tabButton = (id: "summary" | "insights", label: string) => {
     const active = tab === id;
@@ -84,27 +84,26 @@ export function ScorecardCallouts({
           guardrails={scorecardVM.guardrails}
           explain={scorecardVM.explain}
           band={scorecardBand}
-          riskNote={callouts.riskNote}
+          riskNote={insights.riskNote}
           priceDeltas={priceDeltas}
           onViewInsights={() => setTab("insights")}
         />
       </div>
 
       <div className={`${tab === "insights" ? "block" : "hidden"} print:block`}>
-        <CalloutsSnapshot
-          mode="insights"
-          hasResult={callouts.hasResult}
-          basisLabel={callouts.basisLabel}
-          ladderLabel={callouts.ladderLabel}
-          delta={callouts.delta}
-          fallbackNarrative={callouts.fallbackNarrative}
-          guardrails={callouts.guardrails}
-          optimizerWhyLines={callouts.optimizerWhyLines}
-          binds={callouts.binds}
-          topDriverLine={callouts.topDriverLine}
-          guardrailFloorLine={callouts.guardrailFloorLine}
-          validationNotes={callouts.validationNotes}
-          riskNote={callouts.riskNote}
+        <InsightsPanel
+          hasResult={insights.hasResult}
+          basisLabel={insights.basisLabel}
+          ladderLabel={insights.ladderLabel}
+          delta={insights.delta}
+          fallbackNarrative={insights.fallbackNarrative}
+          guardrails={insights.guardrails}
+          optimizerWhyLines={insights.optimizerWhyLines}
+          binds={insights.binds}
+          topDriverLine={insights.topDriverLine}
+          guardrailFloorLine={insights.guardrailFloorLine}
+          validationNotes={insights.validationNotes}
+          riskNote={insights.riskNote}
         />
       </div>
     </Section>
