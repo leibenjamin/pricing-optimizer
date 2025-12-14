@@ -41,7 +41,7 @@ export function CompareBoardSection({
     <Section id="compare-board" title="Scenario Compare (A/B/C)" className={className}>
       {explanation}
       <div className="text-[11px] text-slate-600 mb-1">
-        Slots use saved prices/costs/refs/leak/segments and the saved pocket/list basis if present; Current uses live state. Use A/B/C to branch mixed moves without losing the pinned baseline in Scorecard.
+        Slots use saved prices/costs/refs/leak/segments and the saved pocket/list basis if present; Current uses live state. Use A/B/C to branch mixed moves without losing the pinned baseline in Results Overview.
       </div>
       <div className="flex items-center gap-2 text-[11px] text-slate-600 mb-1">
         <label className="inline-flex items-center gap-1">

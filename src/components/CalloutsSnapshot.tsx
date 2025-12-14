@@ -8,6 +8,7 @@ type GuardrailSummary = {
 };
 
 type CalloutsSnapshotProps = {
+  mode?: "snapshot" | "insights";
   hasResult: boolean;
   basisLabel: string;
   ladderLabel: string;
@@ -23,6 +24,7 @@ type CalloutsSnapshotProps = {
 };
 
 export default function CalloutsSnapshot({
+  mode = "snapshot",
   hasResult,
   basisLabel,
   ladderLabel,
@@ -39,8 +41,8 @@ export default function CalloutsSnapshot({
   if (!hasResult) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-3 py-2 text-sm text-slate-600">
-        Run the optimizer to populate lift, driver, and guardrail callouts. We auto-pin your baseline before running so
-        the deltas below have context.
+        Run the optimizer to populate insights. We auto-pin your baseline before running so deltas and driver notes have
+        context.
       </div>
     );
   }
@@ -63,7 +65,7 @@ export default function CalloutsSnapshot({
       : [
           "Validate guardrails in Pocket floor coverage.",
           "Review leakages in Pocket waterfall.",
-          "Rerun optimizer after ladder or basis tweaks, then export/print the summary.",
+          "When the story looks right, use Review & Export to package/share (links, JSON, print).",
           "Baseline auto-saved before this run; re-pin after manual tweaks to compare future changes.",
         ];
 
@@ -77,31 +79,36 @@ export default function CalloutsSnapshot({
           </span>
         ) : null}
         <RiskBadge note={riskNote} infoId="risk.badge" />
+        {mode === "insights" ? (
+          <span className="text-slate-500">Summary tab shows KPIs and ladder deltas; this tab explains drivers and next steps.</span>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-3 shadow-sm">
-          <div className="text-[11px] uppercase text-slate-600">Lift vs baseline</div>
-          <div className="text-2xl font-semibold text-slate-900">
-            {delta
-              ? `${delta.deltaProfit >= 0 ? "+" : "-"}$${Math.abs(delta.deltaProfit).toLocaleString()}`
-              : "Baseline pending"}
+        {mode === "snapshot" ? (
+          <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-3 shadow-sm">
+            <div className="text-[11px] uppercase text-slate-600">Lift vs baseline</div>
+            <div className="text-2xl font-semibold text-slate-900">
+              {delta
+                ? `${delta.deltaProfit >= 0 ? "+" : "-"}$${Math.abs(delta.deltaProfit).toLocaleString()}`
+                : "Baseline pending"}
+            </div>
+            <ul className="mt-2 space-y-1 text-[11px] text-slate-700">
+              {delta ? (
+                <>
+                  <li>Revenue {delta.deltaRevenue >= 0 ? "+" : "-"}${Math.abs(delta.deltaRevenue).toLocaleString()}</li>
+                  <li>Active {delta.deltaActive >= 0 ? "+" : "-"}{Math.abs(delta.deltaActive).toFixed(0)}</li>
+                  <li>ARPU {delta.deltaARPU >= 0 ? "+" : "-"}${Math.abs(delta.deltaARPU).toFixed(2)}</li>
+                </>
+              ) : (
+                <li>Set or pin a baseline so deltas have context.</li>
+              )}
+            </ul>
           </div>
-          <ul className="mt-2 space-y-1 text-[11px] text-slate-700">
-            {delta ? (
-              <>
-                <li>Revenue {delta.deltaRevenue >= 0 ? "+" : "-"}${Math.abs(delta.deltaRevenue).toLocaleString()}</li>
-                <li>Active {delta.deltaActive >= 0 ? "+" : "-"}{Math.abs(delta.deltaActive).toFixed(0)}</li>
-                <li>ARPU {delta.deltaARPU >= 0 ? "+" : "-"}${Math.abs(delta.deltaARPU).toFixed(2)}</li>
-              </>
-            ) : (
-              <li>Set or pin a baseline so deltas have context.</li>
-            )}
-          </ul>
-        </div>
+        ) : null}
 
         <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-3 shadow-sm">
-          <div className="text-[11px] uppercase text-slate-600">Main driver</div>
+          <div className="text-[11px] uppercase text-slate-600">{mode === "insights" ? "Drivers" : "Main driver"}</div>
           <div className="text-sm font-semibold text-slate-900">{driverHeadline}</div>
           <p className="text-[11px] text-slate-600 mt-1 leading-snug">{driverSegment}</p>
           {driverSuggestion ? (
@@ -131,7 +138,7 @@ export default function CalloutsSnapshot({
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3 shadow-sm">
-          <div className="text-[11px] uppercase text-slate-600">Next steps</div>
+          <div className="text-[11px] uppercase text-slate-600">{mode === "insights" ? "Next steps" : "Next steps"}</div>
           <ul className="mt-1 list-disc space-y-1 pl-4 text-[11px] text-slate-700 leading-snug">
             {validationList.map((line, idx) => (
               <li key={idx}>{line}</li>

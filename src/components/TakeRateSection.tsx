@@ -60,7 +60,7 @@ export function TakeRateSection({
     >
       <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
         <span>
-          Demand-only view: leakages and optimizer guardrails do not apply here. Use delta view or the table for small differences; use Scorecard for pocket/list KPI impact.
+          Demand-only view: leakages and optimizer guardrails do not apply here. Use delta view or the table for small differences; use Results Overview (Summary) for pocket/list KPI impact.
         </span>
         <InfoTip id="takerate.scope" ariaLabel="About take-rate scope" />
         {summary?.baselineLabel && (

@@ -28,6 +28,7 @@ type ScorecardProps = {
   hasOptimized: boolean;
   onChangeView: (view: "current" | "optimized") => void;
   onPinBaseline: () => void;
+  onViewInsights?: () => void;
   basis: BasisLabels;
   kpis: SnapshotKPIs;
   run?: ScenarioRun | null;
@@ -198,6 +199,7 @@ export default function Scorecard({
   hasOptimized,
   onChangeView,
   onPinBaseline,
+  onViewInsights,
   basis,
   kpis,
   run,
@@ -435,11 +437,7 @@ export default function Scorecard({
     : baselineKpis
     ? "Driver story appears once optimizer runs with a pinned baseline."
     : "Pin a baseline to unlock driver and lift narratives.";
-  const segmentLine =
-    explain?.segmentLine ??
-    (baselineKpis
-      ? "Narrate which segment is winning or losing once deltas are available."
-      : "Apply a preset and pin baseline to populate change stories.");
+  const [showLadderDetails, setShowLadderDetails] = React.useState(false);
   const mixShift =
     shareTiles.length && baselineKpis
       ? (() => {
@@ -468,11 +466,7 @@ export default function Scorecard({
               </span>
             </div>
             <div className="text-sm font-semibold text-slate-900 leading-snug">{headline}</div>
-            <p className="text-[11px] text-slate-600 leading-snug">{segmentLine}</p>
             {mixShift ? <p className="text-[11px] text-slate-600 leading-snug">{mixShift}</p> : null}
-            {explain?.suggestion ? (
-              <p className="text-[11px] text-slate-600 leading-snug">{explain.suggestion}</p>
-            ) : null}
             <div className="mt-1 flex flex-wrap items-center gap-2">
               {summaryPills.length > 0 ? (
                 summaryPills.map((pill) =>
@@ -485,9 +479,15 @@ export default function Scorecard({
                   Baseline auto-saves on preset or Optimize; pin anytime to compare lifts.
                 </div>
               )}
-              <a className="text-sky-600 text-xs hover:underline ml-auto" href="#callouts">
-                Jump to Callouts
-              </a>
+              {onViewInsights ? (
+                <button
+                  type="button"
+                  className="ml-auto text-sky-700 text-xs font-semibold hover:underline print:hidden"
+                  onClick={onViewInsights}
+                >
+                  See insights
+                </button>
+              ) : null}
             </div>
             {priceDeltaPills ? (
               <div className="flex flex-wrap gap-2 text-[11px] text-slate-800">
@@ -534,7 +534,24 @@ export default function Scorecard({
             </div>
             <GuardrailCard guardrails={guardrails} />
             {band ? <BandCard band={band} /> : null}
-            {priceDeltaCluster}
+            {priceDeltaCluster ? (
+              <div className="rounded-lg border border-slate-200 bg-white/80 p-2 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[10px] uppercase tracking-wide text-slate-600">Ladder deltas</div>
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-sky-700 hover:underline print:hidden"
+                    onClick={() => setShowLadderDetails((v) => !v)}
+                    aria-expanded={showLadderDetails}
+                  >
+                    {showLadderDetails ? "Hide" : "Show"}
+                  </button>
+                </div>
+                <div className={`${showLadderDetails ? "block" : "hidden"} mt-2 print:block`}>
+                  {priceDeltaCluster}
+                </div>
+              </div>
+            ) : null}
             <button
               type="button"
               className="whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 print:hidden"
@@ -566,48 +583,13 @@ export default function Scorecard({
         <div className="md:col-span-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
             <span>Choice mix at this ladder</span>
-            <span className="text-slate-500">Pair with Callouts to narrate who is buying and why.</span>
+            <span className="text-slate-500">Pair with Insights to narrate who is buying and why.</span>
           </div>
           <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
             {shareTiles.map((tile) => (
               <ShareTile key={tile.tier} tile={tile} />
             ))}
           </div>
-        </div>
-
-        <div className="md:col-span-2 grid gap-3">
-          <div className="rounded-lg border border-slate-200 bg-white/80 p-3 shadow-sm">
-            <div className="text-[10px] uppercase tracking-wide text-slate-600">Driver snapshot</div>
-            <div className="mt-1 text-sm font-semibold text-slate-900 leading-snug">{headline}</div>
-            <p className="text-[11px] text-slate-600 mt-1 leading-snug">{segmentLine}</p>
-            {explain?.suggestion ? (
-              <p className="text-[11px] text-slate-600 mt-1 leading-snug">{explain.suggestion}</p>
-            ) : null}
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-white/80 p-3 shadow-sm">
-            <div className="text-[10px] uppercase tracking-wide text-slate-600">Baseline & story pins</div>
-            <div className="mt-1 text-sm font-semibold text-slate-900 leading-snug">{basis.baseline}</div>
-            <p className="text-[11px] text-slate-600 mt-1 leading-snug">
-              Active view: {basis.active}. Story uses: {basis.pinned}.
-            </p>
-            <p className="text-[11px] text-slate-600 mt-1 leading-snug">
-              Pin before/after runs to lock deltas; exports lean on the pinned story basis.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-600">
-        <div className="flex flex-wrap gap-2">
-          <span className="font-semibold text-slate-800">New to this panel?</span>
-          <span>
-            Quick demo: pick a preset -&gt; click Optimize -&gt; read the green/red deltas and the driver snapshot above, then
-            jump to Callouts on the right rail.
-          </span>
-          <span>
-            Power user: adjust ranges/floors/basis, rerun Optimize, pin baselines between iterations, then export the story once the mix
-            and guardrails look right.
-          </span>
         </div>
       </div>
     </div>

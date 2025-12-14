@@ -4907,11 +4907,14 @@ export default function App() {
                 </Section>
               <Section
                 id="export-summary"
-                title="Export-ready summary"
+                title="Export package"
                 className="order-2"
               >
                 {baselineKpis ? (
                   <div className="space-y-2">
+                    <div className="text-[11px] text-slate-600">
+                      Formats the Results Overview (Summary + Insights) for sharing. No new analysis is introduced here.
+                    </div>
                     <div className="flex flex-wrap items-center gap-2 text-sm text-slate-800">
                       <div>
                         {(optimizedKpis ?? currentKPIs) && baselineKpis ? (
@@ -4963,7 +4966,7 @@ export default function App() {
               </Section>
               <Section
                 id="export-narrative"
-                title="Narrative (copy-ready)"
+                title="Copy/paste narrative"
                 className="order-3"
               >
                 {baselineKpis ? (
@@ -4990,7 +4993,11 @@ export default function App() {
                         ? `Guardrails binding: ${currentVsOptimizedVM.binds.join(", ")}.`
                         : "Guardrails slack in this run.";
                     return (
-                      <ul className="list-disc pl-4 text-[13px] text-slate-700 space-y-1">
+                      <div className="space-y-2">
+                        <div className="text-[11px] text-slate-600">
+                          A copy-ready rendering of the Results Overview. Edit wording for your audience; keep numbers consistent with the pinned baseline.
+                        </div>
+                        <ul className="list-disc pl-4 text-[13px] text-slate-700 space-y-1">
                         <li>
                           Executive: {optimizedKpis ? "Optimized" : "Current"} vs baseline = {fmtSign(profitDelta)} profit, {fmtSign(revenueDelta)} revenue, {fmtSign(activeDelta, false)} active, ARPU {fmtSign(arpuDelta)} (basis follows Optimize toggle).
                         </li>
@@ -5001,9 +5008,10 @@ export default function App() {
                           Drivers: {driverLine ?? tornadoTopDriver ?? "Run optimizer or refresh tornado to populate top driver"}; {guardrailNote} Check leak assumptions in Waterfall. If bands are wide, test in-market first.
                         </li>
                         <li>
-                          Customer impact: see take-rate deltas and price moves for who pays more/less; branch in Compare Board if you need multiple scenarios. Wide bands? Test in-market before rollout.
+                          Customer impact: see take-rate deltas and ladder deltas in Results Overview (Summary) for who pays more/less; branch in Compare Board if you need multiple scenarios. Wide bands? Test in-market before rollout.
                         </li>
-                      </ul>
+                        </ul>
+                      </div>
                     );
                   })()
                 ) : (
