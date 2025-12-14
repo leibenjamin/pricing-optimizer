@@ -84,22 +84,24 @@ export function buildScenarioCsv(
   opts: CsvOptions = { includeMeta: true }
 ): string {
   const header = template.split(/\r?\n/)[0]?.split(",") ?? [];
-  const setValue = (
-    row: string[],
-    key: string,
-    value: string | number | boolean | null | undefined
-  ) => {
-    const idx = header.findIndex((h) => h.toLowerCase() === key.toLowerCase());
-    if (idx >= 0) {
-      if (value === undefined || value === null) {
-        row[idx] = "";
-      } else if (typeof value === "boolean") {
-        row[idx] = value ? "true" : "false";
-      } else {
-        row[idx] = String(value);
+    const setValue = (
+      row: string[],
+      key: string,
+      value: string | number | boolean | null | undefined
+    ) => {
+      const idx = header.findIndex((h) => h.toLowerCase() === key.toLowerCase());
+      if (idx >= 0) {
+        if (value === undefined || value === null) {
+          row[idx] = "";
+        } else if (typeof value === "boolean") {
+          row[idx] = value ? "true" : "false";
+        } else {
+          const s = String(value);
+          // Quote fields that contain commas, quotes, or newlines to avoid column shifts on parse.
+          row[idx] = /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        }
       }
-    }
-  };
+    };
   const makeRow = (
     seg:
       | {
