@@ -156,7 +156,7 @@ export function OptimizerPanel({
           {optError && <span className="text-red-600 mr-2">Error: {optError}</span>}
           {optResult ? (
             <span>
-              Best ladder ${optResult.prices.good}/${optResult.prices.better}/${optResult.prices.best} -&gt; Profit delta $
+              Best ladder ${optResult.prices.good}/${optResult.prices.better}/${optResult.prices.best} -&gt; Profit $
               {Math.round(optResult.profit)}
             </span>
           ) : (
