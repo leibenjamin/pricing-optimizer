@@ -1,3 +1,5 @@
+// src/lib/segmentNarrative.ts
+
 // Helper to narrate segment behavior away from component files (keeps fast-refresh clean)
 import type { Segment } from "./segments";
 

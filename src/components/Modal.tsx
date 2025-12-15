@@ -1,4 +1,5 @@
 // src/components/Modal.tsx
+
 import { useEffect, useRef } from "react";
 
 type Props = {

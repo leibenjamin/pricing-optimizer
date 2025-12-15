@@ -1,3 +1,5 @@
+// src/components/WaterfallSection.tsx
+
 import { useMemo, Suspense } from "react";
 import type { Dispatch, SetStateAction, ComponentProps, ComponentType, LazyExoticComponent } from "react";
 import { computePocketPrice, type Leakages, type Tier } from "../lib/waterfall";

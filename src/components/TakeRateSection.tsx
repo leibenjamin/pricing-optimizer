@@ -1,3 +1,5 @@
+// src/components/TakeRateSection.tsx
+
 import type { Dispatch, SetStateAction } from "react";
 import InfoTip from "./InfoTip";
 import { Section } from "./Section";

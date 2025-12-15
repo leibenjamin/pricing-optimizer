@@ -1,4 +1,5 @@
 // src/lib/csv.ts
+
 import type { Constraints, SearchRanges } from "./optimize";
 import type { PriceRangeSource, TierRangeMap } from "./priceRange";
 import type { ScenarioUncertainty } from "./domain";

@@ -1,3 +1,5 @@
+// src/components/HeatmapMini.tsx
+
 import { useEffect, useRef } from "react";
 import type { FeasCell } from "../lib/coverage";
 

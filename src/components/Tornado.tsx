@@ -1,4 +1,5 @@
 ﻿// src/components/Tornado.tsx
+
 import { useEffect, useRef, useState, useMemo } from "react";
 import * as echarts from "echarts/core";
 import { BarChart, type BarSeriesOption } from "echarts/charts";

@@ -1,4 +1,5 @@
 // src/components/SharesMini.tsx
+
 export default function SharesMini({
   title,
   labels,

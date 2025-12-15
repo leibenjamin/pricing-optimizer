@@ -1,3 +1,5 @@
+// src/lib/share.ts
+
 import { buildScenarioSnapshot, type SnapshotBuildArgs } from "./snapshots";
 import type { Constraints, SearchRanges } from "./optimize";
 import type { PriceRangeSource, TierRangeMap } from "./priceRange";

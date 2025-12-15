@@ -1,3 +1,5 @@
+// src/components/ResultsOverviewSection.tsx
+
 import type { ScorecardBand, ScorecardDelta } from "../lib/scorecard";
 import type { ScorecardGuardrails, ScorecardViewModel } from "../lib/viewModels";
 import { useState } from "react";

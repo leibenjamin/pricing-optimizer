@@ -1,3 +1,5 @@
+// src/components/Scorecard.tsx
+
 import InfoTip from "./InfoTip";
 import { TIER_COLORS } from "../lib/colors";
 import {

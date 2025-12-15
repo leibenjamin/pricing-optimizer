@@ -1,3 +1,5 @@
+// src/lib/snapshots.ts
+
 import { choiceShares } from "./choice";
 import type { Constraints, SearchRanges } from "./optimize";
 import type { PriceRangeSource, TierRangeMap } from "./priceRange";

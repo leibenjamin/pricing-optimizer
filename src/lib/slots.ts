@@ -1,3 +1,5 @@
+// src/lib/slots.ts
+
 import type { ScenarioSnapshot } from "./snapshots";
 
 export type SlotId = "A" | "B" | "C";

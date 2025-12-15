@@ -1,3 +1,5 @@
+// src/components/ScenarioJournalSection.tsx
+
 import { Section } from "./Section";
 
 type Props = {

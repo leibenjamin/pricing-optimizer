@@ -1,4 +1,5 @@
 // src/components/InfoTip.tsx
+
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { explain } from "../lib/explain";

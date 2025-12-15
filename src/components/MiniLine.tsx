@@ -1,4 +1,5 @@
 // src/components/MiniLine.tsx
+
 import { useEffect, useMemo, useRef } from "react";
 
 type Series = {

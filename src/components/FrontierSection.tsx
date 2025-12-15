@@ -1,3 +1,5 @@
+// src/components/FrontierSection.tsx
+
 import type { ComponentType, ReactNode } from "react";
 import { Suspense } from "react";
 import type { Tier } from "../lib/waterfall";

@@ -1,3 +1,5 @@
+// src/components/ShareExportSection.tsx
+
 import { Section } from "./Section";
 import InfoTip from "./InfoTip";
 

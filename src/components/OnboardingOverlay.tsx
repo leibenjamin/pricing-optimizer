@@ -1,4 +1,5 @@
 // src/components/OnboardingOverlay.tsx
+
 import { useEffect, useMemo } from "react";
 
 type Step = {

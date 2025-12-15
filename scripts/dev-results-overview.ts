@@ -1,3 +1,4 @@
+// scripts/dev-results-overview.ts
 /**
  * Dev-only sanity: compute baseline vs optimized KPIs for each preset using the same
  * `gridSearch` + `kpisFromSnapshot` logic as the app, and print a compact Results Overview

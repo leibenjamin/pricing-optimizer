@@ -1,3 +1,5 @@
+// src/lib/recents.ts
+
 export type RecentItem = { id: string; t: number };
 
 const RECENT_KEY = "po_recent_ids_v1";

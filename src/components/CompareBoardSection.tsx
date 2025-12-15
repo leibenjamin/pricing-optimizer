@@ -1,3 +1,5 @@
+// src/components/CompareBoardSection.tsx
+
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import type { SnapshotKPIs } from "../lib/snapshots";
 import CompareBoard from "./CompareBoard";

@@ -1,3 +1,5 @@
+// src/components/ScorecardToolbar.tsx
+
 export type ScorecardView = "current" | "optimized";
 
 type ScorecardToolbarProps = {

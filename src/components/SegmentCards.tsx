@@ -1,4 +1,5 @@
 // src/components/SegmentCards.tsx
+
 import type { Segment } from "../lib/segments";
 import { describeSegment, segmentWeightPct } from "../lib/segmentNarrative";
 

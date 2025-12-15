@@ -1,4 +1,5 @@
 // src/lib/coverage.ts
+
 import { computePocketPrice, type Leakages } from "./waterfall";
 
 export type Prices = { good: number; better: number; best: number };

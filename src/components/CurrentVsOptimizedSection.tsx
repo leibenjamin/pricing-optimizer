@@ -1,3 +1,5 @@
+// src/components/CurrentVsOptimizedSection.tsx
+
 import type { Prices } from "../lib/segments";
 import type { ScorecardDelta } from "../lib/scorecard";
 import { Section } from "./Section";

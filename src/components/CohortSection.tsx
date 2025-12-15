@@ -1,3 +1,5 @@
+// src/components/CohortSection.tsx
+
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import InfoTip from "./InfoTip";
 import { Section } from "./Section";

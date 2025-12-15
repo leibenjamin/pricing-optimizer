@@ -1,3 +1,5 @@
+// src/components/RecentLinksSection.tsx
+
 import { Section } from "./Section";
 
 type RecentItem = { id: string; t: number };

@@ -1,3 +1,5 @@
+// src/components/InsightsPanel.tsx
+
 import type { ScorecardDelta } from "../lib/scorecard";
 import RiskBadge from "./RiskBadge";
 

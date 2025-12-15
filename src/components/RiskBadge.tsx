@@ -1,3 +1,5 @@
+// src/components/RiskBadge.tsx
+
 import InfoTip from "./InfoTip";
 
 type RiskBadgeProps = {

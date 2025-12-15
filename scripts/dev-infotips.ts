@@ -1,3 +1,4 @@
+// scripts/dev-infotips.ts
 import { EXPLAIN } from "../src/lib/explain";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -87,4 +88,3 @@ function main() {
 }
 
 main();
-

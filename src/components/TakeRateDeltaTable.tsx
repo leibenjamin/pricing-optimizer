@@ -1,3 +1,5 @@
+// src/components/TakeRateDeltaTable.tsx
+
 import { TAKE_RATE_COLORS } from "../lib/colors";
 import type { TakeRateScenario } from "./TakeRateChart";
 

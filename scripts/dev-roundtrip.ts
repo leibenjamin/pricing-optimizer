@@ -1,3 +1,4 @@
+// scripts/dev-roundtrip.ts
 import { devValidatePresetRoundTrips, buildPayloadFromScenario } from "../src/lib/share.ts";
 import { PRESETS } from "../src/lib/presets.ts";
 import type { ScenarioUncertainty } from "../src/lib/domain";

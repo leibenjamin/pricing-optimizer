@@ -1,3 +1,5 @@
+// src/lib/colors.ts
+
 // Shared color tokens for tiers/charts to stay consistent.
 export type TierKey = "none" | "good" | "better" | "best";
 

@@ -1,4 +1,5 @@
 // src/components/SalesImport.tsx
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
 import type { SalesMapping } from "../lib/salesSchema";

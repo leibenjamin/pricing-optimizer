@@ -1,3 +1,5 @@
+// src/components/RobustnessSection.tsx
+
 import { Section } from "./Section";
 import type { ScenarioResult } from "../lib/robustness";
 

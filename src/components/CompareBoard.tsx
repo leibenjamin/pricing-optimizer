@@ -1,4 +1,5 @@
 // src/components/CompareBoard.tsx
+
 import type { SnapshotKPIs } from "../lib/snapshots";
 import SharesMini from "./SharesMini";
 

@@ -1,4 +1,5 @@
 ﻿// src/components/PresetPicker.tsx
+
 import InfoTip from "./InfoTip";
 import type { Preset } from "../lib/presets";
 import type { Prices } from "../lib/segments";

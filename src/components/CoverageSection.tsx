@@ -1,3 +1,5 @@
+// src/components/CoverageSection.tsx
+
 import type { Dispatch, SetStateAction } from "react";
 import { feasibilitySliceGB } from "../lib/coverage";
 import type { Constraints, SearchRanges } from "../lib/optimize";

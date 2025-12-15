@@ -1,3 +1,4 @@
+// scripts/dev-guardrails.ts
 /**
  * Dev-only check: ensure presets pin without triggering guardrail relaxation,
  * while still reporting when strict floors/gaps would fail.

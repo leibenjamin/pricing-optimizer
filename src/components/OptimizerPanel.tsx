@@ -1,3 +1,5 @@
+// src/components/OptimizerPanel.tsx
+
 import type { ReactNode, Dispatch, SetStateAction } from "react";
 import type { Prices } from "../lib/segments";
 import type { Constraints, GridDiagnostics, SearchRanges } from "../lib/optimize";

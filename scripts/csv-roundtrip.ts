@@ -1,3 +1,4 @@
+// scripts/csv-roundtrip.ts
 // Quick CSV round-trip check: export payload to CSV and parse it back to ensure fields survive.
 import { PRESETS } from "../src/lib/presets";
 import { defaultSegments, type Features, type Prices } from "../src/lib/segments";
