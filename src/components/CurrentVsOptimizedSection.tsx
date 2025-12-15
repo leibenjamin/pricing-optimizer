@@ -1,4 +1,6 @@
 // src/components/CurrentVsOptimizedSection.tsx
+// NOTE: The "Current vs Optimized" UI has been merged into `OptimizerPanel` as a
+// "Latest run summary" block; this file is kept for the shared `CurrentVsOptimizedVM` type.
 
 import type { Prices } from "../lib/segments";
 import type { ScorecardDelta } from "../lib/scorecard";

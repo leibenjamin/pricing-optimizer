@@ -5,6 +5,7 @@ import type { Prices } from "../lib/segments";
 import type { Constraints, GridDiagnostics, SearchRanges } from "../lib/optimize";
 import InfoTip from "./InfoTip";
 import { Section } from "./Section";
+import type { CurrentVsOptimizedVM } from "./CurrentVsOptimizedSection";
 
 type OptimizerKind = "grid-worker" | "grid-inline" | "future";
 
@@ -29,9 +30,14 @@ type OptimizerPanelProps = {
   optimizerKind: OptimizerKind;
   setOptimizerKind: Dispatch<SetStateAction<OptimizerKind>>;
   runOptimizer: () => void;
-  applyOptimizedPrices: () => void;
   onQuickOptimize: () => void;
   onResetOptimizer: () => void;
+  latestRun: CurrentVsOptimizedVM | null;
+  canUndoApply: boolean;
+  canPinBaseline: boolean;
+  onApplyLatestRun: (best: Prices) => void;
+  onUndoApply: () => void;
+  onPinBaselineFromRun: () => void;
   prices: Prices;
   costs: Prices;
   headline?: ReactNode;
@@ -53,9 +59,14 @@ export function OptimizerPanel({
   optimizerKind,
   setOptimizerKind,
   runOptimizer,
-  applyOptimizedPrices,
   onQuickOptimize,
   onResetOptimizer,
+  latestRun,
+  canUndoApply,
+  canPinBaseline,
+  onApplyLatestRun,
+  onUndoApply,
+  onPinBaselineFromRun,
   prices,
   costs,
   headline,
@@ -65,9 +76,28 @@ export function OptimizerPanel({
 
   return (
     <Section id="global-optimizer" title="Global Optimizer" actions={actions}>
-      {headline}
-      <div className="text-[11px] text-slate-600 mb-1">
-        We auto-pin the current scenario as a baseline before every run so scorecard deltas stay anchored.
+      <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[11px] text-slate-700">
+            <span className="font-semibold">Fast path:</span> set ranges + guardrails, click{" "}
+            <span className="font-semibold">Run</span>, then review{" "}
+            <button
+              type="button"
+              className="text-sky-700 font-semibold hover:underline"
+              onClick={() =>
+                document
+                  .getElementById("results-overview")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+            >
+              Results Overview
+            </button>{" "}
+            on the right.
+          </div>
+          <div className="text-[10px] uppercase tracking-wide text-slate-500">
+            Baseline auto-pinned before run
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -123,18 +153,22 @@ export function OptimizerPanel({
 
           <div className="ml-auto flex items-center gap-2">
             <button
-              className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50"
+              className="rounded px-3 h-8 text-xs font-semibold border border-sky-600 bg-sky-600 text-white hover:bg-sky-500 disabled:opacity-60 disabled:cursor-not-allowed"
               onClick={runOptimizer}
               disabled={isOptRunning}
             >
               {isOptRunning ? "Running..." : "Run"}
             </button>
             <button
-              className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50 disabled:opacity-50"
-              onClick={applyOptimizedPrices}
-              disabled={!optResult || isOptRunning}
+              type="button"
+              className="border rounded px-3 h-8 text-xs bg-white hover:bg-gray-50"
+              onClick={() =>
+                document
+                  .getElementById("results-overview")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
             >
-              Apply
+              See results
             </button>
           </div>
 
@@ -154,17 +188,21 @@ export function OptimizerPanel({
           })()}
         </div>
 
-        <div className="text-xs text-gray-700">
-          {optError && <span className="text-red-600 mr-2">Error: {optError}</span>}
-          {optResult ? (
-            <span>
-              Best ladder ${optResult.prices.good}/${optResult.prices.better}/${optResult.prices.best} -&gt; Profit $
-              {Math.round(optResult.profit)}
-            </span>
-          ) : (
-            <span className="text-gray-500">No result yet</span>
-          )}
-        </div>
+        <LatestRunSummary
+          vm={latestRun}
+          canUndo={canUndoApply}
+          canPinBaseline={canPinBaseline}
+          onApply={(best) => onApplyLatestRun(best)}
+          onUndo={onUndoApply}
+          onPinBaseline={onPinBaselineFromRun}
+          disabled={isOptRunning}
+        />
+
+        {optError ? (
+          <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+            <span className="font-semibold">Optimizer error:</span> {optError}
+          </div>
+        ) : null}
 
         {optResult && optimizerWhyLines.length > 0 && (
           <div className="mt-2 rounded border border-dashed border-gray-200 bg-slate-50 p-3">
@@ -177,13 +215,22 @@ export function OptimizerPanel({
           </div>
         )}
 
-        <details className="text-[11px] text-gray-600">
-          <summary className="cursor-pointer select-none">How ranges & floors work</summary>
-          <div className="mt-1 print-tight">
-            Optimizer searches the grid defined by ranges and step. Gap constraints keep ladder spacing consistent. Floors can
-            be checked on list or <em>pocket</em> margin. Use Apply to write prices back to the Scenario Panel.
-          </div>
-        </details>
+        {headline ? (
+          <details className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm text-[11px] text-slate-600">
+            <summary className="cursor-pointer select-none font-semibold text-slate-700">
+              How this optimizer works
+            </summary>
+            <div className="mt-2">{headline}</div>
+          </details>
+        ) : (
+          <details className="text-[11px] text-gray-600">
+            <summary className="cursor-pointer select-none">How ranges & floors work</summary>
+            <div className="mt-1 print-tight">
+              Optimizer searches the grid defined by ranges and step. Gap constraints keep ladder spacing consistent. Floors can
+              be checked on list or <em>pocket</em> margin.
+            </div>
+          </details>
+        )}
 
         <details className="rounded border border-gray-200 p-3 bg-gray-50/60">
           <summary className="cursor-pointer select-none text-xs font-medium">Advanced constraints</summary>
@@ -367,5 +414,89 @@ export function OptimizerPanel({
         </details>
       </div>
     </Section>
+  );
+}
+
+function LatestRunSummary(props: {
+  vm: CurrentVsOptimizedVM | null;
+  canUndo: boolean;
+  canPinBaseline: boolean;
+  disabled: boolean;
+  onApply: (best: Prices) => void;
+  onUndo: () => void;
+  onPinBaseline: () => void;
+}) {
+  const { vm, canUndo, canPinBaseline, disabled, onApply, onUndo, onPinBaseline } = props;
+
+  if (!vm) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 px-3 py-2 text-xs text-slate-600">
+        No run yet. Click <span className="font-semibold">Run</span> to generate a ladder recommendation; results populate
+        on the right.
+      </div>
+    );
+  }
+
+  const fmtUSD = (n: number) => `$${Math.round(n).toLocaleString()}`;
+  const fmtP = (p: number) =>
+    `$${(Math.round(p * 100) / 100).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    })}`;
+
+  const isSameLadder =
+    Math.abs(vm.best.good - vm.curPrices.good) < 1e-9 &&
+    Math.abs(vm.best.better - vm.curPrices.better) < 1e-9 &&
+    Math.abs(vm.best.best - vm.curPrices.best) < 1e-9;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm" id="optimizer-latest-run">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Latest run summary</div>
+          <div className="text-sm font-semibold text-slate-900">
+            {isSameLadder
+              ? "No better ladder found (baseline retained)"
+              : `Profit ${vm.deltaProfit >= 0 ? "+" : "-"}${fmtUSD(Math.abs(vm.deltaProfit))} vs pre-run baseline`}
+          </div>
+          <div className="mt-1 text-[11px] text-slate-600">
+            Basis: {vm.basisLabel}. Ladder: {fmtP(vm.best.good)} / {fmtP(vm.best.better)} / {fmtP(vm.best.best)}.
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="rounded border border-emerald-600 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
+            onClick={() => onApply(vm.best)}
+            disabled={disabled}
+          >
+            Apply ladder
+          </button>
+          <button
+            type="button"
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={onUndo}
+            disabled={!canUndo || disabled}
+          >
+            Undo apply
+          </button>
+          <button
+            type="button"
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={onPinBaseline}
+            disabled={!canPinBaseline || disabled}
+            title={canPinBaseline ? "Save this run as the pinned baseline" : "Run the optimizer to pin from run"}
+          >
+            Pin as baseline
+          </button>
+        </div>
+      </div>
+
+      {vm.driftNote ? (
+        <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+          {vm.driftNote}
+        </div>
+      ) : null}
+    </div>
   );
 }

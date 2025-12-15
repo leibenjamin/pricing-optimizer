@@ -72,7 +72,7 @@ import { OptimizerPanel } from "./components/OptimizerPanel";
 import { WaterfallSection } from "./components/WaterfallSection";
 import { RobustnessSection } from "./components/RobustnessSection";
 import { CoverageSection } from "./components/CoverageSection";
-import { CurrentVsOptimizedSection, type CurrentVsOptimizedVM } from "./components/CurrentVsOptimizedSection";
+import type { CurrentVsOptimizedVM } from "./components/CurrentVsOptimizedSection";
 import { ShareExportSection } from "./components/ShareExportSection";
 import { RecentLinksSection } from "./components/RecentLinksSection";
 import { ScenarioJournalSection } from "./components/ScenarioJournalSection";
@@ -280,7 +280,6 @@ const OPTIMIZE_TAB_SECTION_IDS = [
   "global-optimizer",
   "reference-prices",
   "kpi-pocket-coverage",
-  "current-vs-optimized",
   "methods",
 ] as const;
 
@@ -1537,18 +1536,6 @@ export default function App() {
       });
   }
 
-  function applyOptimizedPrices() {
-    if (!optResult) return;
-    pushJ?.(
-      `[${now()}] Applied optimizer ladder $${optResult.prices.good}/$${optResult.prices.better}/$${optResult.prices.best}`
-    );
-    setPrices({
-      good: optResult.prices.good,
-      better: optResult.prices.better,
-      best: optResult.prices.best,
-    });
-  }
-
   const [isOptRunning, setIsOptRunning] = useState(false);
   const [optError, setOptError] = useState<string | null>(null);
   const runIdRef = useRef(0);
@@ -1651,6 +1638,30 @@ export default function App() {
     lastAppliedPricesRef.current = null;
     pushJ?.("Undo: restored ladder to previous prices");
   }, [pushJ, setPrices]);
+
+  const pinBaselineFromOptimizerRun = useCallback(() => {
+    if (!optResult?.kpis) return;
+    const meta = { label: "Pinned from optimizer", savedAt: Date.now() };
+    const ctx = optResult.context;
+    const run = makeScenarioRun({
+      scenarioId: scenarioPresetId ?? "custom",
+      ladder: optResult.prices,
+      costs: ctx.costs,
+      leak: ctx.leak,
+      refPrices: ctx.refPrices,
+      features: ctx.features,
+      segments: ctx.segments,
+      basis: {
+        usePocketProfit: !!ctx.usePocketProfit,
+        usePocketMargins: !!ctx.usePocketMargins,
+      },
+      kpis: optResult.kpis,
+      uncertainty: scenarioUncertainty ?? undefined,
+      meta: { label: meta.label, savedAt: meta.savedAt, source: "baseline" },
+    });
+    setBaselineRun(run);
+    toast("success", "Baseline pinned from optimizer");
+  }, [optResult, scenarioPresetId, scenarioUncertainty, setBaselineRun, toast]);
 
   useEffect(() => {
     return () => {
@@ -5102,14 +5113,37 @@ export default function App() {
                   optimizerKind={optimizerKind}
                   setOptimizerKind={setOptimizerKind}
                   runOptimizer={runOptimizer}
-                  applyOptimizedPrices={applyOptimizedPrices}
                   onQuickOptimize={runQuickOptimizeInline}
                   onResetOptimizer={resetOptimizer}
+                  latestRun={currentVsOptimizedVM}
+                  canUndoApply={!!lastAppliedPricesRef.current}
+                  canPinBaseline={Boolean(
+                    lastOptAt &&
+                      (!baselineMeta || lastOptAt > baselineMeta.savedAt) &&
+                      optResult?.kpis
+                  )}
+                  onApplyLatestRun={applyOptimizedLadder}
+                  onUndoApply={undoAppliedLadder}
+                  onPinBaselineFromRun={pinBaselineFromOptimizerRun}
                   prices={prices}
                   costs={costs}
                   headline={
                     <Explanation slot="chart.optimizer">
-                      Fast start: apply a preset then click Run. Set ranges, gaps, and margin floors, then run the grid optimizer (worker). Use pocket toggles to enforce floors and profit after leakages. Charm endings snap to .99 if applicable. If no feasible ladder is found, widen ranges or ease floors/gaps. Cite binding constraints when explaining results.
+                      <div className="font-semibold text-slate-700 text-[11px]">What to do here</div>
+                      <ul className="mt-1 list-disc pl-4 space-y-1 text-[11px] text-slate-600">
+                        <li>
+                          <span className="font-semibold">Set search ranges</span> for Good/Better/Best and choose a step size.
+                        </li>
+                        <li>
+                          <span className="font-semibold">Set guardrails</span> (gap floors + margin floors). Use pocket toggles if you want floors/profit after leakages.
+                        </li>
+                        <li>
+                          <span className="font-semibold">Run</span>, then use the <span className="font-semibold">Latest run summary</span> to apply/undo and optionally pin that run as your new baseline.
+                        </li>
+                      </ul>
+                      <div className="mt-2 text-[11px] text-slate-600">
+                        If no feasible ladder is found, widen ranges or ease floors/gaps. Use Coverage to stress-test floors before running.
+                      </div>
                     </Explanation>
                   }
                 />
@@ -5125,36 +5159,6 @@ export default function App() {
                   leak={leak}
                   setOptConstraints={setOptConstraints}
                   toast={toast}
-                />
-                <CurrentVsOptimizedSection
-                  vm={currentVsOptimizedVM}
-                  canUndo={!!lastAppliedPricesRef.current}
-                  canPinBaseline={Boolean(lastOptAt && (!baselineMeta || lastOptAt > baselineMeta.savedAt) && optResult?.kpis)}
-                  onApplyOptimized={applyOptimizedLadder}
-                  onUndoApply={undoAppliedLadder}
-                  onPinBaseline={() => {
-                    if (!optResult?.kpis) return;
-                    const meta = { label: "Pinned from optimizer", savedAt: Date.now() };
-                    const ctx = optResult.context;
-                    const run = makeScenarioRun({
-                      scenarioId: scenarioPresetId ?? "custom",
-                      ladder: optResult.prices,
-                      costs: ctx.costs,
-                      leak: ctx.leak,
-                      refPrices: ctx.refPrices,
-                      features: ctx.features,
-                      segments: ctx.segments,
-                      basis: {
-                        usePocketProfit: !!ctx.usePocketProfit,
-                        usePocketMargins: !!ctx.usePocketMargins,
-                      },
-                      kpis: optResult.kpis,
-                      uncertainty: scenarioUncertainty ?? undefined,
-                      meta: { label: meta.label, savedAt: meta.savedAt, source: "baseline" },
-                    });
-                    setBaselineRun(run);
-                    toast("success", "Baseline pinned from optimizer");
-                  }}
                 />
             <Section id="methods" title="Methods">
               <p className="text-sm text-gray-700 print-tight">
