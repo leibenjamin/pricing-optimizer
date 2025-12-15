@@ -51,8 +51,23 @@ const COLORS = TAKE_RATE_COLORS;
 
 const TIER_LABELS: Array<keyof TakeRateData> = ["none", "good", "better", "best"];
 
-function pct(n: number) {
-  return Math.round(n * 1000) / 10;
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (ch) => {
+    switch (ch) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return ch;
+    }
+  });
 }
 
 export default function TakeRateChart(props: {
@@ -103,21 +118,21 @@ export default function TakeRateChart(props: {
     }
 
     // default: stacked mix view
-      return TIER_LABELS.map((tier) => ({
-        name: tier[0].toUpperCase() + tier.slice(1),
-        type: "bar" as const,
-        stack: "mix",
-        itemStyle: {
-          color: COLORS[tier],
-          borderColor: "rgba(15,23,42,0.18)",
-          borderWidth: 0.8,
-          opacity: 0.95,
-        },
-        emphasis: { focus: "series" as const },
-        data: scenarios.map((s) => pct(s.shares[tier])),
-        label: {
-          show: false,
-        },
+    return TIER_LABELS.map((tier) => ({
+      name: tier[0].toUpperCase() + tier.slice(1),
+      type: "bar" as const,
+      stack: "mix",
+      itemStyle: {
+        color: COLORS[tier],
+        borderColor: "rgba(15,23,42,0.18)",
+        borderWidth: 0.8,
+        opacity: 0.95,
+      },
+      emphasis: { focus: "series" as const },
+      data: scenarios.map((s) => s.shares[tier] * 100),
+      label: {
+        show: false,
+      },
     }));
   }, [baseline, mode, scenarios]);
 
@@ -167,8 +182,6 @@ export default function TakeRateChart(props: {
         ...(mode === "mix" ? { min: 0, max: 100 } : {}),
         ...(mode === "delta"
           ? {
-              name: "Delta vs baseline (pp)",
-              nameGap: 12,
               axisLine: { onZero: true },
             }
           : {}),
@@ -176,8 +189,11 @@ export default function TakeRateChart(props: {
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
+        confine: true,
+        extraCssText: "max-width:260px; white-space:normal;",
         formatter: (params: TopLevelFormatterParams) => formatTooltip(params, {
           baselineLabel: baseline?.label ?? "baseline",
+          baseline: baseline!,
           scenarios,
           mode,
         }),
@@ -189,7 +205,7 @@ export default function TakeRateChart(props: {
 
     chartRef.current.setOption(option, true);
     chartRef.current.resize();
-  }, [baseline?.label, mode, scenarios, seriesData, vw]);
+  }, [baseline, baseline?.label, mode, scenarios, seriesData, vw]);
 
   // Unified export listener: PNG via ECharts, CSV via our data
   useEffect(() => {
@@ -291,6 +307,7 @@ function formatTooltip(
   params: TopLevelFormatterParams,
   ctx: {
     baselineLabel: string;
+    baseline: TakeRateScenario;
     scenarios: TakeRateScenario[];
     mode: Mode;
   }
@@ -302,27 +319,35 @@ function formatTooltip(
   if (!scenario) return "";
 
   if (ctx.mode === "delta") {
-    const lines = [`<b>${scenario.label}</b> (vs ${ctx.baselineLabel})`];
+    const lines = [`<b>${escapeHtml(scenario.label)}</b> (delta vs baseline)`];
+    const base = ctx.baseline;
+    const activeDelta = scenario.active - base.active;
+    lines.push(
+      `Active: ${scenario.active.toLocaleString()} (base ${base.active.toLocaleString()}, ${activeDelta >= 0 ? "+" : ""}${activeDelta.toLocaleString()})`
+    );
     params.forEach((row) => {
       const val = typeof row.value === "number" ? row.value : Number(row.value);
-      const v = Number.isFinite(val) ? val : 0;
-      lines.push(`${row.marker ?? ""} ${row.seriesName}: ${v >= 0 ? "+" : ""}${v.toFixed(1)} pp`);
+      const deltaPp = Number.isFinite(val) ? val : 0;
+      const seriesName = typeof row.seriesName === "string" ? row.seriesName : String(row.seriesName);
+      const tierKey = seriesName.toLowerCase() as keyof TakeRateData;
+      const baselinePct = (base.shares?.[tierKey] ?? 0) * 100;
+      const scenarioPct = (scenario.shares?.[tierKey] ?? 0) * 100;
+      lines.push(
+        `${row.marker ?? ""} ${escapeHtml(seriesName)}: ${scenarioPct.toFixed(1)}% (base ${baselinePct.toFixed(1)}%, ${deltaPp >= 0 ? "+" : ""}${deltaPp.toFixed(1)} pp)`
+      );
     });
     return lines.join("<br/>");
   }
 
-  const lines = [`<b>${scenario.label}</b>`, `Active: ${scenario.active.toLocaleString()}`];
+  const lines = [`<b>${escapeHtml(scenario.label)}</b>`, `Active: ${scenario.active.toLocaleString()}`];
   params.forEach((row) => {
     const val = typeof row.value === "number" ? row.value : Number(row.value);
     const v = Number.isFinite(val) ? val : 0;
-    lines.push(`${row.marker ?? ""} ${row.seriesName}: ${v.toFixed(1)}%`);
+    const seriesName = typeof row.seriesName === "string" ? row.seriesName : String(row.seriesName);
+    lines.push(`${row.marker ?? ""} ${escapeHtml(seriesName)}: ${v.toFixed(1)}%`);
   });
   return lines.join("<br/>");
 }
-
-
-
-
 
 
 

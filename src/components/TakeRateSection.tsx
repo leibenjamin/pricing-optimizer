@@ -139,7 +139,12 @@ export function TakeRateSection({
             <div className="text-sm font-semibold text-slate-700">Take-rate mix</div>
             <InfoTip className="ml-1" align="right" id="chart.takeRate" ariaLabel="How should I read take-rate bars?" />
           </div>
-          <TakeRateChart chartId="takerate-main" scenarios={scenarios} mode={takeRateMode} />
+          <TakeRateChart
+            chartId="takerate-main"
+            scenarios={scenarios}
+            mode={takeRateMode}
+            baselineKey={takeRateBaselineKey}
+          />
         </div>
         <div className="text-xs text-slate-700 space-y-2">
           <div className="text-sm font-semibold text-slate-700">Quick read</div>
