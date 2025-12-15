@@ -41,7 +41,7 @@ export const EXPLAIN: Record<string, string> = {
 
   "chart.takeRate": `
     <b>Take-rate bars</b> show segment-mixed shares {None, Good, Better, Best} for baseline/current/optimized.
-    Toggle the delta view to see percentage-point shifts vs. the pinned baseline; basis toggle does not apply (demand-only). Use to show mix shifts and active movement alongside optimizer runs.`,
+    Toggle the delta view to see percentage-point shifts (%pt.) vs. the pinned baseline; basis toggle does not apply (demand-only). Use to show mix shifts and active movement alongside optimizer runs.`,
 
   "chart.waterfall": `
     <b>Pocket price waterfall</b> starts from list price and subtracts leakages

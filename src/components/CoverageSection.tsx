@@ -90,7 +90,7 @@ export function CoverageSection({
       <div className="flex items-center gap-2 text-xs mb-2">
         <span className="text-gray-600">Floor sensitivity:</span>
         <input type="range" min={-10} max={10} value={kpiFloorAdj} onChange={(e) => setKpiFloorAdj(Number(e.target.value))} />
-        <span className="w-10 text-right">{kpiFloorAdj} pp</span>
+        <span className="w-10 text-right">{kpiFloorAdj} %pt.</span>
       </div>
 
       <div className={`rounded border px-4 py-3 inline-flex items-center gap-4 ${tone}`}>
@@ -98,7 +98,7 @@ export function CoverageSection({
           <div className="text-2xl font-semibold leading-tight">{coverageSnapshot.pct1}%</div>
           <div className="text-xs">feasible ladders (pocket floors)</div>
           <div className="text-[11px] text-gray-600 mt-1">
-            baseline {coverageSnapshot.pct0}% -&gt; {coverageSnapshot.pct1}% - {coverageSnapshot.delta >= 0 ? `+${coverageSnapshot.delta}pp` : `${coverageSnapshot.delta}pp`} -{" "}
+            baseline {coverageSnapshot.pct0}% -&gt; {coverageSnapshot.pct1}% - {coverageSnapshot.delta >= 0 ? `+${coverageSnapshot.delta}%pt.` : `${coverageSnapshot.delta}%pt.`} -{" "}
             {coverageSnapshot.tested.toLocaleString()} combos - step ${coverageSnapshot.step}
           </div>
         </div>
@@ -121,7 +121,7 @@ export function CoverageSection({
       <div className="text-[11px] text-gray-700 mt-2 space-y-1">
         <div>
           <span className="font-semibold text-gray-800">Floors tested:</span> Good {Math.round(floors1.good * 100)}% | Better {Math.round(floors1.better * 100)}% | Best{" "}
-          {Math.round(floors1.best * 100)}% ({kpiFloorAdj} pp sensitivity applied).
+          {Math.round(floors1.best * 100)}% ({kpiFloorAdj} %pt. sensitivity applied).
         </div>
         <div>
           <span className="font-semibold text-gray-800">Grid and gaps:</span> Good -&gt; Better gap {optConstraints.gapGB}, Better -&gt; Best gap {optConstraints.gapBB}; step ${optRanges.step} across{" "}

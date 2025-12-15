@@ -49,10 +49,10 @@ function sensitivitySummary(p: Preset) {
     const metric = p.tornado.metric === "revenue" ? "Revenue" : "Profit";
     const units = p.tornado.valueMode === "percent" ? "% view" : "$ view";
     const span = p.tornado.rangeMode === "data" ? "data-driven span" : "+/-" + (p.tornado.priceBump ?? 10) + "%";
-    bits.push(`${metric} tornado (${units}, ${p.tornado.usePocket ? "Pocket" : "List"}), ${span}, leak bump ${p.tornado.pctBump ?? 0}pp`);
+    bits.push(`${metric} tornado (${units}, ${p.tornado.usePocket ? "Pocket" : "List"}), ${span}, leak bump ${p.tornado.pctBump ?? 0}%pt.`);
   }
   if (typeof p.retentionPct === "number") bits.push(`Retention ${p.retentionPct}%`);
-  if (typeof p.kpiFloorAdj === "number" && p.kpiFloorAdj !== 0) bits.push(`Floor sensitivity ${p.kpiFloorAdj}pp`);
+  if (typeof p.kpiFloorAdj === "number" && p.kpiFloorAdj !== 0) bits.push(`Floor sensitivity ${p.kpiFloorAdj}%pt.`);
   return bits.length ? bits.join(" | ") : null;
 }
 

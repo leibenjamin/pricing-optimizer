@@ -43,7 +43,7 @@ export function TakeRateDeltaTable({
   const cell = (val: number | undefined, ref: number) => {
     if (val == null || Number.isNaN(val)) return "";
     const delta = val - ref;
-    const deltaTxt = `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} pp`;
+    const deltaTxt = `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} %pt.`;
     return `${val.toFixed(1)}% (${deltaTxt})`;
   };
 

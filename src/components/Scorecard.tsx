@@ -144,7 +144,7 @@ function TierComparisonCard({
         </div>
         <div className={`text-[11px] ${shareTone} whitespace-nowrap`}>
           Mix {data.sharePct.toFixed(1)}%
-          {data.shareDeltaPP !== null ? ` (${data.shareDeltaPP >= 0 ? "+" : ""}${data.shareDeltaPP.toFixed(1)}pp)` : ""}
+          {data.shareDeltaPP !== null ? ` (${data.shareDeltaPP >= 0 ? "+" : ""}${data.shareDeltaPP.toFixed(1)}%pt.)` : ""}
         </div>
       </div>
 
@@ -249,7 +249,7 @@ function BandCard({ band }: { band: ScorecardBand }) {
       <div className="text-[10px] uppercase tracking-wide text-slate-600">Uncertainty band</div>
       <div className="text-[11px] text-slate-600 mt-1">
         Sensitivity +/-{Math.round((band.priceDelta ?? 0) * 1000) / 10}% | Leak +/-
-        {Math.round((band.leakDelta ?? 0) * 1000) / 10}pp
+        {Math.round((band.leakDelta ?? 0) * 1000) / 10}%pt.
       </div>
       <div className="text-[11px] text-slate-700 mt-1 flex flex-wrap gap-3">
         <span>
@@ -354,7 +354,7 @@ export default function Scorecard({
   const metrics = [
     {
       key: "revenue",
-      label: "Revenue (N=1000)",
+      label: "Revenue",
       infoId: "kpi.revenue",
       aria: "Why is Revenue computed this way?",
       value: fmtUSD(activeKpis.revenue),
@@ -368,7 +368,7 @@ export default function Scorecard({
     },
     {
       key: "profit",
-      label: "Profit (N=1000)",
+      label: "Profit",
       infoId: "kpi.profit",
       aria: "How is Profit calculated here?",
       value: fmtUSD(activeKpis.profit),
@@ -418,7 +418,7 @@ export default function Scorecard({
       baselineLabel: baselineMarginPct !== null ? `Baseline ${fmtPct(baselineMarginPct)}` : baselineFallback,
       delta: marginDeltaPP,
       deltaPct: null,
-      formatter: (v: number) => `${v.toFixed(1)} pp`,
+      formatter: (v: number) => `${v.toFixed(1)} %pt.`,
     },
   ];
   const headline = explain?.mainDriver
@@ -435,7 +435,7 @@ export default function Scorecard({
           if (!withDelta.length) return null;
           withDelta.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
           const top = withDelta[0];
-          return `Mix shift: ${top.tier} ${top.delta >= 0 ? "+" : ""}${top.delta.toFixed(1)}pp vs baseline.`;
+          return `Mix shift: ${top.tier} ${top.delta >= 0 ? "+" : ""}${top.delta.toFixed(1)}%pt. vs baseline.`;
         })()
       : null;
 
@@ -484,6 +484,7 @@ export default function Scorecard({
 
         <div className="mt-2 text-sm font-semibold text-slate-900 leading-snug">{headline}</div>
         {mixShift ? <p className="mt-1 text-[11px] text-slate-600 leading-snug">{mixShift}</p> : null}
+        <div className="mt-1 text-[11px] text-slate-600 leading-snug">Revenues and Profits calculated with N = 1000 customers as total customer base.</div>
 
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           <RiskBadge note={riskNote} infoId="risk.badge" />
@@ -515,7 +516,7 @@ export default function Scorecard({
           <span className="text-slate-500">{activeLabel} vs baseline</span>
         </div>
         <div className="mt-1 text-[10px] text-slate-500">
-          Mix = % of total customers in each tier (pp vs baseline). Customers = per-tier counts on the same N used in KPI cards.
+          Mix = % of total customers in each tier (%pt. vs baseline). Customers = per-tier counts on the same N used in KPI cards.
         </div>
         <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
           {tierComparisons.map((t) => (

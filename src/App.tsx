@@ -1308,7 +1308,7 @@ export default function App() {
     minTakeRate: 0.02,
   });
 
-  // Demand scale for demo math
+  // Demand scale for demo math, N is number of customers in total customer base for choice model
   const N = 1000;
 
   type OptRunContext = {
@@ -1554,7 +1554,7 @@ export default function App() {
   const runIdRef = useRef(0);
   const cancelRef = useRef<null | (() => void)>(null);
 
-  const [kpiFloorAdj, setKpiFloorAdj] = useState(KPI_FLOOR_ADJ_DEFAULT); // -10..+10 (pp)
+  const [kpiFloorAdj, setKpiFloorAdj] = useState(KPI_FLOOR_ADJ_DEFAULT); // -10..+10 (%pt.)
   const [coverageUsePocket, setCoverageUsePocket] = useState(true);
   const coverageSnapshot = useMemo(() => {
     const floors0 = optConstraints.marginFloor;
@@ -2191,7 +2191,8 @@ export default function App() {
       best: (target.shares.best - base.shares.best) * 100,
     };
     const activeDelta = target.active - base.active;
-    const fmt = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v * 10) / 10} pp`;
+    const fmt = (v: number) =>
+      `${v >= 0 ? "+" : ""}${Math.round(v * 10) / 10} %pt.`;
     const fmtActive =
       activeDelta === 0 ? "+/-0" : `${activeDelta > 0 ? "+" : ""}${activeDelta.toLocaleString()}`;
 
@@ -2521,7 +2522,7 @@ export default function App() {
   const [tornadoView, setTornadoView] = useState<"current" | "optimized">("current");
   const [tornadoPriceBump, setTornadoPriceBump] = useState(TORNADO_DEFAULTS.priceBump); // percent span for symmetric mode
   const [tornadoRangeMode, setTornadoRangeMode] = useState<"symmetric" | "data">(TORNADO_DEFAULTS.rangeMode);
-  const [tornadoPctBump, setTornadoPctBump] = useState(TORNADO_DEFAULTS.pctBump); // pp
+  const [tornadoPctBump, setTornadoPctBump] = useState(TORNADO_DEFAULTS.pctBump); // %pt.
   const [tornadoMetric, setTornadoMetric] = useState<TornadoMetric>(TORNADO_DEFAULTS.metric);
   const [tornadoValueMode, setTornadoValueMode] = useState<TornadoValueMode>(TORNADO_DEFAULTS.valueMode);
   const activePresetDiffs = useMemo(() => {
@@ -4612,7 +4613,7 @@ export default function App() {
                             />
                           </label>
                           <label className="flex items-center gap-2">
-                            Leak delta (+/- pp)
+                            Leak delta (+/- %pt.)
                             <input
                               type="number"
                               className="border rounded px-2 py-1 w-20"
@@ -5393,7 +5394,7 @@ export default function App() {
                     setTornadoPctBump(Number(e.target.value) || 0)
                   }
                 />
-                <span>pp</span>
+                  <span>%pt.</span>
               </label>
 
               <div className="flex items-center gap-1">

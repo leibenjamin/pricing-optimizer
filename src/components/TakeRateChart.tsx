@@ -177,7 +177,7 @@ export default function TakeRateChart(props: {
       },
       yAxis: {
         type: "value",
-        axisLabel: { formatter: mode === "delta" ? "{value} pp" : "{value}%", fontSize: axisFont },
+        axisLabel: { formatter: mode === "delta" ? "{value} %pt." : "{value}%", fontSize: axisFont },
         splitLine: { show: true },
         ...(mode === "mix" ? { min: 0, max: 100 } : {}),
         ...(mode === "delta"
@@ -288,7 +288,7 @@ export default function TakeRateChart(props: {
   return (
     <div className={`w-full ${className ?? ""}`}>
       <div className="text-xs text-gray-600 mb-1">
-        {mode === "delta" ? "Delta vs baseline (pp)" : "Take-rate by tier"}
+        {mode === "delta" ? "Delta vs baseline (%pt.)" : "Take-rate by tier"}
       </div>
 
       {/* chart root */}
@@ -333,7 +333,7 @@ function formatTooltip(
       const baselinePct = (base.shares?.[tierKey] ?? 0) * 100;
       const scenarioPct = (scenario.shares?.[tierKey] ?? 0) * 100;
       lines.push(
-        `${row.marker ?? ""} ${escapeHtml(seriesName)}: ${scenarioPct.toFixed(1)}% (base ${baselinePct.toFixed(1)}%, ${deltaPp >= 0 ? "+" : ""}${deltaPp.toFixed(1)} pp)`
+        `${row.marker ?? ""} ${escapeHtml(seriesName)}: ${scenarioPct.toFixed(1)}% (base ${baselinePct.toFixed(1)}%, ${deltaPp >= 0 ? "+" : ""}${deltaPp.toFixed(1)} %pt.)`
       );
     });
     return lines.join("<br/>");
@@ -348,7 +348,6 @@ function formatTooltip(
   });
   return lines.join("<br/>");
 }
-
 
 
 

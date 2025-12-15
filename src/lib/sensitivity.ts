@@ -62,8 +62,8 @@ export type TornadoOpts = {
   priceBump?: number;   // delta$ on ladder
   priceBumps?: Partial<Record<Tier, number>>;
   costBump?: number;    // delta$ on unit cost
-  pctSmall?: number;    // deltapp for FX/refunds (0.02 = 2pp) — will be floored below
-  payPct?: number;      // deltapp for processor %
+  pctSmall?: number;    // delta %pt. for FX/refunds (0.02 = 2%pt.) — will be floored below
+  payPct?: number;      // delta %pt. for processor %
   payFixed?: number;    // delta$ for processor fixed
   refBump?: number;     // delta$ shift in ref price
   segTilt?: number;     // delta share tilt between first two segments
@@ -114,7 +114,7 @@ function tornadoMetric(kind: TornadoMetric, s0: Scenario, o: TornadoOpts = {}): 
     refBump   = 2,
     segTilt   = 0.10,
   } = o;
-  const pctSmallFloor = Math.max(0.0025, pctSmall); // floor to 0.25pp to ensure visibility
+  const pctSmallFloor = Math.max(0.0025, pctSmall); // floor to 0.25%pt. to ensure visibility
   const payPctAdj = Math.max(0.001, payPct);
   const payFixedAdj = Math.max(0.01, payFixed);
 
@@ -211,7 +211,6 @@ export function tornadoProfit(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
 export function tornadoRevenue(s0: Scenario, o: TornadoOpts = {}): TornadoRow[] {
   return tornadoMetric("revenue", s0, o);
 }
-
 
 
 
