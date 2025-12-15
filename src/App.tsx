@@ -1,6 +1,5 @@
 ﻿// src/App.tsx
 
-import React from "react";
 import { Suspense, lazy, type ReactNode, type ChangeEvent } from "react";
 // replace direct imports:
 const FrontierChartReal = lazy(() => import("./components/FrontierChart"));
@@ -5210,7 +5209,12 @@ export default function App() {
                 basisLabel: optConstraints.usePocketProfit ? "Pocket profit (after leakages)" : "List profit",
                 ladderLabel: (() => {
                   if (!optResult) return "";
-                  const ladderStr = `${optResult.prices.good}/${optResult.prices.better}/${optResult.prices.best}`;
+                  const fmt = (n: number) =>
+                    `$${(Math.round(n * 100) / 100).toLocaleString(undefined, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 2,
+                    })}`;
+                  const ladderStr = `${fmt(optResult.prices.good)}/${fmt(optResult.prices.better)}/${fmt(optResult.prices.best)}`;
                   if (baselineRun?.ladder) {
                     const deltas = (["good", "better", "best"] as const)
                       .map((tier) => {
@@ -5218,7 +5222,8 @@ export default function App() {
                         const cur = optResult.prices[tier];
                         const delta = cur - base;
                         const sign = delta >= 0 ? "+" : "-";
-                        return `${tier[0].toUpperCase()}: ${sign}$${Math.abs(delta).toFixed(2)}`;
+                        const label = tier === "good" ? "Good" : tier === "better" ? "Better" : "Best";
+                        return `${label}: ${sign}${fmt(Math.abs(delta))}`;
                       })
                       .join(" | ");
                     return `Ladder ${ladderStr} (vs baseline: ${deltas})`;

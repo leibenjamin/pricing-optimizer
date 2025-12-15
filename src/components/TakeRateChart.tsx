@@ -162,8 +162,9 @@ export default function TakeRateChart(props: {
       },
       yAxis: {
         type: "value",
-        axisLabel: { formatter: "{value}%", fontSize: axisFont },
+        axisLabel: { formatter: mode === "delta" ? "{value} pp" : "{value}%", fontSize: axisFont },
         splitLine: { show: true },
+        ...(mode === "mix" ? { min: 0, max: 100 } : {}),
         ...(mode === "delta"
           ? {
               name: "Delta vs baseline (pp)",
@@ -318,8 +319,6 @@ function formatTooltip(
   });
   return lines.join("<br/>");
 }
-
-
 
 
 

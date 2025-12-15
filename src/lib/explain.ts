@@ -138,6 +138,10 @@ export const EXPLAIN: Record<string, string> = {
     <b>Frontier basis</b> mirrors the basis toggle: pocket (after leakages) vs list. Infeasible points fail gaps/floors for the chosen basis. Markers use Baseline/Current/Optimized ladder.`,
   "takerate.scope": `
     <b>Take-rate bars</b> show demand-only shares (None/Good/Better/Best). Leakages/constraints do not apply here. Use delta view vs pinned baseline for mix shifts; basis toggles do not affect this chart.`,
+  "takeRate.segmentBreakdown": `
+    <b>Segment breakdown</b> expands take-rate into one bar per segment (for the selected scenario).
+    Each bar is that segment’s own {None/Good/Better/Best} mix (not weighted by other segments).<br>
+    <i>Tip:</i> use this to see which segments shift tiers under a new ladder before you interpret headline KPIs.`,
   "cohort.basis": `
     <b>Cohort rehearsal</b> uses pocket margin for each month of the cohort (list ignores leakages). Adjust retention/horizon to stress churn vs contribution. Baseline/Current/Optimized overlays reflect the active ladders.`,
 
@@ -153,6 +157,19 @@ export const EXPLAIN: Record<string, string> = {
     FX, refunds). They do <i>not</i> modify prices, costs, or reference
     prices. Use these to test how platform fees or discounts shift pocket
     price and margin floors.`,
+
+  // --- Share & export ---
+  "save.share": `
+    <b>Share & export</b> lets you package the current scenario state for sharing.<br>
+    <b>JSON</b> / <b>short links</b> are full-fidelity (scenario + optimizer settings) and round-trip cleanly.
+    <b>CSV</b> / <b>long URLs</b> are intentionally lightweight for quick sharing and spreadsheets.<br>
+    <i>Privacy:</i> links store scenario inputs—avoid sharing sensitive real prices.`,
+
+  // --- Segments ---
+  "segments.mix": `
+    <b>Customer segments</b> define who’s buying and how price-sensitive they are.
+    Weights should roughly sum to 100% (normalize if needed). Segment betas shape the take-rate mix, tier shifts, and downstream KPIs.<br>
+    <i>Tip:</i> if results look odd, start by checking weights and price sensitivity (beta_price).`,
 
 };
 

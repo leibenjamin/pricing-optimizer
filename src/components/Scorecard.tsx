@@ -90,7 +90,7 @@ function DeltaBadge({
   if (delta === null) return null;
   const sign = delta >= 0 ? "+" : "-";
   return (
-    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tone}`}>
+    <span className={`max-w-full rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tone}`}>
       {sign}
       {formatAbs(Math.abs(delta))}
       {deltaPctLabel ? ` (${deltaPctLabel})` : ""}
@@ -134,42 +134,42 @@ function TierComparisonCard({
     <div className="rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="text-sm font-semibold text-slate-900">{TIER_LABEL[data.tier]}</div>
-        <div className={`text-[11px] ${shareTone}`}>
-          {data.sharePct.toFixed(1)}%
+        <div className={`text-[11px] ${shareTone} whitespace-nowrap`}>
+          Mix {data.sharePct.toFixed(1)}%
           {data.shareDeltaPP !== null ? ` (${data.shareDeltaPP >= 0 ? "+" : ""}${data.shareDeltaPP.toFixed(1)}pp)` : ""}
         </div>
       </div>
 
       <div className="mt-2 space-y-2 text-[11px] text-slate-700">
-        <div className="grid grid-cols-[76px,1fr] items-center gap-2">
+        <div className="grid grid-cols-[76px,1fr] items-start gap-2">
           <div className="text-slate-600">Price</div>
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0 truncate">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-semibold text-slate-900">{activePriceText}</span>
-              <span className="ml-2 text-slate-500">base {baselinePriceText}</span>
+              <DeltaBadge
+                delta={data.priceDelta}
+                deltaPctLabel={pctLabel({ base: data.baselinePrice, delta: data.priceDelta, pct: data.priceDeltaPct })}
+                formatAbs={(n) => `$${n.toFixed(2)}`}
+                tone={priceToneClasses(data.priceDelta)}
+              />
             </div>
-            <DeltaBadge
-              delta={data.priceDelta}
-              deltaPctLabel={pctLabel({ base: data.baselinePrice, delta: data.priceDelta, pct: data.priceDeltaPct })}
-              formatAbs={(n) => `$${n.toFixed(2)}`}
-              tone={priceToneClasses(data.priceDelta)}
-            />
+            <div className="mt-0.5 text-[10px] text-slate-500">Baseline {baselinePriceText}</div>
           </div>
         </div>
 
-        <div className="grid grid-cols-[76px,1fr] items-center gap-2">
+        <div className="grid grid-cols-[76px,1fr] items-start gap-2">
           <div className="text-slate-600">Customers</div>
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0 truncate">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-semibold text-slate-900">{activeCustomersText}</span>
-              <span className="ml-2 text-slate-500">base {baselineCustomersText}</span>
+              <DeltaBadge
+                delta={data.customerDelta}
+                deltaPctLabel={pctLabel({ base: data.baselineCustomers, delta: data.customerDelta, pct: data.customerDeltaPct })}
+                formatAbs={(n) => fmtCount(n)}
+                tone={toneClasses(data.customerDelta)}
+              />
             </div>
-            <DeltaBadge
-              delta={data.customerDelta}
-              deltaPctLabel={pctLabel({ base: data.baselineCustomers, delta: data.customerDelta, pct: data.customerDeltaPct })}
-              formatAbs={(n) => fmtCount(n)}
-              tone={toneClasses(data.customerDelta)}
-            />
+            <div className="mt-0.5 text-[10px] text-slate-500">Baseline {baselineCustomersText}</div>
           </div>
         </div>
       </div>
@@ -200,19 +200,21 @@ function MetricCard({
   const showDelta = delta !== null;
   return (
     <div className="rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm flex flex-col gap-1">
-      <div className="flex items-center justify-between text-[11px] text-slate-600">
-        <span className="flex items-center gap-1">
-          {label}
+      <div className="flex items-center justify-between text-[11px] text-slate-600 min-w-0">
+        <span className="flex items-center gap-1 min-w-0">
+          <span className="truncate">{label}</span>
           {infoId ? <InfoTip className="ml-1" align="right" id={infoId} ariaLabel={aria ?? label} /> : null}
         </span>
-        {showDelta ? (
-          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toneClasses(delta)}`}>
+      </div>
+      {showDelta ? (
+        <div>
+          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toneClasses(delta)}`}>
             {sign}
             {formatter(Math.abs(delta ?? 0))}
             {deltaPct !== null ? ` (${deltaPct >= 0 ? "+" : "-"}${Math.abs(deltaPct).toFixed(1)}%)` : ""}
           </span>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       <div className="text-lg font-semibold text-slate-900 leading-snug">{value}</div>
       <div className="text-[10px] text-slate-500 leading-tight">{baselineLabel}</div>
     </div>
@@ -503,6 +505,9 @@ export default function Scorecard({
         <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
           <span className="font-semibold text-slate-800">Tier ladder and mix vs baseline</span>
           <span className="text-slate-500">{activeLabel} vs baseline</span>
+        </div>
+        <div className="mt-1 text-[10px] text-slate-500">
+          Mix = % of total customers in each tier (pp vs baseline). Customers = per-tier counts on the same N used in KPI cards.
         </div>
         <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
           {tierComparisons.map((t) => (
