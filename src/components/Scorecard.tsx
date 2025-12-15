@@ -1,4 +1,5 @@
 import InfoTip from "./InfoTip";
+import { TIER_COLORS } from "../lib/colors";
 import {
   shareTilesFromKPIs,
   type ScorecardBand,
@@ -133,7 +134,14 @@ function TierComparisonCard({
   return (
     <div className="rounded-xl border border-slate-200 bg-white/80 p-2 shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <div className="text-sm font-semibold text-slate-900">{TIER_LABEL[data.tier]}</div>
+        <div className="flex items-center gap-2">
+          <span
+            className="mt-0.5 inline-block h-2.5 w-2.5 rounded-full"
+            style={{ backgroundColor: TIER_COLORS[data.tier] }}
+            aria-hidden="true"
+          />
+          <div className="text-sm font-semibold text-slate-900">{TIER_LABEL[data.tier]}</div>
+        </div>
         <div className={`text-[11px] ${shareTone} whitespace-nowrap`}>
           Mix {data.sharePct.toFixed(1)}%
           {data.shareDeltaPP !== null ? ` (${data.shareDeltaPP >= 0 ? "+" : ""}${data.shareDeltaPP.toFixed(1)}pp)` : ""}

@@ -251,10 +251,10 @@ const ONBOARDING_STEPS = [
   },
   {
     id: "compare",
-    title: "Compare ladders & export",
-    body: "Pin scenarios on the compare board, generate short links, and use Print for a PDF-ready narrative.",
-    targetId: "compare-board",
-    helper: "Charts and KPIs are print friendly, so exports look polished.",
+    title: "Share & export",
+    body: "Use Share & Export to create links, export JSON/CSV, and print a PDF-ready narrative.",
+    targetId: "share-links",
+    helper: "Short links/JSON keep full fidelity; CSV/long URLs are intentionally lightweight.",
   },
 ] as const;
 
@@ -4050,7 +4050,7 @@ export default function App() {
 
 
   return (
-    <div className="min-h-screen bg-white text-gray-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -4063,8 +4063,7 @@ export default function App() {
                 </span>
               </div>
               <p className="mt-1 text-sm text-slate-600">
-                Good/Better/Best ladder - pocket price waterfall - profit frontier -
-                tornado sensitivity - cohorts
+                A pricing-optimization playground: pick a scenario, run the optimizer, and audit lift, mix, and risk.
               </p>
               <div className="no-print mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
                 <button
@@ -4161,7 +4160,7 @@ export default function App() {
       <main className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-12 gap-4 min-h-screen print-grid-1 print:gap-2">
         {/* Left half: tabbed workspace */}
         <div className="col-span-12 lg:col-span-6 min-w-0">
-          <div className="no-print mb-4 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3 shadow-sm">
+          <div className="no-print mb-4 rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
             <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
               Quick path
             </div>
@@ -4173,7 +4172,7 @@ export default function App() {
                 2) Optimize (baseline saved before run)
               </span>
               <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold">
-                3) Read results on the right; export in Review
+                3) Read results on the right; export in Share & Export
               </span>
               <button
                 type="button"
@@ -4657,7 +4656,7 @@ export default function App() {
                       <Explanation slot="refs.howUsed" className="text-[11px]">
                         <div className="font-semibold text-slate-700">How these are used</div>
                         <ul className="list-disc pl-4 space-y-1">
-                          <li>We treat these as customers&apos; remembered â€œfairâ€ prices; prices above the ref get a loss penalty, prices below get a small gain.</li>
+                          <li>We treat these as customers&apos; remembered "fair" prices; prices above the ref get a loss penalty, prices below get a small gain.</li>
                           <li>Impact is scaled by each segment&apos;s anchoring strength (`alphaAnchor`) and loss aversion (`lambdaLoss`) in the demand model that feeds the optimizer and charts.</li>
                           <li>Keep refs near today&apos;s street/list prices or survey anchors; presets and imports set them automatically but you can tune before running the optimizer.</li>
                         </ul>

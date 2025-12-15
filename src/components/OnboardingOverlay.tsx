@@ -24,19 +24,40 @@ export default function OnboardingOverlay(props: {
   // Highlight the target section/card for the active step.
   useEffect(() => {
     if (!open || !step?.targetId) return;
-    const el = document.getElementById(step.targetId);
-    if (!el) return;
-    el.classList.add("onboarding-highlight");
-    el.setAttribute("data-onboarding-highlight", "true");
-    if (onJump) {
-      onJump(step.targetId);
-    } else {
-      // Fallback to the native behavior if no scroll helper was provided.
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
+    const targetId = step.targetId;
+    // Jump first (may switch tabs / render the target into the DOM).
+    onJump?.(targetId);
+
+    let highlighted: HTMLElement | null = null;
+    let raf: number | null = null;
+    let tries = 0;
+    const maxTries = 20;
+
+    const applyHighlight = () => {
+      tries += 1;
+      const el = document.getElementById(targetId);
+      if (!el) {
+        if (tries < maxTries) raf = requestAnimationFrame(applyHighlight);
+        return;
+      }
+
+      highlighted = el;
+      el.classList.add("onboarding-highlight");
+      el.setAttribute("data-onboarding-highlight", "true");
+
+      if (!onJump) {
+        // Fallback to the native behavior if no scroll helper was provided.
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    };
+
+    raf = requestAnimationFrame(applyHighlight);
+
     return () => {
-      el.classList.remove("onboarding-highlight");
-      el.removeAttribute("data-onboarding-highlight");
+      if (raf !== null) cancelAnimationFrame(raf);
+      if (!highlighted) return;
+      highlighted.classList.remove("onboarding-highlight");
+      highlighted.removeAttribute("data-onboarding-highlight");
     };
   }, [open, step?.targetId, step?.id, onJump]);
 

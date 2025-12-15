@@ -12,7 +12,7 @@ export function Section({ title, id, actions, children, className = "" }: Sectio
   return (
     <section
       id={id}
-      className={`scroll-mt-24 md:scroll-mt-32 rounded-2xl shadow p-3 md:p-4 border border-gray-200 bg-white print-avoid print-card print-pad ${className}`}
+      className={`scroll-mt-24 md:scroll-mt-32 rounded-2xl shadow-sm p-3 md:p-4 border border-slate-200 bg-white print-avoid print-card print-pad ${className}`}
     >
       <div className="mb-3 print:mb-2 flex flex-wrap items-start gap-3 md:items-center md:justify-between">
         <h2 className="font-semibold text-lg print:text-base print-tight">{title}</h2>
