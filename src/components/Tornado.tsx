@@ -35,6 +35,7 @@ export type TornadoDatum = {
   deltaHigh: number;  // negative or positive, display units ($ or %)
   absLow: number;     // raw $ delta (unfloored)
   absHigh: number;    // raw $ delta (unfloored)
+  spanLabel?: string;
 };
 
 export default function Tornado({
@@ -87,6 +88,15 @@ export default function Tornado({
     const metricLabel = resolvedMetric === "revenue" ? "revenue" : "profit";
     const digits = isPct ? 1 : 0;
 
+    const niceCeil = (x: number) => {
+      if (!Number.isFinite(x) || x <= 0) return 1;
+      const pow = Math.pow(10, Math.floor(Math.log10(x)));
+      const m = x / pow;
+      const steps = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+      const step = steps.find((s) => m <= s) ?? 10;
+      return step * pow;
+    };
+
     // Prepare series: left bars show the worst (most-negative) delta; right bars show the best (most-positive) delta.
     const cats = resolvedRows.map((r) => r.name);
     const left = resolvedRows.map((r) => Math.min(0, r.deltaLow, r.deltaHigh));
@@ -102,15 +112,19 @@ export default function Tornado({
     // Ensure tiny values (cents) still render a sliver
     const spanFloor = isPct ? (isNarrow ? 2.5 : 4.5) : isNarrow ? 5 : 10;
     const paddedSpan = Math.max(spanFloor, maxAbsDelta * 1.25 + (isPct ? 1 : 5));
+    const desiredTicksPerSide = isPct ? 4 : 5;
+    const niceSpan = niceCeil(paddedSpan);
+    const interval = niceCeil(niceSpan / desiredTicksPerSide);
+    const axisSpan = Math.max(spanFloor, interval * desiredTicksPerSide);
     const labelDigits = Math.max(
       1,
-      Math.abs(Math.round(paddedSpan)).toLocaleString(undefined, { maximumFractionDigits: digits }).length
+      Math.abs(Math.round(axisSpan)).toLocaleString(undefined, { maximumFractionDigits: digits }).length
     );
     // Keep plot wide; modest grid left, rely on y-axis margin for separation
-    const gridLeft = isNarrow ? 30 : 50;
+    const gridLeft = isNarrow ? 20 : 40;
     const showValueLabels = !isNarrow;
-    const padRight = Math.max(isNarrow ? 30 : 50, (isNarrow ? 8 : 11) * labelDigits + (isNarrow ? 30 : 50));
-    const gridBottom = isNarrow ? 56 : 76;
+    const padRight = Math.max(isNarrow ? 20 : 40, (isNarrow ? 8 : 11) * labelDigits + (isNarrow ? 20 : 40));
+    const gridBottom = isNarrow ? 46 : 66;
 
     const option: ECOption = {
       title: { text: resolvedTitle, left: "center", top: 4, textStyle: { fontWeight: 700, fontSize: 14 } },
@@ -144,20 +158,22 @@ export default function Tornado({
             row?.base != null && Number.isFinite(row.base)
               ? `$${Math.round(row.base).toLocaleString()}`
               : "n/a";
-          return `<div><b>${name}</b><br/>${lines.join("<br/>")}<br/><span style="color:#64748b">Base ${metricLabel}: ${baseStr}</span></div>`;
+          const span = row?.spanLabel ? `<br/><span style="color:#64748b">Span: ${row.spanLabel}</span>` : "";
+          return `<div><b>${name}</b><br/>${lines.join("<br/>")}<br/><span style="color:#64748b">Base ${metricLabel}: ${baseStr}</span>${span}</div>`;
         },
       },
       xAxis: {
         type: "value",
-        min: -paddedSpan,
-        max: paddedSpan,
+        min: -axisSpan,
+        max: axisSpan,
         axisLine: { onZero: false },
-        splitNumber: 4,
+        splitNumber: desiredTicksPerSide * 2,
+        interval,
         axisLabel: {
           formatter: (v: number) =>
             isPct
               ? `${Math.round(v * 10) / 10}%`
-              : `$${Math.round(v).toLocaleString()}`,
+              : `${v < 0 ? "-" : ""}$${Math.round(Math.abs(v)).toLocaleString()}`,
           fontSize: axisFont,
           rotate: -90,
           margin: 14,
@@ -254,7 +270,7 @@ export default function Tornado({
         a.click();
       } else if (e.detail.type === "csv") {
         const rowsCsv = [
-          ["name", "base_usd", "delta_low_display", "delta_high_display", "delta_low_abs", "delta_high_abs", "unit", "metric"],
+          ["name", "base_usd", "delta_low_display", "delta_high_display", "delta_low_abs", "delta_high_abs", "span", "unit", "metric"],
           ...resolvedRows.map((r) => [
             r.name,
             r.base,
@@ -262,6 +278,7 @@ export default function Tornado({
             r.deltaHigh,
             r.absLow,
             r.absHigh,
+            r.spanLabel ?? "",
             resolvedValueMode,
             resolvedMetric,
           ]),

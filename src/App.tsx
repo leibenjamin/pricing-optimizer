@@ -5198,8 +5198,8 @@ export default function App() {
           )}
         </div>
 
-      {/* Right: Charts */}
-      <div className="col-span-12 lg:col-span-6 space-y-4 min-w-0">
+        {/* Right: Charts */}
+        <div className="col-span-12 lg:col-span-6 space-y-4 min-w-0">
           <ResultsOverviewSection
             scorecardView={scorecardView}
             hasOptimized={!!optimizedKpis}
@@ -5258,15 +5258,14 @@ export default function App() {
             frontierSummary={frontierSummary}
             frontierTier={frontierTier}
             setFrontierTier={setFrontierTier}
-          frontierCompareCharm={frontierCompareCharm}
-          setFrontierCompareCharm={setFrontierCompareCharm}
-          usePocketProfit={!!optConstraints.usePocketProfit}
-          frontierSweep={frontierSweep}
-          actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
-          riskNote={riskNote}
-          FrontierChartComponent={FrontierChartReal}
-        />
-
+            frontierCompareCharm={frontierCompareCharm}
+            setFrontierCompareCharm={setFrontierCompareCharm}
+            usePocketProfit={!!optConstraints.usePocketProfit}
+            frontierSweep={frontierSweep}
+            actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
+            riskNote={riskNote}
+            FrontierChartComponent={FrontierChartReal}
+          />
 
           <TakeRateSection
             scenarios={takeRateScenarios}
@@ -5280,25 +5279,25 @@ export default function App() {
             segmentBreakdownEnabled={showSegmentBreakdown}
             setSegmentBreakdownEnabled={setShowSegmentBreakdown}
             segmentBreakdownScenarioKey={segmentBreakdownScenarioKey}
-          setSegmentBreakdownScenarioKey={setSegmentBreakdownScenarioKey}
-          segmentBreakdownScenarios={segmentBreakdownScenarios}
-          segmentScenarioOptions={takeRateContexts.map((c) => ({ key: c.key, label: c.label }))}
-          selectedSegmentLabel={selectedSegmentLabel}
-          riskNote={riskNote}
-        />
+            setSegmentBreakdownScenarioKey={setSegmentBreakdownScenarioKey}
+            segmentBreakdownScenarios={segmentBreakdownScenarios}
+            segmentScenarioOptions={takeRateContexts.map((c) => ({ key: c.key, label: c.label }))}
+            selectedSegmentLabel={selectedSegmentLabel}
+            riskNote={riskNote}
+          />
 
-        <CohortSection
-          retentionPct={retentionPct}
-          setRetentionPct={setRetentionPct}
-          retentionMonths={retentionMonths}
-          setRetentionMonths={setRetentionMonths}
-          showAdvanced={showCohortAdvanced}
-          setShowAdvanced={setShowCohortAdvanced}
-          cohortSummaryCards={cohortSummaryCards}
-          cohortScenarios={cohortScenarios}
-          actions={<ActionCluster chart="cohort" id="cohort-curve" csv />}
-          riskNote={riskNote}
-        />
+          <CohortSection
+            retentionPct={retentionPct}
+            setRetentionPct={setRetentionPct}
+            retentionMonths={retentionMonths}
+            setRetentionMonths={setRetentionMonths}
+            showAdvanced={showCohortAdvanced}
+            setShowAdvanced={setShowCohortAdvanced}
+            cohortSummaryCards={cohortSummaryCards}
+            cohortScenarios={cohortScenarios}
+            actions={<ActionCluster chart="cohort" id="cohort-curve" csv />}
+            riskNote={riskNote}
+          />
 
           <Section
             id="tornado"
