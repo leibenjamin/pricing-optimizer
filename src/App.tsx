@@ -4111,17 +4111,7 @@ export default function App() {
                   Contact
                 </a>
 
-                {/* Case study (future) */}
-                <button
-                  type="button"
-                  aria-disabled="true"
-                  disabled
-                  title="Coming soon"
-                  className="border rounded px-3 py-1 text-sm bg-gray-100 text-gray-400 cursor-not-allowed"
-                >
-                  Case study (soon)
-                </button>
-              </div>
+	              </div>
 
               <div className="no-print flex gap-2">
                 <button

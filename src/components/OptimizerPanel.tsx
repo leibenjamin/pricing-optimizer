@@ -391,30 +391,50 @@ export function OptimizerPanel({
           </div>
         </div>
 
-        <details className="mt-4 rounded border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs">
-          <summary className="cursor-pointer select-none font-medium">Field guide (copy placeholder)</summary>
-          <div data-copy-slot="waterfall.fieldGuide" className="space-y-2 text-slate-600 mt-2">
-            <div>
-              <span className="font-semibold">Tier discounts</span>: Promo/volume discounts shave list down to pocket.
-              Prioritize heavier discounts on tiers where you need mix or where payment fees bite less (higher-ticket tiers).
-            </div>
-            <div>
-              <span className="font-semibold">Global leakages</span>: Payment %/fixed fees, FX, and refunds vary by channel.
-              Low-ticket/high-fee businesses feel payment %; cross-border sales feel FX; high-return categories feel refunds.
-            </div>
-            <div>
-              <span className="font-semibold">Compare all tiers</span>: Mini waterfalls help defend Good/Better/Best
-              deltas-ensure pocket spreads match your positioning and guardrails.
-            </div>
-            <div>
-              <span className="font-semibold">Channel blend</span>: Blend presets (e.g., Stripe vs. marketplace) to see a
-              composite leak profile; narrate how channel mix shifts pocket and floors.
-            </div>
-          </div>
-        </details>
-      </div>
-    </Section>
-  );
+	        <details className="mt-4 rounded border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs">
+	          <summary className="cursor-pointer select-none font-medium">Field guide: discounts, fees, and pocket price</summary>
+	          <div data-copy-slot="waterfall.fieldGuide" className="text-slate-600 mt-2 space-y-2">
+	            <div className="font-semibold text-slate-700">Quick checks before trusting a run</div>
+	            <ul className="list-disc ml-4 space-y-1">
+	              <li>
+	                <span className="font-semibold">Tiered vs. global</span>: promo/volume are per-tier (% of list). Payment
+	                % applies after discounts; payment $ is flat per transaction. FX is on net; refunds are modeled as % of
+	                list.
+	              </li>
+	              <li>
+	                <span className="font-semibold">Low-ticket pain</span>: fixed fees and refunds can overwhelm Good.
+	                If pocket margin goes negative, nudge the floor up or rethink what Good includes.
+	              </li>
+	              <li>
+	                <span className="font-semibold">Defend pocket spreads</span>: mini waterfalls help confirm
+	                Good/Better/Best still separate on pocket after discounts (otherwise "Better" can become a discount
+	                trap).
+	              </li>
+	              <li>
+	                <span className="font-semibold">Pick the right guardrail basis</span>: enable pocket floors/profit when
+	                downstream leakages are real and you want constraints on what you actually keep (not sticker price).
+	              </li>
+	              <li>
+	                <span className="font-semibold">Treat leak presets as assumptions</span>: if the recommendation flips
+	                under Tornado/Robustness, the right next step is an in-market test, not a precise point estimate.
+	              </li>
+	            </ul>
+	            <button
+	              type="button"
+	              className="text-sky-700 font-semibold hover:underline"
+	              onClick={() =>
+	                document
+	                  .getElementById("pocket-price-waterfall")
+	                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
+	              }
+	            >
+	              Jump to Pocket Price Waterfall
+	            </button>
+	          </div>
+	        </details>
+	      </div>
+	    </Section>
+	  );
 }
 
 function LatestRunSummary(props: {
