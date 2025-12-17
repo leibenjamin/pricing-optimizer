@@ -639,12 +639,12 @@ export default function App() {
   const NAV_SECTIONS = useMemo(
     () => [
       "results-overview",
+      "global-optimizer",
       "profit-frontier",
       "pocket-price-waterfall",
       "compare-board",
       "cohort-rehearsal",
       "tornado",
-      "global-optimizer",
     ],
     []
   );
@@ -724,7 +724,7 @@ export default function App() {
       case "tornado":
         return "Tornado";
       case "global-optimizer":
-        return "Global Optimizer";
+        return "Optimize";
       default:
         return id;
     }
@@ -4121,7 +4121,7 @@ export default function App() {
                 </span>
               </div>
               <p className="mt-1 text-sm text-slate-600">
-                A pricing-optimization playground: pick a scenario, run the optimizer, and audit lift, mix, and risk.
+                Pick a preset, run the optimizer, then audit profit lift, mix, and risk (guardrails + uncertainty).
               </p>
               <div className="no-print mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
                 <button
@@ -4132,9 +4132,14 @@ export default function App() {
                 >
                   Take tour
                 </button>
-                <span className="text-xs text-slate-500">
-                  4 steps - highlights each key section
-                </span>
+                <button
+                  type="button"
+                  onClick={() => scrollToId("preset-scenarios")}
+                  className="text-sm font-semibold text-sky-700 hover:underline"
+                >
+                  Jump to presets
+                </button>
+                <span className="text-xs text-slate-500">4 steps - highlights each key section</span>
               </div>
             </div>
 
@@ -4156,13 +4161,11 @@ export default function App() {
                 >
                   Contact
                 </a>
-              </div>
 
-              <div className="no-print flex gap-2">
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="px-3 py-1 rounded-md border text-sm hover:bg-gray-50"
+                  className="no-print border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
                   aria-label="Print this analysis"
                   title="Print this analysis"
                 >
@@ -4209,28 +4212,56 @@ export default function App() {
         <div className="col-span-12 lg:col-span-6 min-w-0">
           <div className="no-print mb-4 rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
             <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
-              Quick path
+              Quick path (first run)
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-700">
-              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold">
-                1) Apply a preset (auto-baseline)
-              </span>
-              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold">
-                2) Optimize (baseline saved before run)
-              </span>
-              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold">
-                3) Read results on the right; export in Share & Export
-              </span>
               <button
                 type="button"
-                className="ml-auto rounded border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-                onClick={() => {
-                  setLeftColumnTab("optimize");
-                  scrollToId("global-optimizer");
-                }}
+                onClick={() => scrollToId("preset-scenarios")}
+                className={`rounded-full border px-2.5 py-1 font-semibold hover:bg-slate-50 ${
+                  scenarioPresetId ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white"
+                }`}
               >
-                Jump to Optimize
+                1) Pick a preset (pins baseline)
               </button>
+              <button
+                type="button"
+                onClick={() => scrollToId("global-optimizer")}
+                className={`rounded-full border px-2.5 py-1 font-semibold hover:bg-slate-50 ${
+                  optResult ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white"
+                }`}
+              >
+                2) Run optimizer (saves baseline)
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToId("results-overview")}
+                className="rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold hover:bg-slate-50"
+              >
+                3) Read Results Overview
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToId("share-links")}
+                className="rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold hover:bg-slate-50"
+              >
+                Share & Export
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-600">
+              <span>After running:</span>
+              <button type="button" className="font-semibold text-sky-700 hover:underline" onClick={() => scrollToId("profit-frontier")}>
+                Profit Frontier
+              </button>
+              <span>(sensitivity)</span>
+              <span>and</span>
+              <button type="button" className="font-semibold text-sky-700 hover:underline" onClick={() => scrollToId("tornado")}>
+                Tornado
+              </button>
+              <span>(top drivers).</span>
+              <span className="ml-auto text-slate-500">
+                If assumptions change after a run, rerun Optimize to refresh 'Optimized' charts.
+              </span>
             </div>
           </div>
           <div className="no-print mb-3">
