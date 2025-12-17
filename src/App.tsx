@@ -2503,11 +2503,22 @@ export default function App() {
       approxStepsWide >= 8 ? "Flat peak" : approxStepsWide >= 3 ? "Moderate peak" : "Sharp peak";
     const isEdgePeak =
       Math.abs(optBest - sweep.min) <= sweep.step * 1.5 || Math.abs(optBest - sweep.max) <= sweep.step * 1.5;
+
+    const showBaselineCurrent =
+      anchor.kind === "optimized" &&
+      baselineMarker &&
+      currentMarker &&
+      (Math.abs(baselineMarker.price - currentMarker.price) > 1e-6 ||
+        Math.abs(baselineMarker.profit - currentMarker.profit) > 1e-3);
+    const baselineCurrentLine = showBaselineCurrent
+      ? `Baseline $${baselineMarker.price.toFixed(2)} (profit $${Math.round(baselineMarker.profit).toLocaleString()}); Current $${currentMarker.price.toFixed(2)} (profit $${Math.round(currentMarker.profit).toLocaleString()}).`
+      : null;
     return {
       headline: `${tierLabel} peak at $${optBest.toFixed(2)} (profit $${Math.round(optProf).toLocaleString()}); range $${sweep.min.toFixed(2)}-$${sweep.max.toFixed(2)}.`,
       bullets: [
-        `${anchor.label} at $${anchor.price.toFixed(2)} (${delta >= 0 ? "+" : "-"}$${Math.abs(Math.round(delta)).toLocaleString()} vs peak).`,
+        `${anchor.label} at $${anchor.price.toFixed(2)} (${delta >= 0 ? "+" : "-"}$${Math.abs(Math.round(delta)).toLocaleString()} vs sweep peak).`,
         `${peakShape}: within 1% of peak from $${bandMin.toFixed(2)}-$${bandMax.toFixed(2)} (${inBand ? "anchor inside" : "anchor outside"}).`,
+        ...(baselineCurrentLine ? [baselineCurrentLine] : []),
         ...(isEdgePeak ? ["Peak sits at the edge of the sweep range - widen ranges to confirm."] : []),
       ],
       feasibility: { feasibleCount, infeasibleCount },
@@ -4145,8 +4156,7 @@ export default function App() {
                 >
                   Contact
                 </a>
-
-	              </div>
+              </div>
 
               <div className="no-print flex gap-2">
                 <button

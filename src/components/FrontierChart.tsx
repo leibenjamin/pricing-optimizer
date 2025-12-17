@@ -32,6 +32,7 @@ type FrontierDatum = {
   shares?: Shares;
   reason?: string;
   lineLabel?: string;
+  kind?: string;
 };
 
 echartsUse([
@@ -240,6 +241,30 @@ export default function FrontierChartReal({
       };
     };
 
+    const markerVisualFor = (m: FrontierMarker) => {
+      const k = inferKinds(m);
+      const kind = k.optimized ? "optimized" : k.current ? "current" : k.baseline ? "baseline" : "current";
+      if (kind === "optimized") {
+        return {
+          kind,
+          symbol: "diamond" as const,
+          itemStyle: { color: "#0f172a", borderColor: "#0f172a", borderWidth: 1 },
+        };
+      }
+      if (kind === "baseline") {
+        return {
+          kind,
+          symbol: "circle" as const,
+          itemStyle: { color: "#ffffff", borderColor: "#64748b", borderWidth: 2 },
+        };
+      }
+      return {
+        kind,
+        symbol: "circle" as const,
+        itemStyle: { color: "#0ea5e9", borderColor: "#075985", borderWidth: 1 },
+      };
+    };
+
     const mergedLineMarkers = (() => {
       if (!markersView?.length) return [];
       const byPrice = new Map<
@@ -346,39 +371,39 @@ export default function FrontierChartReal({
             shares: p.shares,
             reason: p.reason,
           })),
-	          symbolSize: 4,
-	          markLine: markLineData.length
-	            ? {
-	                symbol: "none",
-	                label: {
-	                  show: true,
-	                  formatter: (p: unknown) => {
-	                    const pp = p as { name?: string; data?: { lineLabel?: string } };
-	                    if (pp?.data?.lineLabel) return pp.data.lineLabel;
-	                    if (pp?.name) return String(pp.name).replace(/\s*line$/i, "");
-	                    return "";
-	                  },
-	                  position: "insideEndTop",
-	                  fontSize: axisFont - 1,
-	                  padding: [1, 3],
-	                  backgroundColor: "rgba(255,255,255,0.85)",
-	                  borderColor: "#cbd5e1",
-	                  borderWidth: 1,
-	                },
-	                lineStyle: { color: "#cbd5e1", type: "dashed" },
-	                data: markLineData.map((d) => ({
-	                  ...d,
-	                  label: d.labelOffsetX ? { offset: [d.labelOffsetX, 0] } : undefined,
-	                })),
-	              }
-	            : undefined,
+            symbolSize: 4,
+            markLine: markLineData.length
+              ? {
+                  symbol: "none",
+                  label: {
+                    show: true,
+                    formatter: (p: unknown) => {
+                      const pp = p as { name?: string; data?: { lineLabel?: string } };
+                      if (pp?.data?.lineLabel) return pp.data.lineLabel;
+                      if (pp?.name) return String(pp.name).replace(/\s*line$/i, "");
+                      return "";
+                    },
+                    position: "insideEndTop",
+                    fontSize: axisFont - 1,
+                    padding: [1, 3],
+                    backgroundColor: "rgba(255,255,255,0.85)",
+                    borderColor: "#cbd5e1",
+                    borderWidth: 1,
+                  },
+                  lineStyle: { color: "#cbd5e1", type: "dashed" },
+                  data: markLineData.map((d) => ({
+                    ...d,
+                    label: d.labelOffsetX ? { offset: [d.labelOffsetX, 0] } : undefined,
+                  })),
+                }
+              : undefined,
           label: {
             show: false,
             position: "top",
             fontSize: labelFont,
           },
-	          labelLayout: { moveOverlap: "shiftY" },
-	        } as LineSeriesOption,
+            labelLayout: { moveOverlap: "shiftY" },
+          } as LineSeriesOption,
         ...(comparisonView
           ? [
               {
@@ -387,13 +412,13 @@ export default function FrontierChartReal({
                 name: comparisonView.label,
                 lineStyle: { type: "dashed" },
                 itemStyle: { color: "#0f172a" },
+                symbolSize: 4,
                 data: comparisonView.points.map((p) => ({
                   value: [p.price, p.profit],
                   shares: p.shares,
                   reason: p.reason,
                 })),
                 label: { show: false },
-                symbolSize: 4,
               } as LineSeriesOption,
             ]
           : []),
@@ -431,6 +456,7 @@ export default function FrontierChartReal({
           ? [
               {
                 type: "scatter",
+                name: "Peak",
                 data: [[chartOptimum.price, chartOptimum.profit]],
                 symbolSize: 10,
                 itemStyle: { borderWidth: 1 },
@@ -455,31 +481,34 @@ export default function FrontierChartReal({
               } as ScatterSeriesOption,
             ]
           : []),
-	        ...(markersView && markersView.length
-	          ? [
-	              {
-	                type: "scatter",
-	                data: markersView.map((m) => ({
-	                  value: [m.price, m.profit],
-	                  lineLabel: shortLabel(m.label),
-	                  kind: m.kind,
-	                })),
-	                name: "Marker",
-	                symbolSize: 8,
-	                labelLayout: { hideOverlap: true, moveOverlap: "shiftY" },
-	                itemStyle: {
-	                  color: "#0ea5e9",
-	                  borderColor: "#0a5d80",
-	                  borderWidth: 1,
-	                },
-	                label: { show: false },
-	                z: 5,
-	              } as ScatterSeriesOption,
-	            ]
-	          : []),
+        ...(markersView && markersView.length
+          ? [
+              {
+                type: "scatter",
+                name: "Markers",
+                data: markersView.map((m) => {
+                  const viz = markerVisualFor(m);
+                  return {
+                    value: [m.price, m.profit],
+                    lineLabel: shortLabel(m.label),
+                    kind: viz.kind,
+                    symbol: viz.symbol,
+                    itemStyle: viz.itemStyle,
+                  };
+                }),
+                symbolSize: 9,
+                labelLayout: { hideOverlap: true, moveOverlap: "shiftY" },
+                label: { show: false },
+                tooltip: { trigger: "item" },
+                z: 5,
+              } as ScatterSeriesOption,
+            ]
+          : []),
       ],
       tooltip: {
         trigger: "axis",
+        axisPointer: { type: "line", snap: true },
+        triggerOn: "mousemove",
         formatter: (params: TopLevelFormatterParams) => formatTooltip(params),
         confine: true,
       },
@@ -488,32 +517,45 @@ export default function FrontierChartReal({
     chartRef.current.setOption(option, true);
     chartRef.current.resize();
 
-    const onHover = (p: CallbackDataParams) => {
-    const datum = getDatum(p);
-    const val = Array.isArray(p.value)
-      ? p.value
-      : Array.isArray(datum?.value)
-      ? (datum?.value as Array<string | number | Date>)
-      : null;
-    if (!val || val.length < 2) return;
-    const shares = datum?.shares;
-    if (!shares) return;
-    const price = Number(val[0]);
-    const profit = Number(val[1]);
-    if (!Number.isFinite(price) || !Number.isFinite(profit)) return;
-    setHoverMix({
-      label: p.seriesName || "",
-      shares,
-      price,
-      profit,
+    const baseExtent = (() => {
+      const xs = chartPoints.map((p) => p.price).filter((v) => Number.isFinite(v));
+      return xs.length ? { min: Math.min(...xs), max: Math.max(...xs) } : null;
+    })();
+
+    const pickNearestBasePoint = (x: number) => {
+      if (!Number.isFinite(x) || !chartPoints.length) return null;
+      if (baseExtent && (x < baseExtent.min - 1e-6 || x > baseExtent.max + 1e-6)) return null;
+      let best: FrontierPoint | null = null;
+      let bestDist = Infinity;
+      for (const p of chartPoints) {
+        const d = Math.abs(p.price - x);
+        if (d < bestDist) {
+          bestDist = d;
+          best = p;
+        }
+      }
+      return best;
+    };
+
+    const onAxisPointer = (ev: unknown) => {
+      const e = ev as { axesInfo?: Array<{ value?: unknown }> };
+      const x = Number(e?.axesInfo?.[0]?.value);
+      if (!Number.isFinite(x)) return;
+      const nearest = pickNearestBasePoint(x);
+      if (!nearest?.shares) return;
+      setHoverMix({
+        label: "Frontier",
+        shares: nearest.shares,
+        price: nearest.price,
+        profit: nearest.profit,
       });
     };
     const onLeave = () => setHoverMix(null);
-    chartRef.current.on("mouseover", onHover);
-    chartRef.current.on("mouseout", onLeave);
+    chartRef.current.on("updateAxisPointer", onAxisPointer);
+    chartRef.current.on("globalout", onLeave);
     return () => {
-      chartRef.current?.off("mouseover", onHover);
-      chartRef.current?.off("mouseout", onLeave);
+      chartRef.current?.off("updateAxisPointer", onAxisPointer);
+      chartRef.current?.off("globalout", onLeave);
     };
   }, [chartPoints, chartOptimum, vw, markersView, chartOverlay, xLabelView, comparisonView]);
 
@@ -584,33 +626,52 @@ export default function FrontierChartReal({
   );
 }
 
-function isArrayParams(params: TopLevelFormatterParams): params is CallbackDataParams[] {
-  return Array.isArray(params);
-}
-
 function formatTooltip(params: TopLevelFormatterParams): string {
-  if (!isArrayParams(params) || !params.length) return "";
-  const p = params[0];
+  const list: CallbackDataParams[] = Array.isArray(params) ? params : params ? [params as CallbackDataParams] : [];
+  if (!list.length) return "";
 
-  const datum = getDatum(p);
-  const val = Array.isArray(p.value)
-    ? p.value
-    : Array.isArray(datum?.value)
-    ? (datum?.value as number[])
-    : [];
-  const priceNum = val.length >= 1 ? Number(val[0]) : NaN;
-  const profitNum = val.length >= 2 ? Number(val[1]) : NaN;
+  const firstVal = (() => {
+    for (const p of list) {
+      const datum = getDatum(p);
+      const val = Array.isArray(p.value)
+        ? p.value
+        : Array.isArray(datum?.value)
+        ? (datum?.value as number[])
+        : [];
+      if (val.length >= 2 && Number.isFinite(Number(val[0])) && Number.isFinite(Number(val[1]))) return val;
+    }
+    return null;
+  })();
+
+  const priceNum = firstVal ? Number(firstVal[0]) : NaN;
   const price = Number.isFinite(priceNum) ? `$${priceNum.toFixed(2)}` : "";
-  const profit = Number.isFinite(profitNum) ? `$${profitNum.toFixed(0)}` : "";
+  const lines: string[] = [];
+  if (price) lines.push(`<b>${price}</b>`);
 
-  const shares = datum?.shares;
-  const reason = datum?.reason;
-  const lineLabel = datum?.lineLabel;
+  const rows: string[] = [];
+  let shares: Shares | undefined;
+  let reason: string | undefined;
 
-  const lines = [price && profit ? `<b>${price}</b> | Profit ${profit}` : "Point"];
-  if (lineLabel) {
-    lines.push(`<span style="color:#0f172a"><b>${lineLabel}</b></span>`);
+  for (const p of list) {
+    // Avoid duplicate overlays: the line already communicates the curve.
+    if (p.seriesName === "Feasible" || p.seriesName === "Infeasible") continue;
+    const datum = getDatum(p);
+    const val = Array.isArray(p.value)
+      ? p.value
+      : Array.isArray(datum?.value)
+      ? (datum?.value as number[])
+      : [];
+    const profitNum = val.length >= 2 ? Number(val[1]) : NaN;
+    if (!Number.isFinite(profitNum)) continue;
+
+    const label = datum?.lineLabel || p.seriesName || "Point";
+    rows.push(`<span style="color:#0f172a"><b>${label}</b></span>: Profit $${profitNum.toFixed(0)}`);
+
+    shares ||= datum?.shares;
+    reason ||= datum?.reason;
   }
+
+  if (rows.length) lines.push(...rows);
   if (shares) {
     lines.push(
       `Mix: None ${(shares.none * 100).toFixed(1)}% | Good ${(shares.good * 100).toFixed(1)}% | Better ${(shares.better * 100).toFixed(1)}% | Best ${(shares.best * 100).toFixed(1)}%`
@@ -619,8 +680,6 @@ function formatTooltip(params: TopLevelFormatterParams): string {
   if (reason) {
     lines.push(`<span style="color:#b91c1c">Infeasible: ${reason}</span>`);
   }
-  if (p.seriesName) {
-    lines.push(`<span style="color:#475569">${p.seriesName}</span>`);
-  }
+
   return lines.join("<br/>");
 }

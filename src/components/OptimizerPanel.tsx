@@ -391,50 +391,69 @@ export function OptimizerPanel({
           </div>
         </div>
 
-	        <details className="mt-4 rounded border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs">
-	          <summary className="cursor-pointer select-none font-medium">Field guide: discounts, fees, and pocket price</summary>
-	          <div data-copy-slot="waterfall.fieldGuide" className="text-slate-600 mt-2 space-y-2">
-	            <div className="font-semibold text-slate-700">Quick checks before trusting a run</div>
-	            <ul className="list-disc ml-4 space-y-1">
-	              <li>
-	                <span className="font-semibold">Tiered vs. global</span>: promo/volume are per-tier (% of list). Payment
-	                % applies after discounts; payment $ is flat per transaction. FX is on net; refunds are modeled as % of
-	                list.
-	              </li>
-	              <li>
-	                <span className="font-semibold">Low-ticket pain</span>: fixed fees and refunds can overwhelm Good.
-	                If pocket margin goes negative, nudge the floor up or rethink what Good includes.
-	              </li>
-	              <li>
-	                <span className="font-semibold">Defend pocket spreads</span>: mini waterfalls help confirm
-	                Good/Better/Best still separate on pocket after discounts (otherwise "Better" can become a discount
-	                trap).
-	              </li>
-	              <li>
-	                <span className="font-semibold">Pick the right guardrail basis</span>: enable pocket floors/profit when
-	                downstream leakages are real and you want constraints on what you actually keep (not sticker price).
-	              </li>
-	              <li>
-	                <span className="font-semibold">Treat leak presets as assumptions</span>: if the recommendation flips
-	                under Tornado/Robustness, the right next step is an in-market test, not a precise point estimate.
-	              </li>
-	            </ul>
-	            <button
-	              type="button"
-	              className="text-sky-700 font-semibold hover:underline"
-	              onClick={() =>
-	                document
-	                  .getElementById("pocket-price-waterfall")
-	                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
-	              }
-	            >
-	              Jump to Pocket Price Waterfall
-	            </button>
-	          </div>
-	        </details>
-	      </div>
-	    </Section>
-	  );
+        <details className="mt-4 rounded border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs">
+          <summary className="cursor-pointer select-none font-medium">
+            Field guide: sanity-check pocket profit & guardrails
+          </summary>
+          <div data-copy-slot="waterfall.fieldGuide" className="text-slate-600 mt-2 space-y-2">
+            <div className="font-semibold text-slate-700">Sanity-check the recommendation</div>
+            <ul className="list-disc ml-4 space-y-1">
+              <li>
+                <span className="font-semibold">Pick the right basis</span>: pocket profit/floors enforce what you actually keep after promos, payment fees, FX, and refunds.
+              </li>
+              <li>
+                <span className="font-semibold">Watch fixed-fee cliffs</span>: payment $ and refunds can overwhelm low-ticket tiers; if Good goes negative on pocket, raise floors or re-scope the offer.
+              </li>
+              <li>
+                <span className="font-semibold">Protect tier separation</span>: confirm Better/Best still separate on pocket after discounts/fees; otherwise a tier can become a “discount trap”.
+              </li>
+              <li>
+                <span className="font-semibold">Use charts as cross-checks</span>: Frontier shows sensitivity (flat vs sharp peak); Tornado/Robustness show which assumptions move profit.
+              </li>
+              <li>
+                <span className="font-semibold">Edge optima mean “expand ranges”</span>: if the best point is at the min/max, widen ranges before trusting the exact number.
+              </li>
+            </ul>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="text-sky-700 font-semibold hover:underline"
+                onClick={() =>
+                  document
+                    .getElementById("pocket-price-waterfall")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+              >
+                Jump to Pocket Price Waterfall
+              </button>
+              <button
+                type="button"
+                className="text-sky-700 font-semibold hover:underline"
+                onClick={() =>
+                  document
+                    .getElementById("profit-frontier")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+              >
+                Jump to Profit Frontier
+              </button>
+              <button
+                type="button"
+                className="text-sky-700 font-semibold hover:underline"
+                onClick={() =>
+                  document
+                    .getElementById("tornado")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+              >
+                Jump to Tornado
+              </button>
+            </div>
+          </div>
+        </details>
+      </div>
+    </Section>
+  );
 }
 
 function LatestRunSummary(props: {

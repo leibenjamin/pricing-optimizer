@@ -56,7 +56,7 @@ export function FrontierSection({
         <div className="font-semibold text-slate-800 text-[11px]">How to read</div>
         <ul className="mt-1 list-disc space-y-1 pl-4">
           <li>Sweep one tier (x) while holding the other tiers fixed; the curve is projected profit (y).</li>
-          <li>Marker lines show Baseline / Current / Optimized prices on this axis.</li>
+          <li>Hover the curve to see the segment mix; vertical markers and dots show Baseline / Current / Optimized (hover dots for labels).</li>
           <li>Green vs gray dots show where gaps/margin floors pass or fail under the current basis.</li>
           <li>Flat peak = robust; sharp peak = sensitive to small price mistakes.</li>
           <li>
