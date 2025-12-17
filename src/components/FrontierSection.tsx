@@ -13,13 +13,15 @@ type FrontierSectionProps = {
   frontierViewModel: FrontierViewModel;
   frontierSummary: {
     headline: string;
+    bullets?: string[];
     feasibility: { feasibleCount: number; infeasibleCount: number };
   } | null;
   riskNote?: string | null;
   frontierTier: Tier;
   setFrontierTier: (tier: Tier) => void;
-  frontierCompareCharm: boolean;
-  setFrontierCompareCharm: (v: boolean) => void;
+  frontierCompareMode: "none" | "optimized" | "charm";
+  setFrontierCompareMode: (v: "none" | "optimized" | "charm") => void;
+  hasOptimizedComparison: boolean;
   usePocketProfit: boolean;
   frontierSweep: { min: number; max: number; step: number };
   actions?: ReactNode;
@@ -32,8 +34,9 @@ export function FrontierSection({
   riskNote,
   frontierTier,
   setFrontierTier,
-  frontierCompareCharm,
-  setFrontierCompareCharm,
+  frontierCompareMode,
+  setFrontierCompareMode,
+  hasOptimizedComparison,
   usePocketProfit,
   frontierSweep,
   actions,
@@ -48,9 +51,19 @@ export function FrontierSection({
     >
       <div
         data-copy-slot="chart.profitFrontier"
-        className="text-sm text-slate-700 leading-snug"
+        className="px-3 py-1.5 text-[11px] leading-snug rounded border border-dashed border-slate-300 bg-slate-50/70 text-slate-700"
       >
-        Frontier sweeps the selected tier across its scenario/optimizer range and holds the other tiers fixed. Markers show Baseline/Current/Optimized prices; infeasible points flag where gaps/margins fail. Use this to sanity-check before or after running the optimizer.
+        <div className="font-semibold text-slate-800 text-[11px]">How to read</div>
+        <ul className="mt-1 list-disc space-y-1 pl-4">
+          <li>Sweep one tier (x) while holding the other tiers fixed; the curve is projected profit (y).</li>
+          <li>Marker lines show Baseline / Current / Optimized prices on this axis.</li>
+          <li>Green vs gray dots show where gaps/margin floors pass or fail under the current basis.</li>
+          <li>Flat peak = robust; sharp peak = sensitive to small price mistakes.</li>
+          <li>
+            If Optimized looks "off the curve", it's because the other tiers differ; use Compare -&gt; Optimized ladder
+            slice.
+          </li>
+        </ul>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700 mb-2">
@@ -67,22 +80,38 @@ export function FrontierSection({
           </select>
         </label>
         <label className="flex items-center gap-1">
-          Charm comparison
-          <input
-            type="checkbox"
-            checked={frontierCompareCharm}
-            onChange={(e) => setFrontierCompareCharm(e.target.checked)}
-            className="h-4 w-4"
-          />
-          <span className="text-[11px] text-slate-600">
-            Compare {frontierCompareCharm ? "with vs without .99" : "without vs with .99"}
-          </span>
+          Compare
+          <select
+            className="border rounded px-2 h-7 bg-white"
+            value={frontierCompareMode}
+            onChange={(e) => setFrontierCompareMode(e.target.value as "none" | "optimized" | "charm")}
+          >
+            <option value="none">None</option>
+            <option value="optimized" disabled={!hasOptimizedComparison}>
+              Optimized ladder slice
+            </option>
+            <option value="charm">Charm endings (.99)</option>
+          </select>
         </label>
+        <div className="text-[11px] text-slate-600">
+          {frontierCompareMode === "optimized"
+            ? "Dashed line holds other tiers at the optimizer ladder."
+            : frontierCompareMode === "charm"
+            ? "Dashed line compares with vs without .99 endings."
+            : "No comparison line."}
+        </div>
       </div>
 
       {frontierSummary && (
         <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm text-slate-800">
-          {frontierSummary.headline}
+          <div className="font-semibold">{frontierSummary.headline}</div>
+          {frontierSummary.bullets?.length ? (
+            <ul className="mt-1 list-disc ml-4 space-y-0.5 text-[11px] text-slate-700">
+              {frontierSummary.bullets.map((b, idx) => (
+                <li key={idx}>{b}</li>
+              ))}
+            </ul>
+          ) : null}
           <div className="mt-1 text-[11px] text-slate-600">
             Feasible points: {frontierSummary.feasibility.feasibleCount.toLocaleString()}{" "}
             {frontierSummary.feasibility.infeasibleCount

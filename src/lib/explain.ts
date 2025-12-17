@@ -36,8 +36,8 @@ export const EXPLAIN: Record<string, string> = {
   // --- Charts ---
   "chart.frontier": `
     <b>Profit frontier</b> sweeps one tier's price (x) while holding others fixed,
-    plotting projected profit (y). Markers show Baseline/Current/Optimized prices on this axis; feasible
-    dots clear gaps/floors. Basis toggle switches list vs pocket. Use to narrate distance to peak and how gaps/floors bind.`,
+    plotting projected profit (y). Marker lines show Baseline/Current/Optimized prices; green/gray points show feasible vs infeasible
+    under gaps/floors. Use Compare for a dashed overlay (optimized-ladder slice or charm endings) and to judge how flat the peak is.`,
 
   "chart.takeRate": `
     <b>Take-rate bars</b> show segment-mixed shares {None, Good, Better, Best} for baseline/current/optimized.
@@ -104,7 +104,7 @@ export const EXPLAIN: Record<string, string> = {
   "coverage.basis": `
     Coverage can be calculated on <b>pocket</b> margins (after leakages) or <b>list</b> margins. Pocket is stricter; list is a quick sanity check.`,
   "frontier.overlay": `
-    Feasible points clear margin floors; infeasible points violate floors or gaps. Use basis toggle to see pocket vs list profit along the sweep.`,
+    Feasible points clear gap/margin guardrails; infeasible points violate at least one guardrail (see tooltip). Use the basis toggle to switch list vs pocket along the sweep.`,
   "reset.defaults": `
     Reset ladder, refs, leak, features, ranges, constraints, and channel blend back to defaults. Does not touch saved baselines or compare slots.`,
   "takeRate.bars": `

@@ -31,6 +31,7 @@ type FrontierDatum = {
   value?: unknown;
   shares?: Shares;
   reason?: string;
+  lineLabel?: string;
 };
 
 echartsUse([
@@ -94,7 +95,7 @@ function getDatum(p: CallbackDataParams): FrontierDatum | null {
   return null;
 }
 
-const shortLabel = (s: string) => (s.length > 18 ? `${s.slice(0, 17)}…` : s);
+const shortLabel = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}…` : s);
 
 export default function FrontierChartReal({
   points,
@@ -192,25 +193,24 @@ export default function FrontierChartReal({
     const isNarrow = vw < 768;
     const axisFont = isNarrow ? 10 : 12;
     const labelFont = isNarrow ? 10 : 12;
-    const topPad = isNarrow ? 40 : 54;
+    const topPad = isNarrow ? 46 : 60;
     const rightPad = isNarrow ? 70 : 96;
     const bottomPad = isNarrow ? 60 : 76;
-    const markerSymbolSize = isNarrow ? 18 : 24;
 
     const allPrices: number[] = [
       ...chartPoints.map((p) => p.price),
-      ...(overlay?.feasiblePoints?.map((p) => p.price) ?? []),
-      ...(overlay?.infeasiblePoints?.map((p) => p.price) ?? []),
-      ...(comparison?.points?.map((p) => p.price) ?? []),
-      ...(markers?.map((m) => m.price) ?? []),
+      ...(chartOverlay?.feasiblePoints?.map((p) => p.price) ?? []),
+      ...(chartOverlay?.infeasiblePoints?.map((p) => p.price) ?? []),
+      ...(comparisonView?.points?.map((p) => p.price) ?? []),
+      ...(markersView?.map((m) => m.price) ?? []),
     ].filter((v) => Number.isFinite(v));
     const allProfits: number[] = [
       ...chartPoints.map((p) => p.profit),
-      ...(overlay?.feasiblePoints?.map((p) => p.profit) ?? []),
-      ...(overlay?.infeasiblePoints?.map((p) => p.profit) ?? []),
-      ...(comparison?.points?.map((p) => p.profit) ?? []),
-      ...(markers?.map((m) => m.profit) ?? []),
-      ...(optimum ? [optimum.profit] : []),
+      ...(chartOverlay?.feasiblePoints?.map((p) => p.profit) ?? []),
+      ...(chartOverlay?.infeasiblePoints?.map((p) => p.profit) ?? []),
+      ...(comparisonView?.points?.map((p) => p.profit) ?? []),
+      ...(markersView?.map((m) => m.profit) ?? []),
+      ...(chartOptimum ? [chartOptimum.profit] : []),
     ].filter((v) => Number.isFinite(v));
     const minPrice = allPrices.length ? Math.min(...allPrices) : undefined;
     const maxPrice = allPrices.length ? Math.max(...allPrices) : undefined;
@@ -219,7 +219,7 @@ export default function FrontierChartReal({
     const minProfit = allProfits.length ? Math.min(...allProfits) : undefined;
     const maxProfit = allProfits.length ? Math.max(...allProfits) : undefined;
     const profitSpan = minProfit != null && maxProfit != null ? Math.max(maxProfit - minProfit, 1) : undefined;
-    const padProfit = profitSpan != null ? Math.max(profitSpan * 0.08, 5) : undefined;
+    const padProfit = profitSpan != null ? Math.max(profitSpan * 0.12, 12) : undefined;
 
     const priceExtent = niceExtent(
       minPrice != null && padPrice != null ? minPrice - padPrice : undefined,
@@ -231,25 +231,69 @@ export default function FrontierChartReal({
     );
     const priceDecimals = priceExtent ? (priceExtent.step < 1 ? 2 : 0) : 0;
 
-    const markPointData =
-      markers?.map((m) => ({
-        name: shortLabel(m.label),
-        value: m.price,
-        coord: [m.price, m.profit],
-        label: {
-          formatter: (p: CallbackDataParams) => (p.name ? String(p.name) : ""),
-          fontSize: labelFont,
-          color: "#0f172a",
-          padding: [2, 4, 2, 4],
-        },
-      })) ?? [];
+    const inferKinds = (m: FrontierMarker) => {
+      const s = `${m.label ?? ""}`.toLowerCase();
+      return {
+        baseline: s.includes("baseline") || m.kind === "baseline",
+        current: s.includes("current") || m.kind === "current",
+        optimized: s.includes("optimized") || m.kind === "optimized",
+      };
+    };
 
-    const markLineData: Array<{ xAxis?: number; yAxis?: number; name: string }> = markers
-      ? markers.map((m) => ({ xAxis: m.price, name: shortLabel(m.label) }))
-      : [];
+    const mergedLineMarkers = (() => {
+      if (!markersView?.length) return [];
+      const byPrice = new Map<
+        string,
+        { price: number; kinds: { baseline: boolean; current: boolean; optimized: boolean } }
+      >();
+      for (const m of markersView) {
+        const key = m.price.toFixed(4);
+        const k = inferKinds(m);
+        const existing = byPrice.get(key);
+        if (existing) {
+          existing.kinds.baseline ||= k.baseline;
+          existing.kinds.current ||= k.current;
+          existing.kinds.optimized ||= k.optimized;
+        } else {
+          byPrice.set(key, { price: m.price, kinds: k });
+        }
+      }
+
+      const combinedLabel = (k: { baseline: boolean; current: boolean; optimized: boolean }) => {
+        if (k.optimized && k.current && k.baseline) return "Optimized & Current & Baseline";
+        if (k.current && k.baseline) return "Current & Baseline";
+        if (k.optimized && k.current) return "Optimized & Current";
+        if (k.optimized && k.baseline) return "Optimized & Baseline";
+        if (k.optimized) return "Optimized";
+        if (k.current) return "Current";
+        if (k.baseline) return "Baseline";
+        return "Marker";
+      };
+
+      return Array.from(byPrice.values())
+        .sort((a, b) => a.price - b.price)
+        .map((g, idx) => {
+          const label = combinedLabel(g.kinds);
+          const n = Math.ceil(idx / 2);
+          const dx = idx === 0 ? 0 : (idx % 2 ? 1 : -1) * Math.min(42, 10 * n);
+          return {
+            xAxis: g.price,
+            lineLabel: shortLabel(label),
+            labelOffsetX: dx,
+          };
+        });
+    })();
+
+    const markLineData: Array<{
+      xAxis?: number;
+      yAxis?: number;
+      name?: string;
+      lineLabel?: string;
+      labelOffsetX?: number;
+    }> = [...mergedLineMarkers];
     // Add a zero-profit horizontal line for reference when data crosses zero.
     if (minProfit != null && maxProfit != null && minProfit < 0 && maxProfit > 0) {
-      markLineData.push({ yAxis: 0, name: "Profit = 0" });
+      markLineData.push({ yAxis: 0, name: "Profit = 0", lineLabel: "Profit = 0" });
     }
 
     const option: ECOption = {
@@ -302,35 +346,39 @@ export default function FrontierChartReal({
             shares: p.shares,
             reason: p.reason,
           })),
-          symbolSize: 4,
-          markLine: markLineData.length
-            ? {
-                symbol: "none",
-                label: { show: true, formatter: (p) => (p.name ? String(p.name) : ""), fontSize: axisFont - 1 },
-                lineStyle: { color: "#cbd5e1", type: "dashed" },
-                data: markLineData,
-              }
-            : undefined,
+	          symbolSize: 4,
+	          markLine: markLineData.length
+	            ? {
+	                symbol: "none",
+	                label: {
+	                  show: true,
+	                  formatter: (p: unknown) => {
+	                    const pp = p as { name?: string; data?: { lineLabel?: string } };
+	                    if (pp?.data?.lineLabel) return pp.data.lineLabel;
+	                    if (pp?.name) return String(pp.name).replace(/\s*line$/i, "");
+	                    return "";
+	                  },
+	                  position: "insideEndTop",
+	                  fontSize: axisFont - 1,
+	                  padding: [1, 3],
+	                  backgroundColor: "rgba(255,255,255,0.85)",
+	                  borderColor: "#cbd5e1",
+	                  borderWidth: 1,
+	                },
+	                lineStyle: { color: "#cbd5e1", type: "dashed" },
+	                data: markLineData.map((d) => ({
+	                  ...d,
+	                  label: d.labelOffsetX ? { offset: [d.labelOffsetX, 0] } : undefined,
+	                })),
+	              }
+	            : undefined,
           label: {
             show: false,
             position: "top",
             fontSize: labelFont,
           },
-          labelLayout: { moveOverlap: "shiftY" },
-          markPoint: markers && markers.length
-            ? {
-                symbol: "circle",
-                symbolSize: markerSymbolSize,
-                itemStyle: {
-                  color: "#0ea5e9",
-                  borderColor: "#0a5d80",
-                  borderWidth: 1,
-                },
-                label: { show: false },
-                data: markPointData,
-              }
-            : undefined,
-        } as LineSeriesOption,
+	          labelLayout: { moveOverlap: "shiftY" },
+	        } as LineSeriesOption,
         ...(comparisonView
           ? [
               {
@@ -407,35 +455,28 @@ export default function FrontierChartReal({
               } as ScatterSeriesOption,
             ]
           : []),
-        ...(markersView && markersView.length
-          ? [
-              {
-                type: "scatter",
-                data: markersView.map((m) => [m.price, m.profit, shortLabel(m.label)]),
-                symbolSize: 8,
-                labelLayout: { hideOverlap: true, moveOverlap: "shiftY" },
-                itemStyle: {
-                  color: "#0ea5e9",
-                  borderColor: "#0a5d80",
-                  borderWidth: 1,
-                },
-                label: {
-                  show: true,
-                  formatter: (p: CallbackDataParams) => {
-                    const v = p?.value as unknown[];
-                    return Array.isArray(v) && v[2] ? String(v[2]) : "";
-                  },
-                  position: "top",
-                  fontSize: labelFont,
-                  overflow: "truncate",
-                  width: isNarrow ? 80 : 120,
-                  distance: 6,
-                  color: "#0f172a",
-                },
-                z: 5,
-              } as ScatterSeriesOption,
-            ]
-          : []),
+	        ...(markersView && markersView.length
+	          ? [
+	              {
+	                type: "scatter",
+	                data: markersView.map((m) => ({
+	                  value: [m.price, m.profit],
+	                  lineLabel: shortLabel(m.label),
+	                  kind: m.kind,
+	                })),
+	                name: "Marker",
+	                symbolSize: 8,
+	                labelLayout: { hideOverlap: true, moveOverlap: "shiftY" },
+	                itemStyle: {
+	                  color: "#0ea5e9",
+	                  borderColor: "#0a5d80",
+	                  borderWidth: 1,
+	                },
+	                label: { show: false },
+	                z: 5,
+	              } as ScatterSeriesOption,
+	            ]
+	          : []),
       ],
       tooltip: {
         trigger: "axis",
@@ -474,12 +515,11 @@ export default function FrontierChartReal({
       chartRef.current?.off("mouseover", onHover);
       chartRef.current?.off("mouseout", onLeave);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartPoints, chartOptimum, vw, markersView, chartOverlay, xLabelView, comparisonView]);
 
-  useEffect(() => {
-    if (!chartId) return;
-    const onExport = (ev: Event) => {
+	  useEffect(() => {
+	    if (!chartId) return;
+	    const onExport = (ev: Event) => {
       const e = ev as ExportEvent;
       if (!e.detail || e.detail.id !== chartId) return;
 
@@ -499,13 +539,17 @@ export default function FrontierChartReal({
             a.download = "profit_frontier.png";
             a.click();
           });
-      } else if (e.detail.type === "csv") {
-        const rows: (string | number)[][] = [
-          ["best_price", "profit", "share.none", "share.good", "share.better", "share.best", "reason"],
-          ...chartPoints.map((p) => [
-            p.price,
-            p.profit,
-            p.shares?.none ?? "",
+	      } else if (e.detail.type === "csv") {
+	        const xKey = String(xLabelView || "price")
+	          .toLowerCase()
+	          .replace(/[^a-z0-9]+/g, "_")
+	          .replace(/^_+|_+$/g, "");
+	        const rows: (string | number)[][] = [
+	          [xKey || "price", "profit", "share.none", "share.good", "share.better", "share.best", "reason"],
+	          ...chartPoints.map((p) => [
+	            p.price,
+	            p.profit,
+	            p.shares?.none ?? "",
             p.shares?.good ?? "",
             p.shares?.better ?? "",
             p.shares?.best ?? "",
@@ -515,10 +559,10 @@ export default function FrontierChartReal({
         const csv = csvFromRows(rows);
         downloadBlob(csv, "profit_frontier.csv", "text/csv;charset=utf-8");
       }
-    };
-    window.addEventListener("export:frontier", onExport as EventListener);
-    return () => window.removeEventListener("export:frontier", onExport as EventListener);
-  }, [chartId, chartPoints]);
+	    };
+	    window.addEventListener("export:frontier", onExport as EventListener);
+	    return () => window.removeEventListener("export:frontier", onExport as EventListener);
+	  }, [chartId, chartPoints, xLabelView]);
 
   return (
     <div className="w-full">
@@ -561,8 +605,12 @@ function formatTooltip(params: TopLevelFormatterParams): string {
 
   const shares = datum?.shares;
   const reason = datum?.reason;
+  const lineLabel = datum?.lineLabel;
 
   const lines = [price && profit ? `<b>${price}</b> | Profit ${profit}` : "Point"];
+  if (lineLabel) {
+    lines.push(`<span style="color:#0f172a"><b>${lineLabel}</b></span>`);
+  }
   if (shares) {
     lines.push(
       `Mix: None ${(shares.none * 100).toFixed(1)}% | Good ${(shares.good * 100).toFixed(1)}% | Better ${(shares.better * 100).toFixed(1)}% | Best ${(shares.best * 100).toFixed(1)}%`

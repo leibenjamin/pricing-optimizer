@@ -1692,7 +1692,8 @@ export default function App() {
   );
 
   const [frontierTier, setFrontierTier] = useState<Tier>("best");
-  const [frontierCompareCharm, setFrontierCompareCharm] = useState(false);
+  type FrontierCompareMode = "none" | "optimized" | "charm";
+  const [frontierCompareMode, setFrontierCompareMode] = useState<FrontierCompareMode>("optimized");
 
   const frontierSweep = useMemo(
     () =>
@@ -1726,7 +1727,7 @@ export default function App() {
       N,
       charm: !!optConstraints.charm,
     });
-    const alt = frontierCompareCharm
+    const alt = frontierCompareMode === "charm"
       ? buildFrontier({
           tier: frontierTier,
           prices,
@@ -1746,7 +1747,7 @@ export default function App() {
     N,
     costs,
     features,
-    frontierCompareCharm,
+    frontierCompareMode,
     frontierSweep,
     frontierTier,
     leak,
@@ -1760,12 +1761,6 @@ export default function App() {
   const frontierOptimizedSlice = useMemo(() => {
     if (!optResult) return null;
     const ctx = optResult.context;
-    const sweep = deriveFrontierSweep({
-      tier: frontierTier,
-      prices: optResult.prices,
-      priceRange: priceRangeState?.map?.[frontierTier] ?? null,
-      optRange: ctx.ranges ? ctx.ranges[frontierTier] : null,
-    });
     return buildFrontier({
       tier: frontierTier,
       prices: optResult.prices,
@@ -1775,11 +1770,11 @@ export default function App() {
       refPrices: ctx.refPrices,
       leak: ctx.leak,
       constraints: ctx.constraints,
-      sweep,
+      sweep: frontierSweep,
       N: ctx.N,
       charm: !!ctx.constraints.charm,
     });
-  }, [frontierTier, optResult, priceRangeState?.map]);
+  }, [frontierSweep, frontierTier, optResult]);
 
 
   // Expected profit (current slider scenario)
@@ -2443,7 +2438,7 @@ export default function App() {
       if (hasBaseline && hasCurrent && !hasOptimized) {
         label = "Current & Baseline";
       } else if (hasBaseline && hasCurrent && hasOptimized) {
-        label = "Optimized + Current & Baseline";
+        label = "Optimized & Current & Baseline";
       } else if (hasBaseline && hasOptimized && !hasCurrent) {
         label = "Optimized & Baseline";
       } else if (hasCurrent && hasOptimized && !hasBaseline) {
@@ -2482,35 +2477,74 @@ export default function App() {
     const anchor = optimizedMarker ?? currentMarker ?? baselineMarker;
     if (!anchor) return null;
     const delta = anchor.profit - optProf;
-    const anchorLabel = optimizedMarker ? "Optimized" : baselineMarker ? "Baseline" : "Current";
     const sweep = frontier.base.sweep;
     const tierLabel = `${frontierTier[0].toUpperCase()}${frontierTier.slice(1)}`;
+
+    const pointsForBand =
+      frontier.base.feasiblePoints && frontier.base.feasiblePoints.length
+        ? frontier.base.feasiblePoints
+        : frontier.base.points;
+    const optIdx = pointsForBand.findIndex((p) => p === frontier.base.optimum);
+    const threshold = optProf * 0.99; // within 1% of peak
+    let bandMin = optBest;
+    let bandMax = optBest;
+    if (optIdx >= 0 && pointsForBand.length) {
+      let l = optIdx;
+      let r = optIdx;
+      while (l - 1 >= 0 && pointsForBand[l - 1].profit >= threshold) l--;
+      while (r + 1 < pointsForBand.length && pointsForBand[r + 1].profit >= threshold) r++;
+      bandMin = pointsForBand[l].price;
+      bandMax = pointsForBand[r].price;
+    }
+    const bandSpan = Math.max(0, bandMax - bandMin);
+    const inBand = anchor.price >= bandMin - 1e-6 && anchor.price <= bandMax + 1e-6;
+    const approxStepsWide = sweep.step > 0 ? bandSpan / sweep.step : 0;
+    const peakShape =
+      approxStepsWide >= 8 ? "Flat peak" : approxStepsWide >= 3 ? "Moderate peak" : "Sharp peak";
+    const isEdgePeak =
+      Math.abs(optBest - sweep.min) <= sweep.step * 1.5 || Math.abs(optBest - sweep.max) <= sweep.step * 1.5;
     return {
-      headline: `${tierLabel} sweep peak at $${optBest.toFixed(2)} (profit $${Math.round(optProf).toLocaleString()}); ${anchorLabel} at $${anchor.price.toFixed(2)} (${delta >= 0 ? "+" : "-"}$${Math.abs(Math.round(delta)).toLocaleString()} vs peak). Range $${sweep.min.toFixed(2)}-$${sweep.max.toFixed(2)}.`,
-      anchorLabel: `${anchorLabel} (${tierLabel})`,
-      anchorPrice: anchor.price,
+      headline: `${tierLabel} peak at $${optBest.toFixed(2)} (profit $${Math.round(optProf).toLocaleString()}); range $${sweep.min.toFixed(2)}-$${sweep.max.toFixed(2)}.`,
+      bullets: [
+        `${anchor.label} at $${anchor.price.toFixed(2)} (${delta >= 0 ? "+" : "-"}$${Math.abs(Math.round(delta)).toLocaleString()} vs peak).`,
+        `${peakShape}: within 1% of peak from $${bandMin.toFixed(2)}-$${bandMax.toFixed(2)} (${inBand ? "anchor inside" : "anchor outside"}).`,
+        ...(isEdgePeak ? ["Peak sits at the edge of the sweep range - widen ranges to confirm."] : []),
+      ],
       feasibility: { feasibleCount, infeasibleCount },
     };
-  }, [frontier.base.optimum, frontier.base.feasiblePoints?.length, frontier.base.infeasiblePoints?.length, frontier.base.sweep, frontierMarkers, frontierTier]);
+  }, [
+    frontier.base.optimum,
+    frontier.base.feasiblePoints,
+    frontier.base.infeasiblePoints,
+    frontier.base.points,
+    frontier.base.sweep,
+    frontierMarkers,
+    frontierTier,
+  ]);
 
   const frontierViewModel = useMemo(
     () =>
-      buildFrontierViewModel({
+      (() => {
+        const compareMode: FrontierCompareMode =
+          frontierCompareMode === "optimized" && !frontierOptimizedSlice ? "none" : frontierCompareMode;
+        return buildFrontierViewModel({
         base: {
           points: frontier.base.points,
           feasiblePoints: frontier.base.feasiblePoints,
           infeasiblePoints: frontier.base.infeasiblePoints,
           optimum: frontier.base.optimum,
         },
-        alt: frontier.alt
-          ? { label: optConstraints.charm ? "No charm" : "Charm .99", points: frontier.alt.points }
-          : frontierOptimizedSlice
-          ? { label: "Optimized ladder slice", points: frontierOptimizedSlice.points }
-          : undefined,
+        alt:
+          compareMode === "charm" && frontier.alt
+            ? { label: optConstraints.charm ? "No charm" : "Charm endings (.99)", points: frontier.alt.points }
+            : compareMode === "optimized" && frontierOptimizedSlice
+            ? { label: "Optimized ladder slice", points: frontierOptimizedSlice.points }
+            : undefined,
         markers: frontierMarkers,
         xLabel: `${frontierTier[0].toUpperCase()}${frontierTier.slice(1)} price`,
         run: scorecardView === "optimized" ? optimizedRun : baselineRun,
-      }),
+        });
+      })(),
     [
       baselineRun,
       frontier.alt,
@@ -2518,6 +2552,7 @@ export default function App() {
       frontier.base.infeasiblePoints,
       frontier.base.optimum,
       frontier.base.points,
+      frontierCompareMode,
       frontierOptimizedSlice,
       frontierMarkers,
       frontierTier,
@@ -5248,8 +5283,11 @@ export default function App() {
             frontierSummary={frontierSummary}
             frontierTier={frontierTier}
             setFrontierTier={setFrontierTier}
-            frontierCompareCharm={frontierCompareCharm}
-            setFrontierCompareCharm={setFrontierCompareCharm}
+            frontierCompareMode={
+              frontierCompareMode === "optimized" && !frontierOptimizedSlice ? "none" : frontierCompareMode
+            }
+            setFrontierCompareMode={setFrontierCompareMode}
+            hasOptimizedComparison={!!frontierOptimizedSlice}
             usePocketProfit={!!optConstraints.usePocketProfit}
             frontierSweep={frontierSweep}
             actions={<ActionCluster chart="frontier" id="frontier-main" csv />}
