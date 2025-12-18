@@ -288,8 +288,11 @@ export default function FrontierChartReal({
         if (![left, right, top, bottom].every(Number.isFinite) || right <= left || bottom <= top) return {};
 
         const margin = isNarrow ? 16 : 14;
+        // Extra inset from the y-axis so the Peak label doesn't visually sit on the axis/tick line.
+        // ~8 characters at the label font size.
+        const extraLeft = Math.round((labelFont - 1) * 0.6 * 8);
         const safe = {
-          left: left + margin,
+          left: left + margin + extraLeft,
           right: right - margin,
           top: top + margin,
           bottom: bottom - margin,
