@@ -5492,7 +5492,7 @@ export default function App() {
                     Optimized
                   </button>
                 </div>
-                <InfoTip id="chart.tornado" ariaLabel="How to read tornado chart?" />
+                <InfoTip id="chart.tornado" ariaLabel="How should I use the tornado sensitivity chart?" />
               </div>
             </div>
 
@@ -5505,13 +5505,8 @@ export default function App() {
             <div className="flex items-center justify-between mb-2 text-xs text-slate-600">
               <span>Showing: {tornadoViewLabel} ladder • {tornadoMetricLabel} • {tornadoUnitLabel}</span>
               <div className="flex items-center gap-2">
+                <span>Risk/confidence:</span>
                 <RiskBadge note={riskNote} infoId="risk.badge" />
-                <InfoTip
-                  className="ml-1"
-                  align="right"
-                  id="chart.tornado"
-                  ariaLabel="How should I use the tornado sensitivity chart?"
-                />
               </div>
             </div>
 
@@ -5532,7 +5527,6 @@ export default function App() {
                 <Tornado
                   chartId="tornado-main"
                   viewModel={tornadoViewModel}
-                  riskNote={riskNote}
                 />
               </ErrorBoundary>
             </Suspense>

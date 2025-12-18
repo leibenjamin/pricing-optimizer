@@ -14,7 +14,6 @@ import {
 import { CanvasRenderer } from "echarts/renderers";
 import type { ComposeOption } from "echarts/core";
 import type { ScenarioRun } from "../lib/domain";
-import RiskBadge from "./RiskBadge";
 
 echarts.use([
   BarChart,
@@ -45,7 +44,6 @@ export default function Tornado({
   valueMode = "absolute",
   metric = "profit",
   viewModel,
-  riskNote,
 }: {
   title?: string;
   rows?: TornadoDatum[];
@@ -59,7 +57,6 @@ export default function Tornado({
     metric: "profit" | "revenue";
     run?: ScenarioRun | null;
   };
-  riskNote?: string | null;
 }) {
   const { resolvedTitle, resolvedRows, resolvedValueMode, resolvedMetric } = useMemo(() => {
     return {
@@ -308,11 +305,8 @@ export default function Tornado({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] text-slate-600">
-          Varies one driver from low to high; sorted by absolute impact on {resolvedMetric}.
-        </span>
-        <RiskBadge note={riskNote} infoId="risk.badge" />
+      <div className="text-[11px] text-slate-600">
+        Varies one driver from low to high; sorted by absolute impact on {resolvedMetric}.
       </div>
       <div ref={ref} className="w-full min-h-[420px] lg:min-h-[520px]" />
     </div>
