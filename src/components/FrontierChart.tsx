@@ -232,6 +232,144 @@ export default function FrontierChartReal({
     );
     const priceDecimals = priceExtent ? (priceExtent.step < 1 ? 2 : 0) : 0;
 
+    const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
+    const peakLabelLayout = (() => {
+      // Build a stable list of plotted points we want to avoid covering with the "Peak" label.
+      const plotted: Array<{ price: number; profit: number }> = [
+        ...chartPoints.map((p) => ({ price: p.price, profit: p.profit })),
+        ...(comparisonView?.points?.map((p) => ({ price: p.price, profit: p.profit })) ?? []),
+        ...(chartOverlay?.feasiblePoints?.map((p) => ({ price: p.price, profit: p.profit })) ?? []),
+        ...(chartOverlay?.infeasiblePoints?.map((p) => ({ price: p.price, profit: p.profit })) ?? []),
+        ...(markersView?.map((m) => ({ price: m.price, profit: m.profit })) ?? []),
+      ].filter((p) => Number.isFinite(p.price) && Number.isFinite(p.profit));
+
+      // Note: ECharts labelLayout only manages label-vs-label overlap by default. We use a
+      // custom layout to avoid covering the curve, markers, and axes (especially on narrow charts).
+      return (params: unknown) => {
+        const chart = chartRef.current;
+        if (!chart || !priceExtent || !profitExtent) return {};
+
+        const p = params as {
+          labelRect?: { width: number; height: number };
+          rect?: { x: number; y: number; width: number; height: number };
+        };
+        const labelRect = p?.labelRect;
+        const hostRect = p?.rect;
+        if (!labelRect || !hostRect) return {};
+
+        const labelW = labelRect.width;
+        const labelH = labelRect.height;
+        if (!Number.isFinite(labelW) || !Number.isFinite(labelH) || labelW <= 0 || labelH <= 0) return {};
+
+        const px = hostRect.x + hostRect.width / 2;
+        const py = hostRect.y + hostRect.height / 2;
+        if (!Number.isFinite(px) || !Number.isFinite(py)) return {};
+
+        // Compute the plot-area rectangle in pixels (data-extent corners), then keep a safety margin
+        // so we don't sit on top of axis lines/ticks.
+        const topLeft = chart.convertToPixel(
+          { xAxisIndex: 0, yAxisIndex: 0 },
+          [priceExtent.min, profitExtent.max]
+        ) as unknown;
+        const bottomRight = chart.convertToPixel(
+          { xAxisIndex: 0, yAxisIndex: 0 },
+          [priceExtent.max, profitExtent.min]
+        ) as unknown;
+        if (!Array.isArray(topLeft) || !Array.isArray(bottomRight) || topLeft.length < 2 || bottomRight.length < 2) {
+          return {};
+        }
+
+        const left = Math.min(Number(topLeft[0]), Number(bottomRight[0]));
+        const right = Math.max(Number(topLeft[0]), Number(bottomRight[0]));
+        const top = Math.min(Number(topLeft[1]), Number(bottomRight[1]));
+        const bottom = Math.max(Number(topLeft[1]), Number(bottomRight[1]));
+        if (![left, right, top, bottom].every(Number.isFinite) || right <= left || bottom <= top) return {};
+
+        const margin = isNarrow ? 10 : 8;
+        const safe = {
+          left: left + margin,
+          right: right - margin,
+          top: top + margin,
+          bottom: bottom - margin,
+        };
+
+        const pad = isNarrow ? 10 : 12;
+        const halfW = labelW / 2;
+        const halfH = labelH / 2;
+
+        const candidates = [
+          { name: "topRight", x: px + pad, y: py - labelH - pad },
+          { name: "topLeft", x: px - labelW - pad, y: py - labelH - pad },
+          { name: "bottomRight", x: px + pad, y: py + pad },
+          { name: "bottomLeft", x: px - labelW - pad, y: py + pad },
+          { name: "right", x: px + pad, y: py - halfH },
+          { name: "left", x: px - labelW - pad, y: py - halfH },
+          { name: "top", x: px - halfW, y: py - labelH - pad },
+          { name: "bottom", x: px - halfW, y: py + pad },
+        ];
+
+        // Convert plotted points once; skip points very close to the peak itself so we don't
+        // penalize unavoidable overlap around the anchor.
+        const peakR2 = Math.pow(isNarrow ? 10 : 12, 2);
+        const plottedPx = plotted
+          .map((pt) => {
+            const out = chart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [pt.price, pt.profit]) as unknown;
+            if (!Array.isArray(out) || out.length < 2) return null;
+            const x = Number(out[0]);
+            const y = Number(out[1]);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+            const dx = x - px;
+            const dy = y - py;
+            if (dx * dx + dy * dy <= peakR2) return null;
+            return { x, y };
+          })
+          .filter(Boolean) as Array<{ x: number; y: number }>;
+
+        const scoreCandidate = (c: { x: number; y: number }) => {
+          const box = { x1: c.x, y1: c.y, x2: c.x + labelW, y2: c.y + labelH };
+
+          const outX = Math.max(0, safe.left - box.x1) + Math.max(0, box.x2 - safe.right);
+          const outY = Math.max(0, safe.top - box.y1) + Math.max(0, box.y2 - safe.bottom);
+          const boundsPenalty = (outX + outY) * 10_000;
+
+          // Count how many plotted points would sit under the label; treat this as "visual occlusion".
+          const pointPad = isNarrow ? 6 : 5;
+          const occludes = plottedPx.reduce((acc, pt) => {
+            const inside =
+              pt.x >= box.x1 - pointPad &&
+              pt.x <= box.x2 + pointPad &&
+              pt.y >= box.y1 - pointPad &&
+              pt.y <= box.y2 + pointPad;
+            return inside ? acc + 1 : acc;
+          }, 0);
+
+          // Prefer keeping the label close to the point for scanability, but not at the cost of occlusion.
+          const cx = (box.x1 + box.x2) / 2;
+          const cy = (box.y1 + box.y2) / 2;
+          const dist = Math.hypot(cx - px, cy - py);
+
+          return boundsPenalty + occludes * 250 + dist * 0.4;
+        };
+
+        const best = candidates.reduce<{ x: number; y: number; score: number } | null>((acc, c) => {
+          const score = scoreCandidate(c);
+          if (!acc || score < acc.score) return { x: c.x, y: c.y, score };
+          return acc;
+        }, null);
+
+        if (!best) return {};
+
+        const maxX = Math.max(safe.left, safe.right - labelW);
+        const maxY = Math.max(safe.top, safe.bottom - labelH);
+
+        return {
+          x: clamp(best.x, safe.left, maxX),
+          y: clamp(best.y, safe.top, maxY),
+        };
+      };
+    })();
+
     const inferKinds = (m: FrontierMarker) => {
       const s = `${m.label ?? ""}`.toLowerCase();
       return {
@@ -461,23 +599,32 @@ export default function FrontierChartReal({
                 symbolSize: 10,
                 itemStyle: { borderWidth: 1 },
                 emphasis: { focus: "series" },
+                labelLayout: peakLabelLayout,
                 label: {
-                  show: true,
+                  show: !isNarrow,
                   formatter: (p: CallbackDataParams) => {
                     const v = Array.isArray(p?.value) ? p.value : undefined;
                     if (v && v.length >= 2) {
                       const price = Number(v[0]);
                       const prof = Number(v[1]);
                       if (Number.isFinite(price) && Number.isFinite(prof)) {
-                        return `$${price.toFixed(2)} -> ${prof.toFixed(0)}`;
+                        return `Peak\n$${price.toFixed(2)} → $${Math.round(prof).toLocaleString()}`;
                       }
                     }
                     return "";
                   },
                   fontSize: labelFont - 1,
+                  lineHeight: isNarrow ? 12 : 14,
+                  color: "#0f172a",
+                  backgroundColor: "rgba(255,255,255,0.92)",
+                  borderColor: "#cbd5e1",
+                  borderWidth: 1,
+                  borderRadius: 4,
+                  padding: [3, 6],
                   position: "top",
-                  distance: 6,
+                  distance: isNarrow ? 10 : 12,
                 },
+                z: 6,
               } as ScatterSeriesOption,
             ]
           : []),
