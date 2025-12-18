@@ -9,7 +9,7 @@ import type { TornadoMetric, TornadoValueMode } from "./tornadoView";
 import type { ChannelMix, Scenario, ScenarioUncertainty } from "./domain";
 import type { RetryConfig } from "./net";
 import { csvTemplate } from "./csv";
-import { downloadBlob } from "./download";
+import { downloadBlob, sanitizeSpreadsheetCell } from "./download";
 
 export type SharePayloadArgs = {
   prices: Prices;
@@ -98,7 +98,7 @@ export function buildScenarioCsv(
         } else if (typeof value === "boolean") {
           row[idx] = value ? "true" : "false";
         } else {
-          const s = String(value);
+          const s = typeof value === "string" ? sanitizeSpreadsheetCell(value) : String(value);
           // Quote fields that contain commas, quotes, or newlines to avoid column shifts on parse.
           row[idx] = /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
         }

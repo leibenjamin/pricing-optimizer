@@ -52,6 +52,7 @@ import PresetPicker from "./components/PresetPicker";
 
 import { explainGaps, topDriver, explainOptimizerResult } from "./lib/explain";
 import InfoTip from "./components/InfoTip";
+import NumberInput from "./components/NumberInput";
 
 import ActionCluster from "./components/ActionCluster";
 import DataImport from "./components/DataImport";
@@ -93,11 +94,9 @@ import {
 } from "./lib/viewModels";
 import {
   buildScenarioSnapshot,
-  isScenarioImport,
   mapNormalizedToUI,
   normalizeSegmentsForSave,
   type NormalizedSegment,
-  type ScenarioImport,
 } from "./lib/snapshots";
 import {
   buildSharePayload,
@@ -319,27 +318,39 @@ function mapFitToSegments(
   }));
 }
 
-const isFullSegment = (s: unknown): s is Segment =>
-  !!s &&
-  typeof s === "object" &&
-  typeof (s as Segment).name === "string" &&
-  typeof (s as Segment).betaPrice === "number" &&
-  typeof (s as Segment).betaFeatA === "number" &&
-  typeof (s as Segment).betaFeatB === "number" &&
-  typeof (s as Segment).betaNone === "number" &&
-  typeof (s as Segment).weight === "number";
+const isFullSegment = (s: unknown): s is Segment => {
+  if (!s || typeof s !== "object") return false;
+  const seg = s as Segment;
+  return (
+    typeof seg.name === "string" &&
+    Number.isFinite(seg.weight) &&
+    Number.isFinite(seg.betaPrice) &&
+    Number.isFinite(seg.betaFeatA) &&
+    Number.isFinite(seg.betaFeatB) &&
+    Number.isFinite(seg.betaNone) &&
+    (seg.alphaAnchor === undefined || Number.isFinite(seg.alphaAnchor)) &&
+    (seg.lambdaLoss === undefined || Number.isFinite(seg.lambdaLoss)) &&
+    (seg.betaRefAnchor === undefined || Number.isFinite(seg.betaRefAnchor))
+  );
+};
 
 function coerceSegmentsForCalc(input: unknown, fallback: Segment[]): Segment[] {
-  if (Array.isArray(input) && input.every(isFullSegment)) {
-    return normalizeWeights(input as Segment[]);
-  }
+  const toFinite = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+
   if (Array.isArray(input)) {
+    // Avoid UI freezes / memory spikes if untrusted data contains huge arrays.
+    const safe = input.slice(0, 50);
+
+    if (safe.every(isFullSegment)) {
+      return normalizeWeights(safe as Segment[]);
+    }
     const fallbackSeg = (idx: number): Segment | null => {
       const base = fallback[idx] ?? fallback[0] ?? null;
       return base ? { ...base } : null;
     };
     const mapped: Segment[] = [];
-    (input as unknown[]).forEach((raw, idx) => {
+    safe.forEach((raw, idx) => {
       const base = fallbackSeg(idx);
       if (!raw || typeof raw !== "object") {
         if (base) mapped.push(base);
@@ -356,22 +367,449 @@ function coerceSegmentsForCalc(input: unknown, fallback: Segment[]): Segment[] {
           typeof anyR["name"] === "string" && anyR["name"].trim()
             ? (anyR["name"] as string)
             : base?.name ?? `Segment ${idx + 1}`,
-        weight: typeof anyR["weight"] === "number" ? anyR["weight"] : base?.weight ?? 1,
-        betaPrice: typeof beta["price"] === "number" ? (beta["price"] as number) : base?.betaPrice ?? 0,
-        betaFeatA: typeof beta["featA"] === "number" ? (beta["featA"] as number) : base?.betaFeatA ?? 0,
-        betaFeatB: typeof beta["featB"] === "number" ? (beta["featB"] as number) : base?.betaFeatB ?? 0,
-        betaNone: typeof anyR["betaNone"] === "number" ? (anyR["betaNone"] as number) : base?.betaNone ?? 0,
+        weight: toFinite(anyR["weight"]) ?? base?.weight ?? 1,
+        betaPrice: toFinite(beta["price"]) ?? base?.betaPrice ?? 0,
+        betaFeatA: toFinite(beta["featA"]) ?? base?.betaFeatA ?? 0,
+        betaFeatB: toFinite(beta["featB"]) ?? base?.betaFeatB ?? 0,
+        betaNone: toFinite(anyR["betaNone"]) ?? base?.betaNone ?? 0,
         alphaAnchor:
-          typeof anyR["alphaAnchor"] === "number" ? (anyR["alphaAnchor"] as number) : base?.alphaAnchor ?? 0,
+          toFinite(anyR["alphaAnchor"]) ?? base?.alphaAnchor ?? 0,
         lambdaLoss:
-          typeof anyR["lambdaLoss"] === "number" ? (anyR["lambdaLoss"] as number) : base?.lambdaLoss ?? 1,
-        ...(typeof beta["refAnchor"] === "number" ? { betaRefAnchor: beta["refAnchor"] as number } : {}),
+          toFinite(anyR["lambdaLoss"]) ?? base?.lambdaLoss ?? 1,
+        ...(toFinite(beta["refAnchor"]) !== null ? { betaRefAnchor: toFinite(beta["refAnchor"]) as number } : {}),
       };
       mapped.push(seg);
     });
     if (mapped.length) return normalizeWeights(mapped);
   }
   return fallback;
+}
+
+const TIERS = ["good", "better", "best"] as const;
+
+const clampNumber = (v: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, v));
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === "object" && !Array.isArray(v);
+
+const toFiniteNumber = (v: unknown): number | null => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (!t) return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+};
+
+function coerceTieredPatch(
+  raw: unknown,
+  fallback: Prices,
+  opts: { min: number; max: number }
+): Prices | null {
+  if (!isRecord(raw)) return null;
+  const next: Prices = { ...fallback };
+  let any = false;
+  for (const tier of TIERS) {
+    if (!Object.prototype.hasOwnProperty.call(raw, tier)) continue;
+    const n = toFiniteNumber(raw[tier]);
+    if (n === null) continue;
+    next[tier] = clampNumber(n, opts.min, opts.max);
+    any = true;
+  }
+  return any ? next : null;
+}
+
+function coerceFeaturesPatch(raw: unknown, fallback: Features): Features | null {
+  if (!isRecord(raw)) return null;
+  const next: Features = {
+    featA: { ...fallback.featA },
+    featB: { ...fallback.featB },
+  };
+  let any = false;
+  if (Object.prototype.hasOwnProperty.call(raw, "featA")) {
+    const v = coerceTieredPatch(raw.featA, fallback.featA, { min: 0, max: 1 });
+    if (v) {
+      next.featA = v;
+      any = true;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, "featB")) {
+    const v = coerceTieredPatch(raw.featB, fallback.featB, { min: 0, max: 1 });
+    if (v) {
+      next.featB = v;
+      any = true;
+    }
+  }
+  return any ? next : null;
+}
+
+function coerceLeakagesPatch(raw: unknown, fallback: Leakages): Leakages | null {
+  if (!isRecord(raw)) return null;
+  const next: Leakages = {
+    ...fallback,
+    promo: { ...fallback.promo },
+    volume: { ...fallback.volume },
+  };
+  let any = false;
+
+  if (Object.prototype.hasOwnProperty.call(raw, "promo")) {
+    const v = coerceTieredPatch(raw.promo, fallback.promo, { min: 0, max: 1 });
+    if (v) {
+      next.promo = v;
+      any = true;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, "volume")) {
+    const v = coerceTieredPatch(raw.volume, fallback.volume, { min: 0, max: 1 });
+    if (v) {
+      next.volume = v;
+      any = true;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(raw, "paymentPct")) {
+    const n = toFiniteNumber(raw.paymentPct);
+    if (n !== null) {
+      next.paymentPct = clampNumber(n, 0, 1);
+      any = true;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, "fxPct")) {
+    const n = toFiniteNumber(raw.fxPct);
+    if (n !== null) {
+      next.fxPct = clampNumber(n, 0, 1);
+      any = true;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, "refundsPct")) {
+    const n = toFiniteNumber(raw.refundsPct);
+    if (n !== null) {
+      next.refundsPct = clampNumber(n, 0, 1);
+      any = true;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(raw, "paymentFixed")) {
+    const n = toFiniteNumber(raw.paymentFixed);
+    if (n !== null) {
+      next.paymentFixed = clampNumber(n, 0, 1_000_000);
+      any = true;
+    }
+  }
+
+  return any ? next : null;
+}
+
+function coerceOptRangesPatch(raw: unknown): Partial<SearchRanges> | null {
+  if (!isRecord(raw)) return null;
+  const out: Partial<SearchRanges> = {};
+  let any = false;
+
+  const tuple = (v: unknown): [number, number] | null => {
+    if (!Array.isArray(v) || v.length !== 2) return null;
+    const a = toFiniteNumber(v[0]);
+    const b = toFiniteNumber(v[1]);
+    if (a === null || b === null) return null;
+    const min = clampNumber(a, 0, 1_000_000);
+    const max = clampNumber(b, 0, 1_000_000);
+    return max >= min ? [min, max] : [max, min];
+  };
+
+  for (const tier of TIERS) {
+    if (!Object.prototype.hasOwnProperty.call(raw, tier)) continue;
+    const v = tuple(raw[tier]);
+    if (!v) continue;
+    out[tier] = v;
+    any = true;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(raw, "step")) {
+    const n = toFiniteNumber(raw.step);
+    if (n !== null) {
+      out.step = clampNumber(n, 0.01, 1_000_000);
+      any = true;
+    }
+  }
+
+  return any ? out : null;
+}
+
+function coerceOptConstraintsPatch(raw: unknown): Partial<Constraints> | null {
+  if (!isRecord(raw)) return null;
+  const out: Partial<Constraints> = {};
+  let any = false;
+
+  const nonNeg = (v: unknown): number | null => {
+    const n = toFiniteNumber(v);
+    return n === null ? null : Math.max(0, n);
+  };
+
+  if (Object.prototype.hasOwnProperty.call(raw, "gapGB")) {
+    const n = nonNeg(raw.gapGB);
+    if (n !== null) {
+      out.gapGB = n;
+      any = true;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, "gapBB")) {
+    const n = nonNeg(raw.gapBB);
+    if (n !== null) {
+      out.gapBB = n;
+      any = true;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(raw, "maxNoneShare")) {
+    const n = toFiniteNumber(raw.maxNoneShare);
+    if (n !== null) {
+      out.maxNoneShare = clampNumber(n, 0, 1);
+      any = true;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, "minTakeRate")) {
+    const n = toFiniteNumber(raw.minTakeRate);
+    if (n !== null) {
+      out.minTakeRate = clampNumber(n, 0, 1);
+      any = true;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(raw, "charm") && typeof raw.charm === "boolean") {
+    out.charm = raw.charm;
+    any = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, "usePocketMargins") && typeof raw.usePocketMargins === "boolean") {
+    out.usePocketMargins = raw.usePocketMargins;
+    any = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, "usePocketProfit") && typeof raw.usePocketProfit === "boolean") {
+    out.usePocketProfit = raw.usePocketProfit;
+    any = true;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(raw, "marginFloor") && isRecord(raw.marginFloor)) {
+    const mfRaw = raw.marginFloor;
+    const mf: Partial<Constraints["marginFloor"]> = {};
+    for (const tier of TIERS) {
+      if (!Object.prototype.hasOwnProperty.call(mfRaw, tier)) continue;
+      const n = nonNeg(mfRaw[tier]);
+      if (n === null) continue;
+      mf[tier] = n;
+    }
+    if (Object.keys(mf).length) {
+      out.marginFloor = mf as Constraints["marginFloor"];
+      any = true;
+    }
+  }
+
+  return any ? out : null;
+}
+
+function coerceTierRangeMap(raw: unknown): TierRangeMap | null {
+  if (!isRecord(raw)) return null;
+  const out: TierRangeMap = {};
+  for (const tier of TIERS) {
+    if (!Object.prototype.hasOwnProperty.call(raw, tier)) continue;
+    const stats = raw[tier];
+    if (!isRecord(stats)) continue;
+    const min = toFiniteNumber(stats.min);
+    const max = toFiniteNumber(stats.max);
+    if (min === null || max === null) continue;
+    const mn = clampNumber(min, 0, 1_000_000);
+    const mx = clampNumber(max, 0, 1_000_000);
+    out[tier] = mx >= mn ? { min: mn, max: mx } : { min: mx, max: mn };
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function coercePriceRangeSource(raw: unknown): PriceRangeSource | null {
+  if (raw === "synthetic" || raw === "imported" || raw === "shared") return raw;
+  return null;
+}
+
+function coerceChannelMix(raw: unknown): Array<{ preset: string; w: number }> | null {
+  if (!Array.isArray(raw)) return null;
+  const out: Array<{ preset: string; w: number }> = [];
+  for (const item of raw.slice(0, 50)) {
+    if (!isRecord(item)) continue;
+    const preset = typeof item.preset === "string" ? item.preset : null;
+    const w = toFiniteNumber(item.w);
+    if (!preset || w === null) continue;
+    out.push({ preset, w: clampNumber(w, 0, 100) });
+  }
+  return out;
+}
+
+function coerceUncertainty(raw: unknown): ScenarioUncertainty | null {
+  if (raw === null) return null;
+  if (!isRecord(raw)) return null;
+
+  const out: ScenarioUncertainty = {};
+  if (Object.prototype.hasOwnProperty.call(raw, "priceScaleDelta")) {
+    const n = toFiniteNumber(raw.priceScaleDelta);
+    if (n !== null) out.priceScaleDelta = clampNumber(n, 0, 1);
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, "leakDeltaPct")) {
+    const n = toFiniteNumber(raw.leakDeltaPct);
+    if (n !== null) out.leakDeltaPct = clampNumber(n, 0, 1);
+  }
+  if (
+    raw.source === "preset" ||
+    raw.source === "heuristic" ||
+    raw.source === "precomputed" ||
+    raw.source === "simulated" ||
+    raw.source === "user"
+  ) {
+    out.source = raw.source;
+  }
+  if (typeof raw.note === "string" && raw.note.length <= 500) out.note = raw.note;
+  if (Object.prototype.hasOwnProperty.call(raw, "probBelowBaseline")) {
+    const n = toFiniteNumber(raw.probBelowBaseline);
+    if (n !== null) out.probBelowBaseline = clampNumber(n, 0, 1);
+  }
+
+  return Object.keys(out).length ? out : null;
+}
+
+type ScenarioImportPatch = {
+  prices?: Prices;
+  costs?: Prices;
+  refPrices?: Prices;
+  features?: Features;
+  leak?: Leakages;
+  segments?: Segment[];
+  optConstraints?: Partial<Constraints>;
+  optRanges?: Partial<SearchRanges>;
+  priceRange?: TierRangeMap;
+  priceRangeSource?: PriceRangeSource;
+  channelMix?: Array<{ preset: string; w: number }>;
+  uncertainty?: ScenarioUncertainty | null;
+  optimizerKind?: OptimizerKind;
+  tornadoPocket?: boolean;
+  tornadoPriceBump?: number;
+  tornadoPctBump?: number;
+  tornadoRangeMode?: "symmetric" | "data";
+  tornadoMetric?: TornadoMetric;
+  tornadoValueMode?: TornadoValueMode;
+  retentionPct?: number;
+  retentionMonths?: number;
+  kpiFloorAdj?: number;
+};
+
+function coerceScenarioImportPatch(
+  raw: unknown,
+  ctx: {
+    prices: Prices;
+    costs: Prices;
+    refPrices: Prices;
+    features: Features;
+    leak: Leakages;
+    segments: Segment[];
+  }
+): { patch: ScenarioImportPatch; issues: string[] } {
+  const issues: string[] = [];
+  const patch: ScenarioImportPatch = {};
+  if (!isRecord(raw)) return { patch, issues: ["Not an object"] };
+
+  const analysis = isRecord(raw.analysis) ? raw.analysis : null;
+
+  const prices = coerceTieredPatch(raw.prices, ctx.prices, { min: 0, max: 1_000_000 });
+  if (prices) patch.prices = prices;
+  else if (Object.prototype.hasOwnProperty.call(raw, "prices")) issues.push("Ignored invalid prices");
+
+  const costs = coerceTieredPatch(raw.costs, ctx.costs, { min: 0, max: 1_000_000 });
+  if (costs) patch.costs = costs;
+  else if (Object.prototype.hasOwnProperty.call(raw, "costs")) issues.push("Ignored invalid costs");
+
+  const refs = coerceTieredPatch(raw.refPrices, ctx.refPrices, { min: 0, max: 1_000_000 });
+  if (refs) patch.refPrices = refs;
+  else if (Object.prototype.hasOwnProperty.call(raw, "refPrices")) issues.push("Ignored invalid reference prices");
+
+  const features = coerceFeaturesPatch(raw.features, ctx.features);
+  if (features) patch.features = features;
+  else if (Object.prototype.hasOwnProperty.call(raw, "features")) issues.push("Ignored invalid features");
+
+  const leak = coerceLeakagesPatch(raw.leak, ctx.leak);
+  if (leak) patch.leak = leak;
+  else if (Object.prototype.hasOwnProperty.call(raw, "leak")) issues.push("Ignored invalid leakages");
+
+  if (Object.prototype.hasOwnProperty.call(raw, "segments")) {
+    if (Array.isArray(raw.segments)) {
+      patch.segments = coerceSegmentsForCalc(raw.segments, ctx.segments);
+    } else {
+      issues.push("Ignored invalid segments");
+    }
+  }
+
+  const optRangesRaw = raw.optRanges ?? analysis?.optRanges;
+  const optRanges = coerceOptRangesPatch(optRangesRaw);
+  if (optRanges) patch.optRanges = optRanges;
+  else if (optRangesRaw !== undefined) issues.push("Ignored invalid optimizer ranges");
+
+  const optConstraintsRaw = raw.optConstraints ?? analysis?.optConstraints;
+  const optConstraints = coerceOptConstraintsPatch(optConstraintsRaw);
+  if (optConstraints) patch.optConstraints = optConstraints;
+  else if (optConstraintsRaw !== undefined) issues.push("Ignored invalid optimizer constraints");
+
+  const prRaw = raw.priceRange ?? analysis?.priceRange;
+  const pr = coerceTierRangeMap(prRaw);
+  if (pr) patch.priceRange = pr;
+  else if (prRaw !== undefined) issues.push("Ignored invalid price range");
+
+  const prsRaw = raw.priceRangeSource ?? analysis?.priceRangeSource;
+  const prs = coercePriceRangeSource(prsRaw);
+  if (prs) patch.priceRangeSource = prs;
+
+  const mixRaw = raw.channelMix ?? analysis?.channelMix;
+  const mix = coerceChannelMix(mixRaw);
+  if (mix !== null) patch.channelMix = mix;
+  else if (mixRaw !== undefined) issues.push("Ignored invalid channel mix");
+
+  const uncRaw = Object.prototype.hasOwnProperty.call(raw, "uncertainty")
+    ? raw.uncertainty
+    : analysis && Object.prototype.hasOwnProperty.call(analysis, "uncertainty")
+    ? analysis.uncertainty
+    : undefined;
+  if (uncRaw !== undefined) {
+    patch.uncertainty = coerceUncertainty(uncRaw);
+  }
+
+  const optimizerKindRaw = raw.optimizerKind ?? analysis?.optimizerKind;
+  if (optimizerKindRaw === "grid-worker" || optimizerKindRaw === "grid-inline" || optimizerKindRaw === "future") {
+    patch.optimizerKind = optimizerKindRaw;
+  }
+
+  if (analysis) {
+    if (typeof analysis.tornadoPocket === "boolean") patch.tornadoPocket = analysis.tornadoPocket;
+    if (toFiniteNumber(analysis.tornadoPriceBump) !== null)
+      patch.tornadoPriceBump = clampNumber(toFiniteNumber(analysis.tornadoPriceBump) as number, 1, 40);
+    if (toFiniteNumber(analysis.tornadoPctBump) !== null)
+      patch.tornadoPctBump = clampNumber(toFiniteNumber(analysis.tornadoPctBump) as number, 0, 50);
+    if (analysis.tornadoRangeMode === "symmetric" || analysis.tornadoRangeMode === "data") {
+      patch.tornadoRangeMode = analysis.tornadoRangeMode;
+    }
+    if (analysis.tornadoMetric === "profit" || analysis.tornadoMetric === "revenue") {
+      patch.tornadoMetric = analysis.tornadoMetric;
+    }
+    if (analysis.tornadoValueMode === "absolute" || analysis.tornadoValueMode === "percent") {
+      patch.tornadoValueMode = analysis.tornadoValueMode;
+    }
+
+    if (toFiniteNumber(analysis.retentionPct) !== null) {
+      patch.retentionPct = clampNumber(toFiniteNumber(analysis.retentionPct) as number, 70, 99.9);
+    }
+    if (toFiniteNumber(analysis.retentionMonths) !== null) {
+      patch.retentionMonths = clampNumber(toFiniteNumber(analysis.retentionMonths) as number, 6, 24);
+    }
+    if (toFiniteNumber(analysis.kpiFloorAdj) !== null) {
+      patch.kpiFloorAdj = clampNumber(toFiniteNumber(analysis.kpiFloorAdj) as number, -10_000, 10_000);
+    }
+  }
+
+  return { patch, issues };
 }
 
 export default function App() {
@@ -1192,90 +1630,23 @@ export default function App() {
           toast("error", `Load failed (HTTP ${res.status})`);
           return;
         }
-        const { scenario } = (await res.json()) as {
-          scenario: {
-            prices: typeof prices;
-            costs: typeof costs;
-            features: typeof features;
-            refPrices?: typeof refPrices;
-            leak?: typeof leak;
-            segments?: typeof segments;
-            channelMix?: typeof channelMix;
-          analysis?: {
-            tornadoPocket?: boolean;
-            tornadoPriceBump?: number;
-            tornadoPctBump?: number;
-            tornadoRangeMode?: "symmetric" | "data";
-            retentionPct?: number;
-            retentionMonths?: number;
-            kpiFloorAdj?: number;
-            priceRange?: TierRangeMap;
-            priceRangeSource?: PriceRangeSource;
-            optRanges?: typeof optRanges;
-            optConstraints?: typeof optConstraints;
-            channelMix?: typeof channelMix;
-            uncertainty?: ScenarioUncertainty;
-          };
-        };
-      };
-        setPrices(scenario.prices);
-        setCosts(scenario.costs);
-        setFeatures(scenario.features);
-        if (scenario.refPrices) setRefPrices(scenario.refPrices);
-        if (scenario.leak) setLeak(scenario.leak);
-        if (scenario.segments) setSegments(scenario.segments);
-        const incomingMix = scenario.channelMix ?? scenario.analysis?.channelMix;
-        if (incomingMix && Array.isArray(incomingMix) && incomingMix.length) {
-          setChannelMix(incomingMix as typeof channelMix);
-          setChannelBlendApplied(true);
-        }
-        const incomingUnc = (scenario as { uncertainty?: unknown }).uncertainty ?? scenario.analysis?.uncertainty;
-        if (incomingUnc) {
-          setScenarioUncertainty(incomingUnc as ScenarioUncertainty);
+        const json: unknown = await res.json();
+        if (!isRecord(json) || !Object.prototype.hasOwnProperty.call(json, "scenario")) {
+          pushJ(`[${now()}] Load failed for id ${sid} (invalid response shape)`);
+          toast("error", "Load failed (invalid response)");
+          return;
         }
 
-        // Restore analysis knobs if present
-        if (scenario.analysis) {
-          if (typeof scenario.analysis.tornadoPocket === "boolean") {
-            setTornadoPocket(scenario.analysis.tornadoPocket);
-          }
-          if (typeof scenario.analysis.tornadoPriceBump === "number") {
-            setTornadoPriceBump(scenario.analysis.tornadoPriceBump);
-          }
-          if (typeof scenario.analysis.tornadoPctBump === "number") {
-            setTornadoPctBump(scenario.analysis.tornadoPctBump);
-          }
-          if (
-            scenario.analysis.tornadoRangeMode === "symmetric" ||
-            scenario.analysis.tornadoRangeMode === "data"
-          ) {
-            setTornadoRangeMode(scenario.analysis.tornadoRangeMode);
-          }
-          if (typeof scenario.analysis.retentionPct === "number") {
-            setRetentionPct(scenario.analysis.retentionPct);
-          }
-          if (typeof scenario.analysis.retentionMonths === "number") {
-            setRetentionMonths(Math.min(24, Math.max(6, scenario.analysis.retentionMonths)));
-          }
-          if (typeof scenario.analysis.kpiFloorAdj === "number") {
-            setKpiFloorAdj(scenario.analysis.kpiFloorAdj);
-          }
-          if (scenario.analysis.optRanges) setOptRanges(scenario.analysis.optRanges);
-          if (scenario.analysis.optConstraints)
-            setOptConstraints(scenario.analysis.optConstraints);
-          if (scenario.analysis.priceRange) {
-            const ok = setPriceRangeFromData(
-              scenario.analysis.priceRange,
-              scenario.analysis.priceRangeSource ?? "shared"
-            );
-            if (!ok) {
-              fallbackToSyntheticRanges();
-            }
-          } else {
-            fallbackToSyntheticRanges();
-          }
-        } else {
-          fallbackToSyntheticRanges();
+        const scenario = (json as Record<string, unknown>).scenario;
+        const applied = applyScenarioFromUntrusted(scenario, {
+          mode: "replace",
+          context: `Loaded scenario ${sid}`,
+          requirePrices: true,
+        });
+        if (!applied.ok) {
+          pushJ(`[${now()}] Load failed for id ${sid}: ${applied.issues.join("; ")}`);
+          toast("error", "Load failed (invalid scenario)");
+          return;
         }
 
         rememberId(sid);
@@ -3190,56 +3561,17 @@ export default function App() {
     setBaselineRun,
   ]);
 
-  type SegmentImportNested = { weight: number; beta: { price: number; featA: number; featB: number; refAnchor?: number } };
-  const isSegmentImportNested = (segs: unknown): segs is SegmentImportNested[] => {
-    return (
-      Array.isArray(segs) &&
-      segs.length > 0 &&
-      typeof (segs[0] as Record<string, unknown>).beta === "object"
-    );
-  };
+  function applyScenarioImportPatch(patch: ScenarioImportPatch, mode: "patch" | "replace") {
+    if (patch.prices) setPrices(patch.prices);
+    if (patch.costs) setCosts(patch.costs);
+    if (patch.refPrices) setRefPrices(patch.refPrices);
+    if (patch.features) setFeatures(patch.features);
+    if (patch.leak) setLeak(patch.leak);
 
-  // Apply a (partial) scenario object into state
-  function applyScenarioPartial(obj: {
-    prices?: typeof prices;
-    costs?: typeof costs;
-    refPrices?: typeof refPrices;
-    leak?: typeof leak;
-    segments?: Segment[] | SegmentImportNested[];
-    optConstraints?: Partial<Constraints>;
-    optRanges?: Partial<SearchRanges>;
-    priceRange?: TierRangeMap;
-    priceRangeSource?: PriceRangeSource;
-    channelMix?: Array<{ preset: string; w: number }>;
-    uncertainty?: ScenarioUncertainty | null;
-    optimizerKind?: OptimizerKind;
-  }) {
-    if (obj.prices) setPrices(obj.prices);
-    if (obj.costs) setCosts(obj.costs);
-    if (obj.refPrices) setRefPrices(obj.refPrices);
-    if (obj.leak) setLeak(obj.leak);
+    if (patch.segments) setSegments(normalizeWeights(patch.segments));
 
-    // Accept both your UI-shape segments and the nested CSV shape
-    if (obj.segments) {
-      let nextSegs: Segment[];
-      if (isSegmentImportNested(obj.segments)) {
-        const mapped: Segment[] = obj.segments.map((s) => ({
-          name: "",
-          weight: Number(s.weight) || 0,
-          betaPrice: Number(s.beta.price) || 0,
-          betaFeatA: Number(s.beta.featA) || 0,
-          betaFeatB: Number(s.beta.featB) || 0,
-          betaNone: 0,
-          ...(s.beta.refAnchor !== undefined ? { betaRefAnchor: Number(s.beta.refAnchor) } : {}),
-        }));
-        nextSegs = normalizeWeights(mapped);
-      } else {
-        nextSegs = normalizeWeights(obj.segments as Segment[]);
-      }
-      setSegments(nextSegs);
-    }
-    if (obj.optConstraints) {
-      const partial = obj.optConstraints;
+    if (patch.optConstraints) {
+      const partial = patch.optConstraints;
       setOptConstraints((prev) => ({
         ...prev,
         ...partial,
@@ -3249,23 +3581,70 @@ export default function App() {
         },
       }));
     }
-    if (obj.optRanges) {
-      setOptRanges((prev) => ({ ...prev, ...obj.optRanges }));
+    if (patch.optRanges) {
+      setOptRanges((prev) => ({ ...prev, ...patch.optRanges }));
     }
-    if (obj.priceRange) {
-      const ok = setPriceRangeFromData(obj.priceRange, obj.priceRangeSource ?? "shared");
+
+    if (patch.priceRange) {
+      const ok = setPriceRangeFromData(patch.priceRange, patch.priceRangeSource ?? "shared");
       if (!ok) fallbackToSyntheticRanges();
+    } else if (mode === "replace") {
+      fallbackToSyntheticRanges();
     }
-    if (obj.channelMix) {
-      setChannelMix(obj.channelMix as typeof channelMix);
-      setChannelBlendApplied(true);
+
+    if (patch.channelMix !== undefined) {
+      setChannelMix(normalizeChannelMix(patch.channelMix));
+      setChannelBlendApplied(patch.channelMix.length > 0);
+    } else if (mode === "replace") {
+      setChannelMix(defaults.channelMix);
+      setChannelBlendApplied(false);
     }
-    if (obj.uncertainty !== undefined) {
-      setScenarioUncertainty(obj.uncertainty);
+
+    if (patch.uncertainty !== undefined) {
+      setScenarioUncertainty(patch.uncertainty);
+    } else if (mode === "replace") {
+      setScenarioUncertainty(null);
     }
-    if (obj.optimizerKind) {
-      setOptimizerKind(obj.optimizerKind);
+
+    if (patch.optimizerKind) setOptimizerKind(patch.optimizerKind);
+
+    if (patch.tornadoPocket !== undefined) setTornadoPocket(patch.tornadoPocket);
+    if (patch.tornadoPriceBump !== undefined) setTornadoPriceBump(patch.tornadoPriceBump);
+    if (patch.tornadoPctBump !== undefined) setTornadoPctBump(patch.tornadoPctBump);
+    if (patch.tornadoRangeMode) setTornadoRangeMode(patch.tornadoRangeMode);
+    if (patch.tornadoMetric) setTornadoMetric(patch.tornadoMetric);
+    if (patch.tornadoValueMode) setTornadoValueMode(patch.tornadoValueMode);
+
+    if (patch.retentionPct !== undefined) setRetentionPct(patch.retentionPct);
+    if (patch.retentionMonths !== undefined) setRetentionMonths(patch.retentionMonths);
+    if (patch.kpiFloorAdj !== undefined) setKpiFloorAdj(patch.kpiFloorAdj);
+  }
+
+  function applyScenarioFromUntrusted(
+    raw: unknown,
+    opts: { mode: "patch" | "replace"; context: string; requirePrices?: boolean }
+  ): { ok: boolean; issues: string[] } {
+    const { patch, issues } = coerceScenarioImportPatch(raw, {
+      prices,
+      costs,
+      refPrices,
+      features,
+      leak,
+      segments,
+    });
+
+    if (opts.requirePrices && !patch.prices) {
+      return { ok: false, issues: issues.length ? issues : ["Missing or invalid prices"] };
     }
+
+    applyScenarioImportPatch(patch, opts.mode);
+
+    if (issues.length) {
+      pushJ?.(`[${now()}] ${opts.context}: ${issues.join("; ")}`);
+      toast("warning", `${opts.context}: applied with warnings`);
+    }
+
+    return { ok: true, issues };
   }
 
   // Initialize baseline once on first render (after helpers are defined)
@@ -3327,98 +3706,23 @@ export default function App() {
       const text = await f.text();
       const obj: unknown = JSON.parse(text);
 
-      if (!isScenarioImport(obj)) {
-        pushJ?.(`[${now()}] Import failed: missing core keys`);
-        toast("error", "Import failed: invalid JSON (missing required fields)");
-        alert("Invalid JSON: missing required fields.");
+      const applied = applyScenarioFromUntrusted(obj, {
+        mode: "replace",
+        context: "Imported scenario JSON",
+        requirePrices: true,
+      });
+      if (!applied.ok) {
+        pushJ(`[${now()}] Import failed: ${applied.issues.join("; ")}`);
+        toast("error", "Import failed: invalid scenario JSON");
+        alert("Invalid JSON scenario.");
         e.target.value = "";
         return;
       }
 
-      const sc = obj as ScenarioImport;
-
-      if (sc.prices) setPrices(sc.prices);
-      if (sc.costs) setCosts(sc.costs);
-      if (sc.features) setFeatures(sc.features);
-      if (sc.refPrices) setRefPrices(sc.refPrices);
-      if (sc.leak) setLeak(sc.leak);
-      if (sc.segments)
-        setSegments(
-          mapNormalizedToUI(normalizeSegmentsForSave(sc.segments))
-        );
-      if (sc.analysis) {
-        if (typeof sc.analysis.tornadoPocket === "boolean")
-          setTornadoPocket(sc.analysis.tornadoPocket);
-        if (typeof sc.analysis.tornadoPriceBump === "number")
-          setTornadoPriceBump(sc.analysis.tornadoPriceBump);
-        if (typeof sc.analysis.tornadoPctBump === "number")
-          setTornadoPctBump(sc.analysis.tornadoPctBump);
-        if (
-          sc.analysis.tornadoMetric === "profit" ||
-          sc.analysis.tornadoMetric === "revenue"
-        ) {
-          setTornadoMetric(sc.analysis.tornadoMetric);
-        }
-        if (
-          sc.analysis.tornadoValueMode === "absolute" ||
-          sc.analysis.tornadoValueMode === "percent"
-        ) {
-          setTornadoValueMode(sc.analysis.tornadoValueMode);
-        }
-        if (
-          sc.analysis.tornadoRangeMode === "symmetric" ||
-          sc.analysis.tornadoRangeMode === "data"
-        ) {
-          setTornadoRangeMode(sc.analysis.tornadoRangeMode);
-        }
-        if (typeof sc.analysis.retentionPct === "number")
-          setRetentionPct(sc.analysis.retentionPct);
-        if (typeof sc.analysis.kpiFloorAdj === "number")
-          setKpiFloorAdj(sc.analysis.kpiFloorAdj);
-        if (sc.analysis.optRanges) setOptRanges(sc.analysis.optRanges as typeof optRanges);
-        if (sc.analysis.optConstraints) {
-          const partial = sc.analysis.optConstraints;
-          setOptConstraints((prev) => ({
-            ...prev,
-            ...partial,
-            marginFloor: {
-              ...prev.marginFloor,
-              ...(partial.marginFloor ?? {}),
-            },
-          }));
-        }
-        if (sc.analysis.priceRange) {
-          const ok = setPriceRangeFromData(
-            sc.analysis.priceRange,
-            sc.analysis.priceRangeSource ?? "shared"
-          );
-          if (!ok) fallbackToSyntheticRanges();
-        } else {
-          fallbackToSyntheticRanges();
-        }
-      } else {
-        fallbackToSyntheticRanges();
-      }
-        const incomingMix = sc.channelMix ?? sc.analysis?.channelMix;
-        if (incomingMix && (incomingMix as Array<{ preset: string; w: number }>).length) {
-          setChannelMix(incomingMix as typeof channelMix);
-          setChannelBlendApplied(true);
-        }
-
-        if (sc.analysis) {
-          if (typeof sc.analysis.retentionMonths === "number")
-            setRetentionMonths(Math.min(24, Math.max(6, sc.analysis.retentionMonths)));
-          if (typeof sc.analysis.optimizerKind === "string") setOptimizerKind(sc.analysis.optimizerKind);
-        }
-        const incomingUnc = sc.uncertainty ?? sc.analysis?.uncertainty;
-        if (incomingUnc) {
-          setScenarioUncertainty(incomingUnc as ScenarioUncertainty);
-        }
-
-      pushJ?.(`[${now()}] Imported scenario JSON`);
+      pushJ(`[${now()}] Imported scenario JSON`);
       toast("success", "Imported scenario");
     } catch (err) {
-      pushJ?.(
+      pushJ(
         `[${now()}] Import failed: ${
           err instanceof Error ? err.message : String(err)
         }`
@@ -4150,7 +4454,7 @@ export default function App() {
                   className="border rounded px-3 py-1 text-sm bg-white hover:bg-gray-50"
                   href="https://github.com/leibenjamin/pricing-optimizer"
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                 >
                   View source
                 </a>
@@ -4430,9 +4734,16 @@ export default function App() {
                       
                       <DataImport
                         onPaste={(obj) => {
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          applyScenarioPartial(obj as any);
-                          pushJ?.(`[${now()}] Imported scenario CSV`);
+                          const res = applyScenarioFromUntrusted(obj, {
+                            mode: "patch",
+                            context: "Imported scenario CSV",
+                          });
+                          if (!res.ok) {
+                            pushJ(`[${now()}] Import failed: ${res.issues.join("; ")}`);
+                            toast("error", "Import failed: invalid scenario CSV");
+                            return;
+                          }
+                          pushJ(`[${now()}] Imported scenario CSV`);
                           toast("success", "Scenario parameters CSV applied");
                         }}
                         onToast={(kind, msg) => toast(kind, msg)}
@@ -4575,20 +4886,14 @@ export default function App() {
                                 className="flex-[1.4] min-w-[140px] max-w-[220px]"
                                 aria-label={`${tier} price slider`}
                               />
-                              <input
-                                type="number"
+                              <NumberInput
                                 min={0}
                                 step={0.01}
                                 inputMode="decimal"
-                              value={prices[tier]}
-                              onFocus={() => beginPriceEdit(tier)}
-                              onChange={(e) => updatePrice(tier, Number(e.target.value))}
-                              onBlur={(e) => commitPriceEdit(tier, Number(e.target.value))}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  (e.currentTarget as HTMLInputElement).blur();
-                                }
-                              }}
+                                value={prices[tier]}
+                                onFocus={() => beginPriceEdit(tier)}
+                                onValueChange={(v) => updatePrice(tier, v)}
+                                onBlur={() => commitPriceEdit(tier)}
                                 className="w-24 border rounded px-2 py-1 text-sm"
                                 aria-label={`${tier} price input`}
                               />
@@ -4602,20 +4907,15 @@ export default function App() {
                             <div className="font-semibold capitalize mb-1">
                               {tier} cost
                             </div>
-                            <input
-                              type="number"
+                            <NumberInput
+                              min={0}
+                              step={0.01}
                               value={costs[tier]}
                               onFocus={() => beginCostEdit(tier)}
-                              onChange={(e) => {
-                                const to = Number(e.target.value || 0);
-                                setCosts((c) => ({ ...c, [tier]: to }));
-                              }}
-                              onBlur={(e) => commitCostEdit(tier, Number(e.target.value))}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  (e.currentTarget as HTMLInputElement).blur();
-                                }
-                              }}
+                              onValueChange={(v) =>
+                                setCosts((c) => ({ ...c, [tier]: Math.max(0, v) }))
+                              }
+                              onBlur={() => commitCostEdit(tier)}
                               className="w-full border rounded px-2 py-1"
                             />
                           </div>
@@ -4679,26 +4979,24 @@ export default function App() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-amber-900">
                           <label className="flex items-center gap-2">
                             Price scale delta (+/- %)
-                            <input
-                              type="number"
+                            <NumberInput
                               className="border rounded px-2 py-1 w-20"
                               min={0}
                               max={50}
                               step={0.5}
                               value={Math.round(uncPriceDelta * 1000) / 10}
-                              onChange={(e) => updateUncertainty("priceScaleDelta", Number(e.target.value) || 0)}
+                              onValueChange={(v) => updateUncertainty("priceScaleDelta", v)}
                             />
                           </label>
                           <label className="flex items-center gap-2">
                             Leak delta (+/- %pt.)
-                            <input
-                              type="number"
+                            <NumberInput
                               className="border rounded px-2 py-1 w-20"
                               min={0}
                               max={50}
                               step={0.5}
                               value={Math.round(uncLeakDelta * 1000) / 10}
-                              onChange={(e) => updateUncertainty("leakDeltaPct", Number(e.target.value) || 0)}
+                              onValueChange={(v) => updateUncertainty("leakDeltaPct", v)}
                             />
                           </label>
                         </div>
@@ -4741,34 +5039,27 @@ export default function App() {
                       </Explanation>
                       <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2 items-center">
                         <label className="text-sm">Good</label>
-                        <input
-                          type="number"
+                        <NumberInput
                           className="col-span-2 border rounded px-2 py-1 h-9 w-full"
                           value={refPrices.good}
-                          onChange={(e) =>
-                            setRefPrices((p) => ({ ...p, good: Number(e.target.value) }))
-                          }
+                          onValueChange={(v) => setRefPrices((p) => ({ ...p, good: v }))}
                         />
                         <label className="text-sm">Better</label>
-                        <input
-                          type="number"
+                        <NumberInput
                           className="col-span-2 border rounded px-2 py-1 h-9 w-full"
                           value={refPrices.better}
-                          onChange={(e) =>
+                          onValueChange={(v) =>
                             setRefPrices((p) => ({
                               ...p,
-                              better: Number(e.target.value),
+                              better: v,
                             }))
                           }
                         />
                         <label className="text-sm">Best</label>
-                        <input
-                          type="number"
+                        <NumberInput
                           className="col-span-2 border rounded px-2 py-1 h-9 w-full"
                           value={refPrices.best}
-                          onChange={(e) =>
-                            setRefPrices((p) => ({ ...p, best: Number(e.target.value) }))
-                          }
+                          onValueChange={(v) => setRefPrices((p) => ({ ...p, best: v }))}
                         />
                       </div>
 
@@ -4849,15 +5140,12 @@ export default function App() {
                                   className="flex-1"
                                   aria-label={`${seg.name} weight slider`}
                                 />
-                                <input
-                                  type="number"
+                                <NumberInput
                                   min={0}
                                   max={100}
                                   step={1}
                                   value={Math.round(seg.weight * 100)}
-                                  onChange={(e) => {
-                                    const pct = Number(e.target.value);
-                                    if (!Number.isFinite(pct)) return;
+                                  onValueChange={(pct) => {
                                     const clamped = Math.max(0, Math.min(100, pct));
                                     const w = clamped / 100;
                                     const next = segments.map((t, j) =>
@@ -5432,18 +5720,13 @@ export default function App() {
               {tornadoRangeMode === "symmetric" ? (
                 <label className="flex items-center gap-1">
                   Span
-                  <input
-                    type="number"
+                  <NumberInput
                     step="0.5"
                     min="1"
                     max="40"
                     className="border rounded px-2 h-7 w-16"
                     value={tornadoPriceBump}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      if (!Number.isFinite(v)) return;
-                      setTornadoPriceBump(Math.max(1, Math.min(40, v)));
-                    }}
+                    onValueChange={(v) => setTornadoPriceBump(Math.max(1, Math.min(40, v)))}
                   />
                   <span>%</span>
                 </label>
@@ -5457,14 +5740,12 @@ export default function App() {
 
               <label className="flex items-center gap-1">
                 Leak bump (FX/Refunds/Payment)
-                <input
-                  type="number"
+                <NumberInput
                   step="0.5"
+                  min={0}
                   className="border rounded px-2 h-7 w-16"
                   value={tornadoPctBump}
-                  onChange={(e) =>
-                    setTornadoPctBump(Number(e.target.value) || 0)
-                  }
+                  onValueChange={(v) => setTornadoPctBump(Math.max(0, v))}
                 />
                   <span>%pt.</span>
               </label>

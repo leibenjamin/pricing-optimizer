@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { FeasCell } from "../lib/coverage";
+import { csvFromRows, downloadBlob } from "../lib/download";
 
 type HeatmapMiniProps = {
   cells: FeasCell[];
@@ -61,18 +62,12 @@ export default function HeatmapMini({
 
       const type = detail.type ?? "png";
       if (type === "csv") {
-        const rows = [
+        const rows: Array<Array<string | number>> = [
           ["good_price", "better_price", "feasible"],
           ...cells.map((c) => [c.g, c.b, c.ok ? 1 : 0]),
         ];
-        const csv = rows.map((r) => r.join(",")).join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${chartId}.csv`;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 500);
+        const csv = csvFromRows(rows);
+        downloadBlob(csv, `${chartId}.csv`, "text/csv;charset=utf-8");
         return;
       }
 

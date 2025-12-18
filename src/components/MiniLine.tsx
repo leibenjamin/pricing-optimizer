@@ -1,6 +1,7 @@
 // src/components/MiniLine.tsx
 
 import { useEffect, useMemo, useRef } from "react";
+import { csvFromRows, downloadBlob } from "../lib/download";
 
 type Series = {
   label: string;
@@ -88,16 +89,8 @@ export default function MiniLine({
             ...lines.map((s) => s.y[i] ?? ""),
           ]);
         }
-        const csv = rows
-          .map((row) => row.map((cell) => String(cell)).join(","))
-          .join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${chartId}.csv`;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 500);
+        const csv = csvFromRows(rows);
+        downloadBlob(csv, `${chartId}.csv`, "text/csv;charset=utf-8");
       } else {
         const svg = svgRef.current;
         if (!svg) return;

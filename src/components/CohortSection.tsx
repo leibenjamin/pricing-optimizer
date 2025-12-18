@@ -2,6 +2,7 @@
 
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import InfoTip from "./InfoTip";
+import NumberInput from "./NumberInput";
 import { Section } from "./Section";
 import MiniLine from "./MiniLine";
 import type { CohortScenarioVM, CohortSummaryCard } from "../lib/viewModels";
@@ -57,17 +58,12 @@ export function CohortSection({
             value={retentionPct}
             onChange={(e) => setRetentionPct(Number(e.target.value))}
           />
-          <input
-            type="number"
+          <NumberInput
             step={0.1}
             min={70}
             max={99.9}
             value={retentionPct}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              if (!Number.isFinite(v)) return;
-              setRetentionPct(Math.min(99.9, Math.max(70, v)));
-            }}
+            onValueChange={(v) => setRetentionPct(Math.min(99.9, Math.max(70, v)))}
             className="w-16 h-7 border rounded px-2"
           />
           <span>%</span>

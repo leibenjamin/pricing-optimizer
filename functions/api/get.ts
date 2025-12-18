@@ -1,21 +1,28 @@
 /// <reference types="@cloudflare/workers-types" />
 // functions/api/get.ts
 
+import { corsHeaders } from "./cors";
+
 export interface Env {
   SCENARIOS: KVNamespace
+  ALLOWED_ORIGINS?: string;
 }
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
-  "Access-Control-Allow-Headers": "content-type",
-  "Cache-Control": "no-store",
+export const onRequestOptions: PagesFunction<Env> = async ({ request, env }) => {
+  const headers = corsHeaders(request, env, "GET,HEAD,OPTIONS");
+  if (!headers) return new Response(null, { status: 403 });
+  return new Response(null, { status: 204, headers });
 };
 
-export const onRequestOptions: PagesFunction = async () =>
-  new Response(null, { status: 204, headers: CORS_HEADERS });
-
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+  const cors = corsHeaders(request, env, "GET,HEAD,OPTIONS");
+  if (!cors) {
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const url = new URL(request.url)
     const id = url.searchParams.get("s") ?? ""
@@ -24,7 +31,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     if (!/^[a-zA-Z0-9_-]{5,16}$/.test(id)) {
       return new Response(JSON.stringify({ error: "Bad or missing id" }), {
         status: 400,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        headers: { ...cors, "Content-Type": "application/json" },
       })
     }
 
@@ -32,7 +39,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     if (!raw) {
       return new Response(JSON.stringify({ error: "Not found" }), {
         status: 404,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        headers: { ...cors, "Content-Type": "application/json" },
       })
     }
 
@@ -40,28 +47,31 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     const scenario = JSON.parse(raw)
 
     return new Response(JSON.stringify({ scenario }), {
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      headers: { ...cors, "Content-Type": "application/json" },
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Server error"
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      headers: { ...cors, "Content-Type": "application/json" },
     })
   }
 }
 
 // Fast health/prewarm endpoint: HEAD /api/get?s=ping  -> 204 No Content
-export const onRequestHead: PagesFunction = async ({ request }) => {
+export const onRequestHead: PagesFunction<Env> = async ({ request, env }) => {
+  const cors = corsHeaders(request, env, "GET,HEAD,OPTIONS");
+  if (!cors) return new Response(null, { status: 403 });
+
   try {
     const url = new URL(request.url);
     const s = url.searchParams.get("s");
     if (s === "ping") {
-      return new Response(null, { status: 204, headers: CORS_HEADERS });
+      return new Response(null, { status: 204, headers: cors });
     }
     // If they HEAD a real id, treat as "exists?"
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: cors });
   } catch {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: cors });
   }
 };

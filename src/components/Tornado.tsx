@@ -14,6 +14,7 @@ import {
 import { CanvasRenderer } from "echarts/renderers";
 import type { ComposeOption } from "echarts/core";
 import type { ScenarioRun } from "../lib/domain";
+import { csvFromRows, downloadBlob } from "../lib/download";
 
 echarts.use([
   BarChart,
@@ -266,7 +267,7 @@ export default function Tornado({
         a.download = "tornado.png";
         a.click();
       } else if (e.detail.type === "csv") {
-        const rowsCsv = [
+        const rowsCsv: Array<Array<string | number>> = [
           ["name", "base_usd", "delta_low_display", "delta_high_display", "delta_low_abs", "delta_high_abs", "span", "unit", "metric"],
           ...resolvedRows.map((r) => [
             r.name,
@@ -280,14 +281,8 @@ export default function Tornado({
             resolvedMetric,
           ]),
         ];
-        const csv = rowsCsv.map((r) => r.join(",")).join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "tornado.csv";
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        const csv = csvFromRows(rowsCsv);
+        downloadBlob(csv, "tornado.csv", "text/csv;charset=utf-8");
       }
     };
 

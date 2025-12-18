@@ -25,6 +25,19 @@ const TIER_LABELS: Record<TierKey, string> = {
   best: "Best",
 };
 
+// Avoid freezing the UI by trying to parse massive CSVs in-browser.
+// Keep these caps generous enough for demo use, but protective by default.
+const MAX_SALES_IMPORT_BYTES = 8_000_000; // ~8MB
+const MAX_SALES_IMPORT_ROWS = 200_000; // approximate line-count cap
+
+function countLines(text: string): number {
+  let lines = 1;
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) === 10) lines++;
+  }
+  return lines;
+}
+
 type SegmentOut = { name: string; weight: number; beta: { price: number; featA: number; featB: number } };
 type DataDiagnostics = import("../workers/estimator").FitDone["dataDiagnostics"];
 type Diagnostics = {
@@ -105,11 +118,28 @@ export default function SalesImport(props: {
   };
 
   function handleFile(f: File) {
+    if (f.size > MAX_SALES_IMPORT_BYTES) {
+      const mb = (f.size / (1024 * 1024)).toFixed(1);
+      onToast?.(
+        "error",
+        `Sales CSV is too large (${mb}MB). This demo caps imports at ${(MAX_SALES_IMPORT_BYTES / (1024 * 1024)).toFixed(0)}MB to avoid browser freezes. Consider sampling or exporting fewer rows.`
+      );
+      return;
+    }
     setFileName(f.name);
     const reader = new FileReader();
     reader.onload = () => {
       const text = String(reader.result ?? "");
       fileTextRef.current = text;
+
+      const approxRows = Math.max(0, countLines(text) - 1);
+      if (approxRows > MAX_SALES_IMPORT_ROWS) {
+        onToast?.(
+          "error",
+          `Sales CSV has ~${approxRows.toLocaleString()} rows, which is above the demo cap (${MAX_SALES_IMPORT_ROWS.toLocaleString()}). Sample it down to keep the estimator responsive.`
+        );
+        return;
+      }
 
       const p = Papa.parse<Record<string, string | number | boolean | null | undefined>>(text, {
         header: true,

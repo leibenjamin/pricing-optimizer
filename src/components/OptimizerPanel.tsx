@@ -4,6 +4,7 @@ import type { ReactNode, Dispatch, SetStateAction } from "react";
 import type { Prices } from "../lib/segments";
 import type { Constraints, GridDiagnostics, SearchRanges } from "../lib/optimize";
 import InfoTip from "./InfoTip";
+import NumberInput from "./NumberInput";
 import { Section } from "./Section";
 import type { CurrentVsOptimizedVM } from "./CurrentVsOptimizedSection";
 
@@ -107,28 +108,26 @@ export function OptimizerPanel({
           {(["good", "better", "best"] as const).map((tier) => (
             <label key={tier} className="flex items-center gap-1">
               <span className="w-12 capitalize">{tier}</span>
-              <input
-                type="number"
+              <NumberInput
                 className="border rounded px-2 h-8 w-16"
                 aria-label={`${tier} min`}
                 value={optRanges[tier][0]}
-                onChange={(e) =>
+                onValueChange={(v) =>
                   setOptRanges((r) => ({
                     ...r,
-                    [tier]: [Number(e.target.value), r[tier][1]] as [number, number],
+                    [tier]: [v, r[tier][1]] as [number, number],
                   }))
                 }
               />
               <span>-</span>
-              <input
-                type="number"
+              <NumberInput
                 className="border rounded px-2 h-8 w-16"
                 aria-label={`${tier} max`}
                 value={optRanges[tier][1]}
-                onChange={(e) =>
+                onValueChange={(v) =>
                   setOptRanges((r) => ({
                     ...r,
-                    [tier]: [r[tier][0], Number(e.target.value)] as [number, number],
+                    [tier]: [r[tier][0], v] as [number, number],
                   }))
                 }
               />
@@ -137,15 +136,14 @@ export function OptimizerPanel({
 
           <label className="flex items-center gap-1">
             <span className="w-16">Step between Prices</span>
-            <input
-              type="number"
+            <NumberInput
               className="border rounded px-2 h-8 w-16"
               aria-label="Step"
               value={optRanges.step}
-              onChange={(e) =>
+              onValueChange={(v) =>
                 setOptRanges((r) => ({
                   ...r,
-                  step: Math.max(0.25, Number(e.target.value)),
+                  step: Math.max(0.25, v),
                 }))
               }
             />
@@ -238,28 +236,26 @@ export function OptimizerPanel({
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
             <label className="flex items-center gap-2">
               <span className="w-28">Gap G-&gt;B</span>
-              <input
-                type="number"
+              <NumberInput
                 className="border rounded px-2 h-8 flex-1"
                 value={optConstraints.gapGB}
-                onChange={(e) =>
+                onValueChange={(v) =>
                   setOptConstraints((c) => ({
                     ...c,
-                    gapGB: Number(e.target.value),
+                    gapGB: v,
                   }))
                 }
               />
             </label>
             <label className="flex items-center gap-2">
               <span className="w-28">Gap B-&gt;Best</span>
-              <input
-                type="number"
+              <NumberInput
                 className="border rounded px-2 h-8 flex-1"
                 value={optConstraints.gapBB}
-                onChange={(e) =>
+                onValueChange={(v) =>
                   setOptConstraints((c) => ({
                     ...c,
-                    gapBB: Number(e.target.value),
+                    gapBB: v,
                   }))
                 }
               />
@@ -271,17 +267,16 @@ export function OptimizerPanel({
                 {(["good", "better", "best"] as const).map((t) => (
                   <label key={t} className="text-[11px]">
                     {t}
-                    <input
-                      type="number"
+                    <NumberInput
                       className="mt-1 w-full border rounded px-1 py-0.5"
                       value={optConstraints.marginFloor[t]}
                       step={0.01}
-                      onChange={(e) =>
+                      onValueChange={(v) =>
                         setOptConstraints((c) => ({
                           ...c,
                           marginFloor: {
                             ...c.marginFloor,
-                            [t]: Number(e.target.value),
+                            [t]: v,
                           },
                         }))
                       }

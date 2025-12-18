@@ -7,6 +7,7 @@ import { LEAK_PRESETS, blendLeakPresets } from "../lib/waterfallPresets";
 import type { Prices } from "../lib/segments";
 import ActionCluster from "./ActionCluster";
 import InfoTip from "./InfoTip";
+import NumberInput from "./NumberInput";
 import { Section } from "./Section";
 import ErrorBoundary from "./ErrorBoundary";
 import type Waterfall from "./Waterfall";
@@ -163,17 +164,16 @@ export function WaterfallSection({
                 <div key={t} className="grid grid-cols-[minmax(72px,1fr)_1fr_1fr] items-center gap-2">
                   <span className="capitalize text-slate-700">{t} tier</span>
                   <div className="flex items-center gap-1">
-                    <input
-                      type="number"
+                    <NumberInput
                       step={0.01}
                       className="h-9 w-full border rounded px-2 bg-white"
                       value={leak.promo[t]}
-                      onChange={(e) => {
+                      onValueChange={(v) => {
                         setLeak((L) => ({
                           ...L,
                           promo: {
                             ...L.promo,
-                            [t]: clamp01(Number(e.target.value)),
+                            [t]: clamp01(v),
                           },
                         }));
                         setChannelBlendApplied(false);
@@ -182,17 +182,16 @@ export function WaterfallSection({
                     <span className="text-[10px] text-slate-500">promo</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <input
-                      type="number"
+                    <NumberInput
                       step={0.01}
                       className="h-9 w-full border rounded px-2 bg-white"
                       value={leak.volume[t]}
-                      onChange={(e) => {
+                      onValueChange={(v) => {
                         setLeak((L) => ({
                           ...L,
                           volume: {
                             ...L.volume,
-                            [t]: clamp01(Number(e.target.value)),
+                            [t]: clamp01(v),
                           },
                         }));
                         setChannelBlendApplied(false);
@@ -240,15 +239,14 @@ export function WaterfallSection({
             <div className="grid grid-cols-2 gap-2">
               <label className="flex flex-col gap-1 font-semibold text-slate-800">
                 <span>Payment %</span>
-                <input
-                  type="number"
+                <NumberInput
                   step={0.001}
                   className="h-9 w-full border rounded px-2 bg-white"
                   value={leak.paymentPct}
-                  onChange={(e) => {
+                  onValueChange={(v) => {
                     setLeak((L) => ({
                       ...L,
-                      paymentPct: clamp01(Number(e.target.value)),
+                      paymentPct: clamp01(v),
                     }));
                     setChannelBlendApplied(false);
                   }}
@@ -256,15 +254,14 @@ export function WaterfallSection({
               </label>
               <label className="flex flex-col gap-1 font-semibold text-slate-800">
                 <span>Payment $</span>
-                <input
-                  type="number"
+                <NumberInput
                   step={0.01}
                   className="h-9 w-full border rounded px-2 bg-white"
                   value={leak.paymentFixed}
-                  onChange={(e) => {
+                  onValueChange={(v) => {
                     setLeak((L) => ({
                       ...L,
-                      paymentFixed: Math.max(0, Number(e.target.value)),
+                      paymentFixed: Math.max(0, v),
                     }));
                     setChannelBlendApplied(false);
                   }}
@@ -272,15 +269,14 @@ export function WaterfallSection({
               </label>
               <label className="flex flex-col gap-1 font-semibold text-slate-800">
                 <span>FX %</span>
-                <input
-                  type="number"
+                <NumberInput
                   step={0.001}
                   className="h-9 w-full border rounded px-2 bg-white"
                   value={leak.fxPct}
-                  onChange={(e) => {
+                  onValueChange={(v) => {
                     setLeak((L) => ({
                       ...L,
-                      fxPct: clamp01(Number(e.target.value)),
+                      fxPct: clamp01(v),
                     }));
                     setChannelBlendApplied(false);
                   }}
@@ -288,15 +284,14 @@ export function WaterfallSection({
               </label>
               <label className="flex flex-col gap-1 font-semibold text-slate-800">
                 <span>Refunds %</span>
-                <input
-                  type="number"
+                <NumberInput
                   step={0.001}
                   className="h-9 w-full border rounded px-2 bg-white"
                   value={leak.refundsPct}
-                  onChange={(e) => {
+                  onValueChange={(v) => {
                     setLeak((L) => ({
                       ...L,
-                      refundsPct: clamp01(Number(e.target.value)),
+                      refundsPct: clamp01(v),
                     }));
                     setChannelBlendApplied(false);
                   }}
@@ -382,15 +377,14 @@ export function WaterfallSection({
                 <div key={i} className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2">
                   <span className="text-[11px] text-slate-600">Row {i + 1}</span>
                   <div className="inline-flex items-center gap-1">
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
                       max={100}
                       className="border rounded px-2 h-8 w-20"
                       value={row.w}
-                      onChange={(e) => {
-                        const v = Math.max(0, Math.min(100, Number(e.target.value)));
-                        setChannelMix((cur) => cur.map((r, j) => (j === i ? { ...r, w: v } : r)));
+                      onValueChange={(v) => {
+                        const clamped = Math.max(0, Math.min(100, v));
+                        setChannelMix((cur) => cur.map((r, j) => (j === i ? { ...r, w: clamped } : r)));
                       }}
                     />
                     <span>%</span>

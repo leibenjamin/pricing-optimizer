@@ -1,18 +1,24 @@
 /// <reference types="@cloudflare/workers-types" />
 // functions/api/ping.ts
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,HEAD,OPTIONS",
-  "Access-Control-Allow-Headers": "content-type",
-  "Cache-Control": "no-store",
+import { corsHeaders, type CorsEnv } from "./cors";
+
+export interface Env extends CorsEnv {}
+
+export const onRequestOptions: PagesFunction<Env> = async ({ request, env }) => {
+  const headers = corsHeaders(request, env, "GET,HEAD,OPTIONS");
+  if (!headers) return new Response(null, { status: 403 });
+  return new Response(null, { status: 204, headers });
 };
 
-export const onRequestOptions: PagesFunction = async () =>
-  new Response(null, { status: 204, headers: CORS_HEADERS });
+export const onRequestHead: PagesFunction<Env> = async ({ request, env }) => {
+  const headers = corsHeaders(request, env, "GET,HEAD,OPTIONS");
+  if (!headers) return new Response(null, { status: 403 });
+  return new Response(null, { status: 204, headers });
+};
 
-export const onRequestHead: PagesFunction = async () =>
-  new Response(null, { status: 204, headers: CORS_HEADERS });
-
-export const onRequestGet: PagesFunction = async () =>
-  new Response(null, { status: 204, headers: CORS_HEADERS });
+export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+  const headers = corsHeaders(request, env, "GET,HEAD,OPTIONS");
+  if (!headers) return new Response(null, { status: 403 });
+  return new Response(null, { status: 204, headers });
+};

@@ -1,46 +1,46 @@
 /// <reference types="@cloudflare/workers-types" />
 // functions/api/save.ts
 import { z } from "zod"
+import { corsHeaders, type CorsEnv } from "./cors";
 
-export interface Env {
+export interface Env extends CorsEnv {
   SCENARIOS: KVNamespace
 }
 
 const MAX_BODY_BYTES = 120_000; // keep KV payloads small; prevents abuse
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST,OPTIONS",
-  "Access-Control-Allow-Headers": "content-type",
-  "Cache-Control": "no-store",
+export const onRequestOptions: PagesFunction<Env> = async ({ request, env }) => {
+  const headers = corsHeaders(request, env, "POST,OPTIONS");
+  if (!headers) return new Response(null, { status: 403 });
+  return new Response(null, { status: 204, headers });
 };
-
-export const onRequestOptions: PagesFunction = async () =>
-  new Response(null, { status: 204, headers: CORS_HEADERS });
 
 // helper to enforce finite numbers (no NaN/Infinity)
 const Num = z.number().finite()
+const NonNeg = Num.min(0)
+const Pct01 = Num.min(0).max(1)
+const Percent100 = Num.min(0).max(100)
 
 const Prices = z.object({
-  good: Num, better: Num, best: Num,
+  good: NonNeg, better: NonNeg, best: NonNeg,
 })
 
 const TierFlags = z.object({
-  good: Num, better: Num, best: Num,
+  good: Pct01, better: Pct01, best: Pct01,
 }) // used for featA/featB (0/1) and also promo/volume (% in [0..1])
 
 const Leakages = z.object({
   promo: TierFlags,             // 0..1
   volume: TierFlags,            // 0..1
-  paymentPct: Num,              // 0..1
-  paymentFixed: Num,            // >=0
-  fxPct: Num,                   // 0..1
-  refundsPct: Num,              // 0..1
+  paymentPct: Pct01,            // 0..1
+  paymentFixed: NonNeg,         // >=0
+  fxPct: Pct01,                 // 0..1
+  refundsPct: Pct01,            // 0..1
 })
 
 const Segment = z.object({
   name: z.string().optional(),
-  weight: Num, // 0..1, you normalize client-side
+  weight: Pct01, // 0..1, you normalize client-side
   beta: z.object({
     price: Num,
     featA: Num,
@@ -49,51 +49,53 @@ const Segment = z.object({
   })
 })
 
-const Range = z.object({ min: Num, max: Num })
+const Range = z
+  .object({ min: NonNeg, max: NonNeg })
+  .refine((r) => r.max >= r.min, { message: "Range max must be >= min" });
 const PriceRange = z.object({
   good: Range.optional(),
   better: Range.optional(),
   best: Range.optional(),
 }).partial()
 
-const ChannelMix = z.array(z.object({ preset: z.string(), w: Num })).optional()
+const ChannelMix = z.array(z.object({ preset: z.string(), w: Percent100 })).optional()
 
 const Uncertainty = z
   .object({
-    priceScaleDelta: Num.optional(),
-    leakDeltaPct: Num.optional(),
+    priceScaleDelta: Pct01.optional(),
+    leakDeltaPct: Pct01.optional(),
     source: z.enum(["preset", "heuristic", "precomputed", "simulated", "user"]).optional(),
   })
   .passthrough();
 
 const OptConstraints = z.object({
-  gapGB: Num.optional(),
-  gapBB: Num.optional(),
+  gapGB: NonNeg.optional(),
+  gapBB: NonNeg.optional(),
   marginFloor: Prices.optional(),
   charm: z.boolean().optional(),
   usePocketProfit: z.boolean().optional(),
   usePocketMargins: z.boolean().optional(),
-  maxNoneShare: Num.optional(),
-  minTakeRate: Num.optional(),
+  maxNoneShare: Pct01.optional(),
+  minTakeRate: Pct01.optional(),
 }).passthrough()
 
 const SearchRanges = z.object({
-  good: z.tuple([Num, Num]).optional(),
-  better: z.tuple([Num, Num]).optional(),
-  best: z.tuple([Num, Num]).optional(),
-  step: Num.optional(),
+  good: z.tuple([NonNeg, NonNeg]).optional(),
+  better: z.tuple([NonNeg, NonNeg]).optional(),
+  best: z.tuple([NonNeg, NonNeg]).optional(),
+  step: NonNeg.optional(),
 }).passthrough()
 
 const Analysis = z.object({
   tornadoPocket: z.boolean().optional(),
-  tornadoPriceBump: Num.optional(),
-  tornadoPctBump: Num.optional(),
+  tornadoPriceBump: NonNeg.optional(),
+  tornadoPctBump: NonNeg.optional(),
   tornadoRangeMode: z.enum(["symmetric", "data"]).optional(),
   tornadoMetric: z.string().optional(),
   tornadoValueMode: z.string().optional(),
-  retentionPct: Num.optional(),
-  retentionMonths: Num.optional(),
-  kpiFloorAdj: Num.optional(),
+  retentionPct: Percent100.optional(),
+  retentionMonths: NonNeg.optional(),
+  kpiFloorAdj: Num.optional(), // can be negative (tighten vs relax floor)
   priceRange: PriceRange.optional(),
   priceRangeSource: z.enum(["synthetic", "imported", "shared"]).optional(),
   optRanges: SearchRanges.optional(),
@@ -126,12 +128,20 @@ function shortId(len = 7) {
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  const cors = corsHeaders(request, env, "POST,OPTIONS");
+  if (!cors) {
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const contentLength = Number(request.headers.get("content-length") ?? "0");
     if (contentLength && contentLength > MAX_BODY_BYTES) {
       return new Response(JSON.stringify({ error: "Body too large" }), {
         status: 413,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        headers: { ...cors, "Content-Type": "application/json" },
       });
     }
 
@@ -139,13 +149,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (!raw) {
       return new Response(JSON.stringify({ error: "Missing body" }), {
         status: 400,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        headers: { ...cors, "Content-Type": "application/json" },
       });
     }
     if (raw.length > MAX_BODY_BYTES) {
       return new Response(JSON.stringify({ error: "Body too large" }), {
         status: 413,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        headers: { ...cors, "Content-Type": "application/json" },
       });
     }
 
@@ -155,14 +165,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     } catch {
       return new Response(JSON.stringify({ error: "Invalid JSON" }), {
         status: 400,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        headers: { ...cors, "Content-Type": "application/json" },
       });
     }
     const parsed = ScenarioSchema.safeParse(json)
     if (!parsed.success) {
       return new Response(
         JSON.stringify({ error: "Invalid body", issues: parsed.error.issues }),
-        { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...cors, "Content-Type": "application/json" } }
       )
     }
     const scenario: Scenario = parsed.data
@@ -170,7 +180,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (scenarioJson.length > MAX_BODY_BYTES) {
       return new Response(JSON.stringify({ error: "Body too large" }), {
         status: 413,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        headers: { ...cors, "Content-Type": "application/json" },
       });
     }
 
@@ -184,18 +194,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       await env.SCENARIOS.put(id, scenarioJson, {
         expirationTtl: 60 * 60 * 24 * 180,
       })
-      return new Response(JSON.stringify({ id }), { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } })
+      return new Response(JSON.stringify({ id }), { headers: { ...cors, "Content-Type": "application/json" } })
     }
 
     return new Response(JSON.stringify({ error: "Could not allocate id" }), {
       status: 500,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      headers: { ...cors, "Content-Type": "application/json" },
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Server error"
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      headers: { ...cors, "Content-Type": "application/json" },
     })
   }
 }

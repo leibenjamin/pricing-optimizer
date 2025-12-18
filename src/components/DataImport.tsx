@@ -7,6 +7,8 @@ type ScenarioJSON = {
   prices?: any; costs?: any; refPrices?: any; leak?: any; segments?: any;
 };
 
+const MAX_SCENARIO_IMPORT_BYTES = 500_000; // 500KB: prevents accidental huge CSV paste/uploads
+
 export default function DataImport(props: {
   onPaste: (obj: ScenarioJSON) => void;
   onToast?: (kind: "success" | "error" | "info", msg: string) => void;
@@ -15,7 +17,21 @@ export default function DataImport(props: {
 
   const handleCSV = async (file: File) => {
     try {
+      if (file.size > MAX_SCENARIO_IMPORT_BYTES) {
+        const kb = Math.round(file.size / 1024);
+        onToast?.(
+          "error",
+          `Scenario CSV is too large (${kb.toLocaleString()}KB). This demo importer is capped at ${Math.round(
+            MAX_SCENARIO_IMPORT_BYTES / 1024
+          ).toLocaleString()}KB.`
+        );
+        return;
+      }
       const text = await file.text();
+      if (text.length > MAX_SCENARIO_IMPORT_BYTES) {
+        onToast?.("error", "Scenario CSV is too large to parse safely in-browser.");
+        return;
+      }
       const sc = importScenarioCSV(text);
       const out: ScenarioJSON = {
         ...(sc.prices ? { prices: sc.prices } : {}),

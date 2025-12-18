@@ -27,6 +27,7 @@ import type {
   CallbackDataParams,
   LabelFormatterCallback,
 } from "echarts/types/dist/shared";
+import { csvFromRows, downloadBlob } from "../lib/download";
 
 echarts.use([
   BarChart,
@@ -302,14 +303,8 @@ export default function Waterfall({
         }
         rows.push(["Pocket", pocket]);
 
-        const csv = ["label,value", ...rows.map(([k, v]) => `${k},${v}`)].join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "pocket_waterfall.csv";
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        const csv = csvFromRows([["label", "value"], ...rows]);
+        downloadBlob(csv, "pocket_waterfall.csv", "text/csv;charset=utf-8");
       }
     };
     window.addEventListener("export:waterfall", onExport as EventListener);
