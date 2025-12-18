@@ -124,6 +124,7 @@ export default function FrontierChartReal({
     shares: Shares;
     price: number;
     profit: number;
+    compare?: { label: string; profit: number } | null;
   } | null>(null);
 
   const [vw, setVw] = useState<number>(typeof window !== "undefined" ? window.innerWidth : 1024);
@@ -286,7 +287,7 @@ export default function FrontierChartReal({
         const bottom = Math.max(Number(topLeft[1]), Number(bottomRight[1]));
         if (![left, right, top, bottom].every(Number.isFinite) || right <= left || bottom <= top) return {};
 
-        const margin = isNarrow ? 10 : 8;
+        const margin = isNarrow ? 16 : 14;
         const safe = {
           left: left + margin,
           right: right - margin,
@@ -333,6 +334,14 @@ export default function FrontierChartReal({
           const outY = Math.max(0, safe.top - box.y1) + Math.max(0, box.y2 - safe.bottom);
           const boundsPenalty = (outX + outY) * 10_000;
 
+          // Keep away from the plot boundary/tick lines: penalize being too close to any edge.
+          const edgePad = isNarrow ? 16 : 14;
+          const nearLeft = Math.max(0, safe.left + edgePad - box.x1);
+          const nearRight = Math.max(0, box.x2 - (safe.right - edgePad));
+          const nearTop = Math.max(0, safe.top + edgePad - box.y1);
+          const nearBottom = Math.max(0, box.y2 - (safe.bottom - edgePad));
+          const edgePenalty = (nearLeft + nearRight + nearTop + nearBottom) * 120;
+
           // Count how many plotted points would sit under the label; treat this as "visual occlusion".
           const pointPad = isNarrow ? 6 : 5;
           const occludes = plottedPx.reduce((acc, pt) => {
@@ -349,7 +358,17 @@ export default function FrontierChartReal({
           const cy = (box.y1 + box.y2) / 2;
           const dist = Math.hypot(cx - px, cy - py);
 
-          return boundsPenalty + occludes * 250 + dist * 0.4;
+          // Prefer placing the label towards the plot center (away from axes).
+          const centerX = (safe.left + safe.right) / 2;
+          const centerY = (safe.top + safe.bottom) / 2;
+          const toCenterX = centerX - px;
+          const toCenterY = centerY - py;
+          const toLabelX = cx - px;
+          const toLabelY = cy - py;
+          const dot = toCenterX * toLabelX + toCenterY * toLabelY;
+          const awayFromCenterPenalty = dot < 0 ? 800 : 0;
+
+          return boundsPenalty + edgePenalty + awayFromCenterPenalty + occludes * 260 + dist * 0.35;
         };
 
         const best = candidates.reduce<{ x: number; y: number; score: number } | null>((acc, c) => {
@@ -656,6 +675,7 @@ export default function FrontierChartReal({
         trigger: "axis",
         axisPointer: { type: "line", snap: true },
         triggerOn: "mousemove",
+        showContent: false,
         formatter: (params: TopLevelFormatterParams) => formatTooltip(params),
         confine: true,
       },
@@ -664,17 +684,19 @@ export default function FrontierChartReal({
     chartRef.current.setOption(option, true);
     chartRef.current.resize();
 
-    const baseExtent = (() => {
-      const xs = chartPoints.map((p) => p.price).filter((v) => Number.isFinite(v));
+    const extentFor = (pts: FrontierPoint[] | undefined) => {
+      const xs = (pts ?? []).map((p) => p.price).filter((v) => Number.isFinite(v));
       return xs.length ? { min: Math.min(...xs), max: Math.max(...xs) } : null;
-    })();
+    };
+    const baseExtent = extentFor(chartPoints);
+    const comparisonExtent = extentFor(comparisonView?.points);
 
-    const pickNearestBasePoint = (x: number) => {
-      if (!Number.isFinite(x) || !chartPoints.length) return null;
-      if (baseExtent && (x < baseExtent.min - 1e-6 || x > baseExtent.max + 1e-6)) return null;
+    const pickNearestPoint = (pts: FrontierPoint[] | undefined, x: number, extent: { min: number; max: number } | null) => {
+      if (!Number.isFinite(x) || !pts?.length) return null;
+      if (extent && (x < extent.min - 1e-6 || x > extent.max + 1e-6)) return null;
       let best: FrontierPoint | null = null;
       let bestDist = Infinity;
-      for (const p of chartPoints) {
+      for (const p of pts) {
         const d = Math.abs(p.price - x);
         if (d < bestDist) {
           bestDist = d;
@@ -688,13 +710,20 @@ export default function FrontierChartReal({
       const e = ev as { axesInfo?: Array<{ value?: unknown }> };
       const x = Number(e?.axesInfo?.[0]?.value);
       if (!Number.isFinite(x)) return;
-      const nearest = pickNearestBasePoint(x);
+      const nearest = pickNearestPoint(chartPoints, x, baseExtent);
       if (!nearest?.shares) return;
+
+      const comparePoint = comparisonView
+        ? pickNearestPoint(comparisonView.points, x, comparisonExtent)
+        : null;
       setHoverMix({
         label: "Frontier",
         shares: nearest.shares,
         price: nearest.price,
         profit: nearest.profit,
+        compare: comparePoint
+          ? { label: comparisonView?.label ?? "Compare", profit: comparePoint.profit }
+          : null,
       });
     };
     const onLeave = () => setHoverMix(null);
@@ -761,6 +790,15 @@ export default function FrontierChartReal({
           <div className="font-semibold text-slate-900">
             {hoverMix.label || "Point"} @ ${hoverMix.price.toFixed(2)} | Profit ${Math.round(hoverMix.profit).toLocaleString()}
           </div>
+          {hoverMix.compare && (
+            <div className="text-[11px] text-slate-700">
+              Compare ({hoverMix.compare.label}): Profit ${Math.round(hoverMix.compare.profit).toLocaleString()}{" "}
+              <span className="text-slate-500">
+                (Δ {(hoverMix.compare.profit - hoverMix.profit >= 0 ? "+" : "")}
+                {Math.round(hoverMix.compare.profit - hoverMix.profit).toLocaleString()})
+              </span>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             <span>None {(hoverMix.shares.none * 100).toFixed(1)}%</span>
             <span>Good {(hoverMix.shares.good * 100).toFixed(1)}%</span>
@@ -798,6 +836,7 @@ function formatTooltip(params: TopLevelFormatterParams): string {
   const rows: string[] = [];
   let shares: Shares | undefined;
   let reason: string | undefined;
+  const seen = new Set<string>();
 
   for (const p of list) {
     // Avoid duplicate overlays: the line already communicates the curve.
@@ -812,6 +851,9 @@ function formatTooltip(params: TopLevelFormatterParams): string {
     if (!Number.isFinite(profitNum)) continue;
 
     const label = datum?.lineLabel || p.seriesName || "Point";
+    const key = `${label}|${profitNum.toFixed(4)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     rows.push(`<span style="color:#0f172a"><b>${label}</b></span>: Profit $${profitNum.toFixed(0)}`);
 
     shares ||= datum?.shares;
