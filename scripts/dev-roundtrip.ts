@@ -20,6 +20,7 @@ const baseFallback = {
   retentionPct: defaults.retentionPct ?? 94,
   retentionMonths: defaults.retentionMonths ?? 12,
   kpiFloorAdj: defaults.kpiFloorAdj ?? 0,
+  coverageUsePocket: defaults.optConstraints?.usePocketMargins ?? true,
   tornadoDefaults: defaults.tornado ?? {},
   optimizerKind: "grid-inline" as const,
 };

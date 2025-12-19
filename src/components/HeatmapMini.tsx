@@ -171,7 +171,7 @@ export default function HeatmapMini({
         })}
       </svg>
       <div className="text-[11px] text-gray-600 mt-1">
-        Green = Good/Better price pairs that clear pocket-margin floors with Best pinned near its lowest feasible point;
+        Green = Good/Better price pairs that clear margin floors under the selected basis with Best pinned near its lowest feasible point;
         gray = fails a gap or a floor.
       </div>
     </div>

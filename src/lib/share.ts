@@ -27,6 +27,7 @@ export type SharePayloadArgs = {
   retentionPct: number;
   retentionMonths: number;
   kpiFloorAdj: number;
+  coverageUsePocket: boolean;
   priceRange: { map: TierRangeMap; source: PriceRangeSource } | null;
   optRanges: SearchRanges;
   optConstraints: Constraints;
@@ -56,6 +57,7 @@ export function buildSharePayload(args: SharePayloadArgs) {
     retentionPct: args.retentionPct,
     retentionMonths: args.retentionMonths,
     kpiFloorAdj: args.kpiFloorAdj,
+    coverageUsePocket: args.coverageUsePocket,
     priceRange: args.priceRange,
     optRanges: args.optRanges,
     optConstraints: args.optConstraints,
@@ -500,13 +502,15 @@ export function roundTripValidate(payload: SharePayload): { ok: boolean; issues:
     else {
       if (beforeAnalysis?.optConstraints && !afterAnalysis.optConstraints)
         issues.push("optConstraints missing after round-trip");
-      if (beforeAnalysis?.optRanges && !afterAnalysis.optRanges) issues.push("optRanges missing after round-trip");
-      if (beforeAnalysis?.priceRange && !afterAnalysis.priceRange)
-        issues.push("priceRange missing after round-trip");
-      if (beforeAnalysis?.priceRangeSource && !afterAnalysis.priceRangeSource)
-        issues.push("priceRangeSource missing after round-trip");
-      if (beforeAnalysis?.optimizerKind && !afterAnalysis.optimizerKind)
-        issues.push("optimizerKind missing after round-trip");
+    if (beforeAnalysis?.optRanges && !afterAnalysis.optRanges) issues.push("optRanges missing after round-trip");
+    if (beforeAnalysis?.priceRange && !afterAnalysis.priceRange)
+      issues.push("priceRange missing after round-trip");
+    if (beforeAnalysis?.priceRangeSource && !afterAnalysis.priceRangeSource)
+      issues.push("priceRangeSource missing after round-trip");
+    if (beforeAnalysis?.coverageUsePocket !== undefined && afterAnalysis.coverageUsePocket === undefined)
+      issues.push("coverageUsePocket missing after round-trip");
+    if (beforeAnalysis?.optimizerKind && !afterAnalysis.optimizerKind)
+      issues.push("optimizerKind missing after round-trip");
     }
   }
 
@@ -572,6 +576,7 @@ export function buildPayloadFromScenario(
     retentionPct?: number;
     retentionMonths?: number;
     kpiFloorAdj?: number;
+    coverageUsePocket?: boolean;
     tornadoDefaults?: Partial<{
       usePocket: boolean;
       priceBump: number;
@@ -589,6 +594,8 @@ export function buildPayloadFromScenario(
     scenario.priceRange !== undefined
       ? { map: scenario.priceRange, source: scenario.priceRangeSource ?? fallback.priceRange?.source ?? "shared" }
       : fallback.priceRange ?? null;
+  const coverageUsePocket =
+    scenario.optConstraints?.usePocketMargins ?? fallback.coverageUsePocket ?? true;
   return buildSharePayload({
     prices: scenario.prices ?? fallback.prices,
     costs: scenario.costs ?? fallback.costs,
@@ -605,6 +612,7 @@ export function buildPayloadFromScenario(
     retentionPct: scenario.retentionPct ?? fallback.retentionPct ?? 0,
     retentionMonths: scenario.retentionMonths ?? fallback.retentionMonths ?? 12,
     kpiFloorAdj: scenario.kpiFloorAdj ?? fallback.kpiFloorAdj ?? 0,
+    coverageUsePocket,
     priceRange,
     optRanges: scenario.optRanges ?? fallback.optRanges,
     optConstraints: scenario.optConstraints ?? fallback.optConstraints,

@@ -23,6 +23,7 @@ type OptimizerPanelProps = {
   setOptConstraints: Dispatch<SetStateAction<Constraints>>;
   coverageUsePocket: boolean;
   setCoverageUsePocket: Dispatch<SetStateAction<boolean>>;
+  coverageSnapshot: { pct1: number; demandPct?: number };
   optError: string | null;
   optResult: OptimizerResult;
   quickOptDiagnostics?: GridDiagnostics;
@@ -52,6 +53,7 @@ export function OptimizerPanel({
   setOptConstraints,
   coverageUsePocket,
   setCoverageUsePocket,
+  coverageSnapshot,
   optError,
   optResult,
   quickOptDiagnostics,
@@ -74,6 +76,13 @@ export function OptimizerPanel({
   actions,
 }: OptimizerPanelProps) {
   const diag: GridDiagnostics | undefined = optResult?.diagnostics ?? quickOptDiagnostics;
+  const readinessTone =
+    coverageSnapshot.pct1 >= 70
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : coverageSnapshot.pct1 >= 40
+      ? "border-amber-200 bg-amber-50 text-amber-800"
+      : "border-rose-200 bg-rose-50 text-rose-800";
+  const readinessBasis = coverageUsePocket ? "pocket" : "list";
 
   return (
     <Section id="global-optimizer" title="Global Optimizer" actions={actions}>
@@ -184,6 +193,38 @@ export function OptimizerPanel({
               </div>
             );
           })()}
+        </div>
+
+        <div className={`rounded-xl border px-3 py-2 ${readinessTone}`}>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-600">
+                Guardrail readiness
+              </div>
+              <div className="text-lg font-semibold leading-tight">
+                {coverageSnapshot.pct1}%
+              </div>
+              <div className="text-[11px]">
+                floors feasible ({readinessBasis} basis)
+              </div>
+              {coverageSnapshot.demandPct !== undefined && (
+                <div className="text-[11px]">
+                  Full guardrails: {coverageSnapshot.demandPct}%
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+              onClick={() =>
+                document
+                  .getElementById("kpi-pocket-coverage")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+            >
+              Details
+            </button>
+          </div>
         </div>
 
         <LatestRunSummary

@@ -38,6 +38,7 @@ function payloadFromPreset(p: (typeof PRESETS)[number]) {
     retentionPct: p.retentionPct ?? 0,
     retentionMonths: p.retentionMonths ?? 12,
     kpiFloorAdj: p.kpiFloorAdj ?? 0,
+    coverageUsePocket: p.optConstraints?.usePocketMargins ?? defaultConstraints.usePocketMargins,
     tornadoDefaults: {
       usePocket: true,
       priceBump: 0,

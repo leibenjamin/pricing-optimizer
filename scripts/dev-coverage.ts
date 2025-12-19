@@ -9,7 +9,7 @@
 import fs from "fs";
 import path from "path";
 import { PRESETS } from "../src/lib/presets";
-import { pocketCoverage, feasibilitySliceGB } from "../src/lib/coverage";
+import { guardrailCoverage, pocketCoverage, feasibilitySliceGB } from "../src/lib/coverage";
 import { choiceShares } from "../src/lib/choice";
 import { computePocketPrice, type Leakages } from "../src/lib/waterfall";
 import {
@@ -140,9 +140,17 @@ for (const preset of PRESETS) {
 
   const base = pocketCoverage(optRanges, preset.costs, floors0, gaps, preset.leak, coverageUsePocket);
   const moved = pocketCoverage(optRanges, preset.costs, floors1, gaps, preset.leak, coverageUsePocket);
+  const full = guardrailCoverage(optRanges, preset.costs, floors1, gaps, preset.leak, coverageUsePocket, {
+    features,
+    segments,
+    refPrices: preset.refPrices,
+    maxNoneShare: mergedConstraints.maxNoneShare,
+    minTakeRate: mergedConstraints.minTakeRate,
+  });
 
   const pct0 = Math.round(base.coverage * 100);
   const pct1 = Math.round(moved.coverage * 100);
+  const fullPct = Math.round(full.coverage * 100);
   const delta = pct1 - pct0;
   const coverageStep = Math.max(0.5, optRanges.step);
 
@@ -166,6 +174,7 @@ for (const preset of PRESETS) {
   console.log(`Ranges: G ${optRanges.good[0]}-${optRanges.good[1]} | B ${optRanges.better[0]}-${optRanges.better[1]} | Best ${optRanges.best[0]}-${optRanges.best[1]} | step ${optRanges.step}`);
   console.log(`Floors (adj ${floorAdj}%pt): ${floorsLabel}`);
   console.log(`Coverage: ${pct0}% -> ${pct1}% (${delta >= 0 ? "+" : ""}${delta}%pt), tested ${moved.tested.toLocaleString()} combos, step ${coverageStep}`);
+  console.log(`Full guardrails: ${fullPct}% (adds none-share/take-rate)`);
   console.log(`Heatmap: ${heatmapPct}% ok (${okCells}/${cellCount}), grid ${gTicks.length}x${bTicks.length}, bestUsed ${bestUsed}`);
 
   if (writeCsv) {

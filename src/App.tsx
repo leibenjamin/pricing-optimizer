@@ -36,7 +36,7 @@ import { gridOptimize } from "./lib/optQuick";
 
 import { describeSegment } from "./lib/segmentNarrative";
 
-import { pocketCoverage } from "./lib/coverage";
+import { pocketCoverage, guardrailCoverage } from "./lib/coverage";
 
 import {
   collectPriceRange,
@@ -697,6 +697,7 @@ type ScenarioImportPatch = {
   retentionPct?: number;
   retentionMonths?: number;
   kpiFloorAdj?: number;
+  coverageUsePocket?: boolean;
 };
 
 function coerceScenarioImportPatch(
@@ -780,6 +781,11 @@ function coerceScenarioImportPatch(
   const optimizerKindRaw = raw.optimizerKind ?? analysis?.optimizerKind;
   if (optimizerKindRaw === "grid-worker" || optimizerKindRaw === "grid-inline" || optimizerKindRaw === "future") {
     patch.optimizerKind = optimizerKindRaw;
+  }
+
+  const coverageUsePocketRaw = raw.coverageUsePocket ?? analysis?.coverageUsePocket;
+  if (typeof coverageUsePocketRaw === "boolean") {
+    patch.coverageUsePocket = coverageUsePocketRaw;
   }
 
   if (analysis) {
@@ -1916,6 +1922,7 @@ export default function App() {
   const [coverageUsePocket, setCoverageUsePocket] = useState(true);
   const coverageSnapshot = useMemo(() => {
     const floors0 = optConstraints.marginFloor;
+    const coverageStep = Math.max(0.5, optRanges.step);
     const adj = (x: number) =>
       Math.max(0, Math.min(0.95, x + kpiFloorAdj / 100));
     const floors1 = {
@@ -1926,17 +1933,25 @@ export default function App() {
     const constraints = { gapGB: optConstraints.gapGB, gapBB: optConstraints.gapBB };
     const base = pocketCoverage(optRanges, costs, floors0, constraints, leak, coverageUsePocket);
     const moved = pocketCoverage(optRanges, costs, floors1, constraints, leak, coverageUsePocket);
+    const full = guardrailCoverage(optRanges, costs, floors1, constraints, leak, coverageUsePocket, {
+      features,
+      segments,
+      refPrices,
+      maxNoneShare: optConstraints.maxNoneShare,
+      minTakeRate: optConstraints.minTakeRate,
+    });
     const pct0 = Math.round(base.coverage * 100);
     const pct1 = Math.round(moved.coverage * 100);
     return {
       pct0,
       pct1,
       delta: pct1 - pct0,
+      demandPct: Math.round(full.coverage * 100),
       tested: moved.tested,
-      step: optRanges.step,
+      step: coverageStep,
       floors: floors1,
     };
-  }, [optConstraints.marginFloor, optConstraints.gapGB, optConstraints.gapBB, optRanges, costs, leak, kpiFloorAdj, coverageUsePocket]);
+  }, [optConstraints.marginFloor, optConstraints.gapGB, optConstraints.gapBB, optConstraints.maxNoneShare, optConstraints.minTakeRate, optRanges, costs, leak, kpiFloorAdj, coverageUsePocket, features, segments, refPrices]);
 
   const lastAppliedPricesRef = useRef<Prices | null>(null);
 
@@ -3618,6 +3633,11 @@ export default function App() {
     if (patch.retentionPct !== undefined) setRetentionPct(patch.retentionPct);
     if (patch.retentionMonths !== undefined) setRetentionMonths(patch.retentionMonths);
     if (patch.kpiFloorAdj !== undefined) setKpiFloorAdj(patch.kpiFloorAdj);
+    if (patch.coverageUsePocket !== undefined) {
+      setCoverageUsePocket(patch.coverageUsePocket);
+    } else if (mode === "replace" && patch.optConstraints?.usePocketMargins !== undefined) {
+      setCoverageUsePocket(!!patch.optConstraints.usePocketMargins);
+    }
   }
 
   function applyScenarioFromUntrusted(
@@ -3789,6 +3809,7 @@ export default function App() {
         retentionPct,
         retentionMonths,
         kpiFloorAdj,
+        coverageUsePocket,
         priceRange: priceRangeState,
         optRanges,
         optConstraints,
@@ -3820,6 +3841,7 @@ export default function App() {
       retentionPct,
       retentionMonths,
       kpiFloorAdj,
+      coverageUsePocket,
       priceRangeState,
       optRanges,
       optConstraints,
@@ -3855,6 +3877,7 @@ export default function App() {
         retentionPct,
         retentionMonths,
         kpiFloorAdj,
+        coverageUsePocket,
         tornadoDefaults: {
           usePocket: tornadoPocket,
           priceBump: tornadoPriceBump,
@@ -3877,31 +3900,7 @@ export default function App() {
         console.warn("Round-trip preset issues", suite.issues);
       }
     }
-  }, [
-    buildSharePayloadChecked,
-    pushJ,
-    prices,
-    costs,
-    features,
-    refPrices,
-    leak,
-    segments,
-    tornadoPocket,
-    tornadoPriceBump,
-    tornadoPctBump,
-    tornadoRangeMode,
-    tornadoMetric,
-    tornadoValueMode,
-    retentionPct,
-    retentionMonths,
-    kpiFloorAdj,
-    priceRangeState,
-    optRanges,
-    optConstraints,
-    channelMix,
-    optimizerKind,
-    scenarioUncertainty,
-  ]);
+  }, [buildSharePayloadChecked, pushJ, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, scenarioUncertainty, coverageUsePocket]);
 
   function handleExportJson() {
     const snap = buildSharePayloadChecked("export json");
@@ -3997,6 +3996,8 @@ export default function App() {
         setRetentionMonths(Math.min(24, Math.max(6, sc.analysis.retentionMonths)));
       if (typeof sc.analysis.kpiFloorAdj === "number")
         setKpiFloorAdj(sc.analysis.kpiFloorAdj);
+      if (typeof sc.analysis.coverageUsePocket === "boolean")
+        setCoverageUsePocket(sc.analysis.coverageUsePocket);
       if (sc.analysis.priceRange) {
         const ok = setPriceRangeFromData(
           sc.analysis.priceRange,
@@ -4155,6 +4156,7 @@ export default function App() {
         retentionPct,
         retentionMonths,
         kpiFloorAdj,
+        coverageUsePocket,
         priceRange: priceRangeState,
         optRanges,
         optConstraints: {
@@ -4169,6 +4171,7 @@ export default function App() {
         ...base,
         ...(override ?? {}),
         retentionMonths: override?.retentionMonths ?? base.retentionMonths,
+        coverageUsePocket: override?.coverageUsePocket ?? base.coverageUsePocket,
         optConstraints: {
           ...base.optConstraints,
           ...(override?.optConstraints ?? {}),
@@ -4212,7 +4215,7 @@ export default function App() {
         toast(kind, opts?.toastMessage ?? "Baseline pinned");
       }
     },
-    [prices, costs, features, refPrices, leak, setBaselineRun, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, toast, scenarioPresetId, scenarioUncertainty]
+    [prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, coverageUsePocket, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, setBaselineRun, scenarioPresetId, scenarioUncertainty, toast]
   );
 
   const pinBaselineNow = () => {
@@ -5222,13 +5225,14 @@ export default function App() {
                         tornadoValueMode,
                         retentionPct,
                         retentionMonths,
-                      kpiFloorAdj,
-                      priceRange: priceRangeState,
-                      optRanges,
-                      optConstraints,
-                      channelMix,
-                      optimizerKind,
-                    });
+                        kpiFloorAdj,
+                        coverageUsePocket,
+                        priceRange: priceRangeState,
+                        optRanges,
+                        optConstraints,
+                        channelMix,
+                        optimizerKind,
+                      });
                       const meta = { label: "Pinned now", savedAt: Date.now() };
                       const kpis = currentKPIs;
                       if (kpis) {
@@ -5459,6 +5463,7 @@ export default function App() {
                   setOptConstraints={setOptConstraints}
                   coverageUsePocket={coverageUsePocket}
                   setCoverageUsePocket={setCoverageUsePocket}
+                  coverageSnapshot={coverageSnapshot}
                   optError={optError}
                   optResult={optResult}
                   quickOptDiagnostics={quickOpt.diagnostics}

@@ -49,6 +49,7 @@ export type ScenarioSnapshot = {
     retentionPct?: number;
     retentionMonths?: number;
     kpiFloorAdj?: number;
+    coverageUsePocket?: boolean;
     priceRange?: TierRangeMap;
     priceRangeSource?: PriceRangeSource;
     optimizerKind?: "grid-worker" | "grid-inline" | "future";
@@ -126,6 +127,7 @@ export type SnapshotBuildArgs = {
   retentionPct: number;
   retentionMonths: number;
   kpiFloorAdj: number;
+  coverageUsePocket: boolean;
   priceRange: { map: TierRangeMap; source: PriceRangeSource } | null;
   optRanges: SearchRanges;
   optConstraints: Constraints;
@@ -157,6 +159,7 @@ export function buildScenarioSnapshot(args: SnapshotBuildArgs): ScenarioSnapshot
       retentionPct: args.retentionPct,
       retentionMonths: args.retentionMonths,
       kpiFloorAdj: args.kpiFloorAdj,
+      coverageUsePocket: args.coverageUsePocket,
       optRanges: args.optRanges,
       optConstraints: args.optConstraints,
       optimizerKind: args.optimizerKind ?? "grid-worker",

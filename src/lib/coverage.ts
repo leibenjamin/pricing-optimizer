@@ -1,6 +1,8 @@
 // src/lib/coverage.ts
 
 import { computePocketPrice, type Leakages } from "./waterfall";
+import { choiceShares } from "./choice";
+import type { Features, Segment } from "./segments";
 
 export type Prices = { good: number; better: number; best: number };
 export type Ranges = {
@@ -42,6 +44,62 @@ export function pocketCoverage(
 
         tested++;
         if (mG >= floors.good && mB >= floors.better && mH >= floors.best) ok++;
+      }
+    }
+  }
+  return { coverage: tested ? ok / tested : 0, tested };
+}
+
+export type DemandGuardrails = {
+  features: Features;
+  segments: Segment[];
+  refPrices?: Prices;
+  maxNoneShare?: number;
+  minTakeRate?: number;
+};
+
+export function guardrailCoverage(
+  ranges: Ranges,
+  costs: Prices,
+  floors: Floors,
+  gaps: Gaps,
+  leak: Leakages,
+  usePocket: boolean,
+  demand: DemandGuardrails
+): { coverage: number; tested: number } {
+  let ok = 0;
+  let tested = 0;
+  const step = Math.max(0.5, ranges.step); // safety
+  const maxNone = demand.maxNoneShare ?? 0.9;
+  const minTake = demand.minTakeRate ?? 0.02;
+
+  for (let g = ranges.good[0]; g <= ranges.good[1]; g += step) {
+    const bStart = Math.max(g + (gaps.gapGB ?? 0), ranges.better[0]);
+    for (let b = bStart; b <= ranges.better[1]; b += step) {
+      const hStart = Math.max(b + (gaps.gapBB ?? 0), ranges.best[0]);
+      for (let h = hStart; h <= ranges.best[1]; h += step) {
+        const effG = usePocket ? computePocketPrice(g, "good", leak).pocket : g;
+        const effB = usePocket ? computePocketPrice(b, "better", leak).pocket : b;
+        const effH = usePocket ? computePocketPrice(h, "best", leak).pocket : h;
+
+        const mG = (effG - costs.good) / Math.max(effG, 1e-6);
+        const mB = (effB - costs.better) / Math.max(effB, 1e-6);
+        const mH = (effH - costs.best) / Math.max(effH, 1e-6);
+
+        tested++;
+        if (mG < floors.good || mB < floors.better || mH < floors.best) continue;
+
+        const probs = choiceShares(
+          { good: g, better: b, best: h },
+          demand.features,
+          demand.segments,
+          demand.refPrices
+        );
+        if (probs.none > maxNone) continue;
+        const takeRate = probs.good + probs.better + probs.best;
+        if (takeRate < minTake) continue;
+
+        ok++;
       }
     }
   }
