@@ -196,6 +196,7 @@ export default function FrontierChartReal({
     const axisFont = isNarrow ? 10 : 12;
     const labelFont = isNarrow ? 10 : 12;
     const topPad = isNarrow ? 46 : 60;
+    const leftPad = isNarrow ? 52 : 72;
     const rightPad = isNarrow ? 70 : 96;
     const bottomPad = isNarrow ? 60 : 76;
 
@@ -249,7 +250,7 @@ export default function FrontierChartReal({
       // custom layout to avoid covering the curve, markers, and axes (especially on narrow charts).
       return (params: unknown) => {
         const chart = chartRef.current;
-        if (!chart || !priceExtent || !profitExtent) return {};
+        if (!chart) return {};
 
         const p = params as {
           labelRect?: { width: number; height: number };
@@ -267,36 +268,60 @@ export default function FrontierChartReal({
         const py = hostRect.y + hostRect.height / 2;
         if (!Number.isFinite(px) || !Number.isFinite(py)) return {};
 
-        // Compute the plot-area rectangle in pixels (data-extent corners), then keep a safety margin
+        // Compute the plot-area rectangle in pixels (grid rect), then keep a safety margin
         // so we don't sit on top of axis lines/ticks.
-        const topLeft = chart.convertToPixel(
-          { xAxisIndex: 0, yAxisIndex: 0 },
-          [priceExtent.min, profitExtent.max]
-        ) as unknown;
-        const bottomRight = chart.convertToPixel(
-          { xAxisIndex: 0, yAxisIndex: 0 },
-          [priceExtent.max, profitExtent.min]
-        ) as unknown;
-        if (!Array.isArray(topLeft) || !Array.isArray(bottomRight) || topLeft.length < 2 || bottomRight.length < 2) {
-          return {};
+        let left: number;
+        let right: number;
+        let top: number;
+        let bottom: number;
+
+        if (priceExtent && profitExtent) {
+          const topLeft = chart.convertToPixel(
+            { xAxisIndex: 0, yAxisIndex: 0 },
+            [priceExtent.min, profitExtent.max]
+          ) as unknown;
+          const bottomRight = chart.convertToPixel(
+            { xAxisIndex: 0, yAxisIndex: 0 },
+            [priceExtent.max, profitExtent.min]
+          ) as unknown;
+          if (!Array.isArray(topLeft) || !Array.isArray(bottomRight) || topLeft.length < 2 || bottomRight.length < 2) {
+            return {};
+          }
+          left = Math.min(Number(topLeft[0]), Number(bottomRight[0]));
+          right = Math.max(Number(topLeft[0]), Number(bottomRight[0]));
+          top = Math.min(Number(topLeft[1]), Number(bottomRight[1]));
+          bottom = Math.max(Number(topLeft[1]), Number(bottomRight[1]));
+        } else {
+          const width = chart.getWidth?.() ?? 0;
+          const height = chart.getHeight?.() ?? 0;
+          if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return {};
+          left = leftPad;
+          right = width - rightPad;
+          top = topPad;
+          bottom = height - bottomPad;
         }
 
-        const left = Math.min(Number(topLeft[0]), Number(bottomRight[0]));
-        const right = Math.max(Number(topLeft[0]), Number(bottomRight[0]));
-        const top = Math.min(Number(topLeft[1]), Number(bottomRight[1]));
-        const bottom = Math.max(Number(topLeft[1]), Number(bottomRight[1]));
         if (![left, right, top, bottom].every(Number.isFinite) || right <= left || bottom <= top) return {};
 
         const margin = isNarrow ? 16 : 14;
-        // Extra inset from the y-axis so the Peak label doesn't visually sit on the axis/tick line.
-        // ~8 characters at the label font size.
-        const extraLeft = Math.round((labelFont - 1) * 0.6 * 8);
-        const safe = {
+        // Keep the label inset from plot edges and axis/tick lines.
+        const charW = Math.max(1, (labelFont - 1) * 0.6);
+        const extraLeft = Math.round(Math.max(charW * 8, labelW * 0.25));
+        const extraRight = Math.round(Math.max(charW * 6, labelW * 0.18));
+        const extraTop = Math.round(Math.max((labelFont - 1) * 1.8, labelH * 0.35));
+        const extraBottom = Math.round(Math.max((labelFont - 1) * 0.9, labelH * 0.2));
+        let safe = {
           left: left + margin + extraLeft,
-          right: right - margin,
-          top: top + margin,
-          bottom: bottom - margin,
+          right: right - margin - extraRight,
+          top: top + margin + extraTop,
+          bottom: bottom - margin - extraBottom,
         };
+        if (safe.right - safe.left < labelW * 0.6) {
+          safe = { ...safe, left: left + margin, right: right - margin };
+        }
+        if (safe.bottom - safe.top < labelH * 0.6) {
+          safe = { ...safe, top: top + margin, bottom: bottom - margin };
+        }
 
         const pad = isNarrow ? 10 : 12;
         const halfW = labelW / 2;
@@ -388,6 +413,8 @@ export default function FrontierChartReal({
         return {
           x: clamp(best.x, safe.left, maxX),
           y: clamp(best.y, safe.top, maxY),
+          align: "left",
+          verticalAlign: "top",
         };
       };
     })();
@@ -484,7 +511,7 @@ export default function FrontierChartReal({
     const option: ECOption = {
       animation: false,
       grid: {
-        left: isNarrow ? 52 : 72,
+        left: leftPad,
         right: rightPad,
         top: topPad,
         bottom: bottomPad,
