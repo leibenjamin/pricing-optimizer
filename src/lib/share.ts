@@ -26,6 +26,9 @@ export type SharePayloadArgs = {
   tornadoValueMode: TornadoValueMode;
   retentionPct: number;
   retentionMonths: number;
+  cohortView: "monthly" | "cumulative";
+  cohortPriceChurnOn: boolean;
+  cohortPriceChurnPer10: number;
   kpiFloorAdj: number;
   coverageUsePocket: boolean;
   priceRange: { map: TierRangeMap; source: PriceRangeSource } | null;
@@ -56,6 +59,9 @@ export function buildSharePayload(args: SharePayloadArgs) {
     tornadoValueMode: args.tornadoValueMode,
     retentionPct: args.retentionPct,
     retentionMonths: args.retentionMonths,
+    cohortView: args.cohortView,
+    cohortPriceChurnOn: args.cohortPriceChurnOn,
+    cohortPriceChurnPer10: args.cohortPriceChurnPer10,
     kpiFloorAdj: args.kpiFloorAdj,
     coverageUsePocket: args.coverageUsePocket,
     priceRange: args.priceRange,
@@ -575,6 +581,9 @@ export function buildPayloadFromScenario(
     uncertainty?: ScenarioUncertainty | null;
     retentionPct?: number;
     retentionMonths?: number;
+    cohortView?: "monthly" | "cumulative";
+    cohortPriceChurnOn?: boolean;
+    cohortPriceChurnPer10?: number;
     kpiFloorAdj?: number;
     coverageUsePocket?: boolean;
     tornadoDefaults?: Partial<{
@@ -611,6 +620,9 @@ export function buildPayloadFromScenario(
     tornadoValueMode: tor.valueMode ?? tDef.valueMode ?? "absolute",
     retentionPct: scenario.retentionPct ?? fallback.retentionPct ?? 0,
     retentionMonths: scenario.retentionMonths ?? fallback.retentionMonths ?? 12,
+    cohortView: scenario.cohortView ?? fallback.cohortView ?? "monthly",
+    cohortPriceChurnOn: scenario.cohortPriceChurnOn ?? fallback.cohortPriceChurnOn ?? false,
+    cohortPriceChurnPer10: scenario.cohortPriceChurnPer10 ?? fallback.cohortPriceChurnPer10 ?? 0,
     kpiFloorAdj: scenario.kpiFloorAdj ?? fallback.kpiFloorAdj ?? 0,
     coverageUsePocket,
     priceRange,

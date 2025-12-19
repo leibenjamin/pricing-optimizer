@@ -48,6 +48,9 @@ export type ScenarioSnapshot = {
     tornadoValueMode?: TornadoValueMode;
     retentionPct?: number;
     retentionMonths?: number;
+    cohortView?: "monthly" | "cumulative";
+    cohortPriceChurnOn?: boolean;
+    cohortPriceChurnPer10?: number;
     kpiFloorAdj?: number;
     coverageUsePocket?: boolean;
     priceRange?: TierRangeMap;
@@ -126,6 +129,9 @@ export type SnapshotBuildArgs = {
   tornadoValueMode: TornadoValueMode;
   retentionPct: number;
   retentionMonths: number;
+  cohortView: "monthly" | "cumulative";
+  cohortPriceChurnOn: boolean;
+  cohortPriceChurnPer10: number;
   kpiFloorAdj: number;
   coverageUsePocket: boolean;
   priceRange: { map: TierRangeMap; source: PriceRangeSource } | null;
@@ -158,6 +164,9 @@ export function buildScenarioSnapshot(args: SnapshotBuildArgs): ScenarioSnapshot
       tornadoValueMode: args.tornadoValueMode,
       retentionPct: args.retentionPct,
       retentionMonths: args.retentionMonths,
+      cohortView: args.cohortView,
+      cohortPriceChurnOn: args.cohortPriceChurnOn,
+      cohortPriceChurnPer10: args.cohortPriceChurnPer10,
       kpiFloorAdj: args.kpiFloorAdj,
       coverageUsePocket: args.coverageUsePocket,
       optRanges: args.optRanges,

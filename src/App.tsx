@@ -217,6 +217,10 @@ type AppliedPresetSnapshot = {
     valueMode: TornadoValueMode;
   };
   retentionPct: number;
+  retentionMonths: number;
+  cohortView: "monthly" | "cumulative";
+  cohortPriceChurnOn: boolean;
+  cohortPriceChurnPer10: number;
   kpiFloorAdj: number;
   channelMix: Array<{ preset: string; w: number }>;
   uncertainty: ScenarioUncertainty | null;
@@ -696,6 +700,9 @@ type ScenarioImportPatch = {
   tornadoValueMode?: TornadoValueMode;
   retentionPct?: number;
   retentionMonths?: number;
+  cohortView?: "monthly" | "cumulative";
+  cohortPriceChurnOn?: boolean;
+  cohortPriceChurnPer10?: number;
   kpiFloorAdj?: number;
   coverageUsePocket?: boolean;
 };
@@ -809,6 +816,15 @@ function coerceScenarioImportPatch(
     }
     if (toFiniteNumber(analysis.retentionMonths) !== null) {
       patch.retentionMonths = clampNumber(toFiniteNumber(analysis.retentionMonths) as number, 6, 24);
+    }
+    if (analysis.cohortView === "monthly" || analysis.cohortView === "cumulative") {
+      patch.cohortView = analysis.cohortView;
+    }
+    if (typeof analysis.cohortPriceChurnOn === "boolean") {
+      patch.cohortPriceChurnOn = analysis.cohortPriceChurnOn;
+    }
+    if (toFiniteNumber(analysis.cohortPriceChurnPer10) !== null) {
+      patch.cohortPriceChurnPer10 = clampNumber(toFiniteNumber(analysis.cohortPriceChurnPer10) as number, 0, 10);
     }
     if (toFiniteNumber(analysis.kpiFloorAdj) !== null) {
       patch.kpiFloorAdj = clampNumber(toFiniteNumber(analysis.kpiFloorAdj) as number, -10_000, 10_000);
@@ -1537,6 +1553,9 @@ export default function App() {
     valueMode: "absolute" as TornadoValueMode,
   };
   const RETENTION_DEFAULT = 92;
+  const COHORT_VIEW_DEFAULT = "monthly" as const;
+  const COHORT_PRICE_CHURN_DEFAULT = 0;
+  const COHORT_PRICE_CHURN_ON_DEFAULT = false;
   const KPI_FLOOR_ADJ_DEFAULT = 0;
 
   const resetAllSettings = () => {
@@ -2680,6 +2699,31 @@ export default function App() {
   }, [retentionMonths]);
   const [showCohortAdvanced, setShowCohortAdvanced] = useState(false);
 
+  const [cohortView, setCohortView] = useState<"monthly" | "cumulative">(() => {
+    const saved = localStorage.getItem("cohort_view");
+    return saved === "cumulative" ? "cumulative" : COHORT_VIEW_DEFAULT;
+  });
+  useEffect(() => {
+    localStorage.setItem("cohort_view", cohortView);
+  }, [cohortView]);
+
+  const [cohortPriceChurnOn, setCohortPriceChurnOn] = useState<boolean>(() => {
+    const saved = localStorage.getItem("cohort_price_churn_on");
+    return saved ? saved === "true" : COHORT_PRICE_CHURN_ON_DEFAULT;
+  });
+  useEffect(() => {
+    localStorage.setItem("cohort_price_churn_on", String(cohortPriceChurnOn));
+  }, [cohortPriceChurnOn]);
+
+  const [cohortPriceChurnPer10, setCohortPriceChurnPer10] = useState<number>(() => {
+    const saved = localStorage.getItem("cohort_price_churn_per10");
+    const v = saved ? Number(saved) : COHORT_PRICE_CHURN_DEFAULT;
+    return Number.isFinite(v) ? Math.min(10, Math.max(0, v)) : COHORT_PRICE_CHURN_DEFAULT;
+  });
+  useEffect(() => {
+    localStorage.setItem("cohort_price_churn_per10", String(cohortPriceChurnPer10));
+  }, [cohortPriceChurnPer10]);
+
   // --- Cohort rehearsal scenarios (baseline/current/optimized) ---
   const { scenarios: cohortScenarios, summaries: cohortSummaryCards } = useMemo(() => {
     const baselineLabel =
@@ -2726,6 +2770,7 @@ export default function App() {
       optimized: optimizedInfo,
       retentionMonths,
       retentionPct,
+      priceChurn: { enabled: cohortPriceChurnOn, churnPer10Pct: cohortPriceChurnPer10 },
     });
   }, [
     baselineKpis,
@@ -2740,6 +2785,8 @@ export default function App() {
     prices,
     retentionMonths,
     retentionPct,
+    cohortPriceChurnOn,
+    cohortPriceChurnPer10,
   ]);
 
   // --- Frontier markers & summary ---
@@ -2989,8 +3036,15 @@ export default function App() {
     ) {
       diffs.push("Tornado");
     }
-    if (Math.abs(appliedPresetSnapshot.retentionPct - retentionPct) >= 1e-6 || Math.abs(appliedPresetSnapshot.kpiFloorAdj - kpiFloorAdj) >= 1e-6) {
-      diffs.push("Retention/Floor adj");
+    if (
+      Math.abs(appliedPresetSnapshot.retentionPct - retentionPct) >= 1e-6 ||
+      Math.abs(appliedPresetSnapshot.retentionMonths - retentionMonths) >= 1e-6 ||
+      appliedPresetSnapshot.cohortView !== cohortView ||
+      appliedPresetSnapshot.cohortPriceChurnOn !== cohortPriceChurnOn ||
+      Math.abs(appliedPresetSnapshot.cohortPriceChurnPer10 - cohortPriceChurnPer10) >= 1e-6 ||
+      Math.abs(appliedPresetSnapshot.kpiFloorAdj - kpiFloorAdj) >= 1e-6
+    ) {
+      diffs.push("Cohort settings");
     }
     if (!eqChannelMix(channelMix, appliedPresetSnapshot.channelMix)) diffs.push("Channel mix");
     if (!eqUncertainty(scenarioUncertainty, appliedPresetSnapshot.uncertainty)) diffs.push("Uncertainty");
@@ -3013,6 +3067,10 @@ export default function App() {
     tornadoMetric,
     tornadoValueMode,
     retentionPct,
+    retentionMonths,
+    cohortView,
+    cohortPriceChurnOn,
+    cohortPriceChurnPer10,
     kpiFloorAdj,
     channelMix,
     scenarioUncertainty,
@@ -3632,6 +3690,9 @@ export default function App() {
 
     if (patch.retentionPct !== undefined) setRetentionPct(patch.retentionPct);
     if (patch.retentionMonths !== undefined) setRetentionMonths(patch.retentionMonths);
+    if (patch.cohortView !== undefined) setCohortView(patch.cohortView);
+    if (patch.cohortPriceChurnOn !== undefined) setCohortPriceChurnOn(patch.cohortPriceChurnOn);
+    if (patch.cohortPriceChurnPer10 !== undefined) setCohortPriceChurnPer10(patch.cohortPriceChurnPer10);
     if (patch.kpiFloorAdj !== undefined) setKpiFloorAdj(patch.kpiFloorAdj);
     if (patch.coverageUsePocket !== undefined) {
       setCoverageUsePocket(patch.coverageUsePocket);
@@ -3808,6 +3869,9 @@ export default function App() {
         tornadoValueMode,
         retentionPct,
         retentionMonths,
+        cohortView,
+        cohortPriceChurnOn,
+        cohortPriceChurnPer10,
         kpiFloorAdj,
         coverageUsePocket,
         priceRange: priceRangeState,
@@ -3840,6 +3904,9 @@ export default function App() {
       tornadoValueMode,
       retentionPct,
       retentionMonths,
+      cohortView,
+      cohortPriceChurnOn,
+      cohortPriceChurnPer10,
       kpiFloorAdj,
       coverageUsePocket,
       priceRangeState,
@@ -3876,6 +3943,9 @@ export default function App() {
         uncertainty: scenarioUncertainty,
         retentionPct,
         retentionMonths,
+        cohortView,
+        cohortPriceChurnOn,
+        cohortPriceChurnPer10,
         kpiFloorAdj,
         coverageUsePocket,
         tornadoDefaults: {
@@ -3900,7 +3970,7 @@ export default function App() {
         console.warn("Round-trip preset issues", suite.issues);
       }
     }
-  }, [buildSharePayloadChecked, pushJ, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, scenarioUncertainty, coverageUsePocket]);
+  }, [buildSharePayloadChecked, pushJ, prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, cohortView, cohortPriceChurnOn, cohortPriceChurnPer10, kpiFloorAdj, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, scenarioUncertainty, coverageUsePocket]);
 
   function handleExportJson() {
     const snap = buildSharePayloadChecked("export json");
@@ -4155,6 +4225,9 @@ export default function App() {
         tornadoValueMode,
         retentionPct,
         retentionMonths,
+        cohortView,
+        cohortPriceChurnOn,
+        cohortPriceChurnPer10,
         kpiFloorAdj,
         coverageUsePocket,
         priceRange: priceRangeState,
@@ -4215,7 +4288,7 @@ export default function App() {
         toast(kind, opts?.toastMessage ?? "Baseline pinned");
       }
     },
-    [prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, kpiFloorAdj, coverageUsePocket, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, setBaselineRun, scenarioPresetId, scenarioUncertainty, toast]
+    [prices, costs, features, refPrices, leak, segments, tornadoPocket, tornadoPriceBump, tornadoPctBump, tornadoRangeMode, tornadoMetric, tornadoValueMode, retentionPct, retentionMonths, cohortView, cohortPriceChurnOn, cohortPriceChurnPer10, kpiFloorAdj, coverageUsePocket, priceRangeState, optRanges, optConstraints, channelMix, optimizerKind, setBaselineRun, scenarioPresetId, scenarioUncertainty, toast]
   );
 
   const pinBaselineNow = () => {
@@ -4342,8 +4415,20 @@ export default function App() {
       }
 
       const retention = p.retentionPct ?? RETENTION_DEFAULT;
+      const retentionMonthsNext = p.retentionMonths ?? retentionMonths;
+      const cohortViewNext = p.cohortView ?? COHORT_VIEW_DEFAULT;
+      const cohortPriceChurnOnNext = p.cohortPriceChurnOn ?? COHORT_PRICE_CHURN_ON_DEFAULT;
+      const cohortPriceChurnPer10Next = clampNumber(
+        p.cohortPriceChurnPer10 ?? COHORT_PRICE_CHURN_DEFAULT,
+        0,
+        10
+      );
       const floorAdj = p.kpiFloorAdj ?? KPI_FLOOR_ADJ_DEFAULT;
       setRetentionPct(retention);
+      setRetentionMonths(retentionMonthsNext);
+      setCohortView(cohortViewNext);
+      setCohortPriceChurnOn(cohortPriceChurnOnNext);
+      setCohortPriceChurnPer10(cohortPriceChurnPer10Next);
       setKpiFloorAdj(floorAdj);
 
       setOptResult(null);
@@ -4373,6 +4458,10 @@ export default function App() {
           valueMode: p.tornado?.valueMode ?? TORNADO_DEFAULTS.valueMode,
         },
         retentionPct: retention,
+        retentionMonths: retentionMonthsNext,
+        cohortView: cohortViewNext,
+        cohortPriceChurnOn: cohortPriceChurnOnNext,
+        cohortPriceChurnPer10: cohortPriceChurnPer10Next,
         kpiFloorAdj: floorAdj,
         channelMix: mix,
         uncertainty: p.uncertainty ?? null,
@@ -4403,7 +4492,7 @@ export default function App() {
       );
       pushJ(`Loaded preset: ${p.name}`);
     },
-    [KPI_FLOOR_ADJ_DEFAULT, RETENTION_DEFAULT, TORNADO_DEFAULTS.metric, TORNADO_DEFAULTS.priceBump, TORNADO_DEFAULTS.pctBump, TORNADO_DEFAULTS.rangeMode, TORNADO_DEFAULTS.usePocket, TORNADO_DEFAULTS.valueMode, checkFeasible, defaults, fallbackToSyntheticRanges, normalizeChannelMix, pinBaseline, pushJ, setChannelBlendApplied, setChannelMix, setCosts, setCoverageUsePocket, setFeatures, setKpiFloorAdj, setLeak, setLastOptAt, setOptConstraints, setOptError, setOptRanges, setOptResult, setPresetSel, setPriceRangeFromData, setPrices, setRefPrices, setRetentionPct, setScenarioPresetId, setScorecardView, setSegments, setTornadoMetric, setTornadoPctBump, setTornadoPocket, setTornadoPriceBump, setTornadoRangeMode, setTornadoValueMode, setTornadoView, toast]
+    [COHORT_PRICE_CHURN_DEFAULT, COHORT_PRICE_CHURN_ON_DEFAULT, COHORT_VIEW_DEFAULT, KPI_FLOOR_ADJ_DEFAULT, RETENTION_DEFAULT, TORNADO_DEFAULTS.metric, TORNADO_DEFAULTS.priceBump, TORNADO_DEFAULTS.pctBump, TORNADO_DEFAULTS.rangeMode, TORNADO_DEFAULTS.usePocket, TORNADO_DEFAULTS.valueMode, checkFeasible, defaults, fallbackToSyntheticRanges, normalizeChannelMix, pinBaseline, pushJ, retentionMonths, setChannelBlendApplied, setChannelMix, setCohortPriceChurnOn, setCohortPriceChurnPer10, setCohortView, setCosts, setCoverageUsePocket, setFeatures, setKpiFloorAdj, setLeak, setLastOptAt, setOptConstraints, setOptError, setOptRanges, setOptResult, setPresetSel, setPriceRangeFromData, setPrices, setRefPrices, setRetentionMonths, setRetentionPct, setScenarioPresetId, setScorecardView, setSegments, setTornadoMetric, setTornadoPctBump, setTornadoPocket, setTornadoPriceBump, setTornadoRangeMode, setTornadoValueMode, setTornadoView, toast]
   );
 
   const resetActivePreset = useCallback(() => {
@@ -5225,6 +5314,9 @@ export default function App() {
                         tornadoValueMode,
                         retentionPct,
                         retentionMonths,
+                        cohortView,
+                        cohortPriceChurnOn,
+                        cohortPriceChurnPer10,
                         kpiFloorAdj,
                         coverageUsePocket,
                         priceRange: priceRangeState,
@@ -5653,6 +5745,12 @@ export default function App() {
             setRetentionPct={setRetentionPct}
             retentionMonths={retentionMonths}
             setRetentionMonths={setRetentionMonths}
+            priceChurnEnabled={cohortPriceChurnOn}
+            setPriceChurnEnabled={setCohortPriceChurnOn}
+            priceChurnPer10={cohortPriceChurnPer10}
+            setPriceChurnPer10={setCohortPriceChurnPer10}
+            cohortView={cohortView}
+            setCohortView={setCohortView}
             showAdvanced={showCohortAdvanced}
             setShowAdvanced={setShowCohortAdvanced}
             cohortSummaryCards={cohortSummaryCards}

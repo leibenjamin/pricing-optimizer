@@ -9,7 +9,7 @@ import type { Prices } from "./segments";
 import type { Leakages } from "./waterfall";
 import type { Constraints, SearchRanges } from "./optimize";
 import { explainGaps } from "./explain";
-import { simulateCohort } from "./simCohort";
+import { adjustRetentionPct, listArpu, simulateCohort } from "./simCohort";
 
 export function buildFrontierViewModel(args: {
   base: { points: FrontierPoint[]; feasiblePoints?: FrontierPoint[]; infeasiblePoints?: FrontierPoint[]; optimum: FrontierPoint | null };
@@ -162,6 +162,9 @@ export type CohortScenarioVM = {
   total: number;
   month1: number;
   monthEnd: number;
+  retentionPct: number;
+  priceDeltaPct: number;
+  listArpu: number;
 };
 
 export type CohortSummaryCard = {
@@ -212,9 +215,16 @@ export function buildCohortViewModel(args: {
   } | null;
   retentionMonths: number;
   retentionPct: number;
+  priceChurn?: { enabled: boolean; churnPer10Pct: number };
 }): { scenarios: CohortScenarioVM[]; summaries: CohortSummaryCard[] } {
-  const r = args.retentionPct / 100;
+  const baseRetentionPct = args.retentionPct;
   const months = Math.max(6, Math.min(24, args.retentionMonths));
+  const priceChurnEnabled = args.priceChurn?.enabled ?? false;
+  const churnPer10 = Math.max(0, args.priceChurn?.churnPer10Pct ?? 0);
+  const baselineSource = args.baseline ?? args.current ?? args.optimized;
+  const baselineArpu = baselineSource
+    ? listArpu(baselineSource.prices, baselineSource.kpis.shares)
+    : 0;
 
   const build = (
     key: string,
@@ -224,7 +234,25 @@ export function buildCohortViewModel(args: {
     leakForMargin: Leakages,
     costsForMargin: Prices
   ): CohortScenarioVM => {
-    const pts = simulateCohort(pricesForMargin, shares, leakForMargin, costsForMargin, months, r);
+    const scenarioArpu = listArpu(pricesForMargin, shares);
+    const priceDeltaPct =
+      baselineArpu > 0 ? (scenarioArpu - baselineArpu) / baselineArpu : 0;
+    const retentionUsedPct =
+      priceChurnEnabled && churnPer10 > 0 && baselineArpu > 0
+        ? adjustRetentionPct({
+            baseRetentionPct,
+            priceDeltaPct,
+            churnPer10Pct: churnPer10,
+          })
+        : baseRetentionPct;
+    const pts = simulateCohort(
+      pricesForMargin,
+      shares,
+      leakForMargin,
+      costsForMargin,
+      months,
+      retentionUsedPct / 100
+    );
     const total = pts.reduce((s, p) => s + p.margin, 0);
     return {
       key,
@@ -234,6 +262,9 @@ export function buildCohortViewModel(args: {
       total,
       month1: pts[0]?.margin ?? 0,
       monthEnd: pts[pts.length - 1]?.margin ?? 0,
+      retentionPct: retentionUsedPct,
+      priceDeltaPct,
+      listArpu: scenarioArpu,
     };
   };
 

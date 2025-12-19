@@ -61,6 +61,9 @@ export type Scenario = {
   };
   retentionPct?: number;
   retentionMonths?: number;
+  cohortView?: "monthly" | "cumulative";
+  cohortPriceChurnOn?: boolean;
+  cohortPriceChurnPer10?: number;
   kpiFloorAdj?: number;
   note?: string;
 };
